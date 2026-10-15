@@ -1,0 +1,664 @@
+<!doctype html>
+<!--
+  PROTOTYPE（拋棄式原型）— 回放畫面與操作
+  問題：回放畫面的操作（方向鍵的一步、播放、時間軸、面板連動）用起來順不順手？
+  一個版面；Docking 以固定格狀配置模擬（實作時以 AvalonDock 拖曳停靠）。
+  依據：ADR-0003、ADR-0004、ADR-0005、ADR-0006，以及「回放畫面與操作」ticket 的 Q1～Q8。
+  所有資料都是虛構的範例；不寫入檔案、不連網，狀態只在記憶體中。
+-->
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>回放畫面原型（PROTOTYPE・虛構資料）</title>
+<style>
+  :root { --bd:#cbd5e1; --bg:#eef2f7; --pn:#fff; --tx:#0f172a; --mu:#64748b; --ac:#2563eb; --er:#dc2626;
+          --exe:#fef3c7; --plc:#dcfce7; --svr:#e0e7ff; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--tx); font:13px/1.35 "Segoe UI","Microsoft JhengHei",sans-serif; }
+  button, select { font:inherit; border:1px solid var(--bd); background:#fff; border-radius:5px; padding:2px 8px; cursor:pointer; }
+  button:hover { border-color:var(--ac); }
+  button.on { background:#dbeafe; border-color:var(--ac); }
+  .banner { background:#fef3c7; color:#92400e; padding:2px 10px; font-size:12px; text-align:center; }
+  #root { height:calc(100vh - 20px); display:grid; gap:4px; padding:4px; }
+  #root.p-play { grid-template-columns:1fr 330px; grid-template-rows:auto minmax(0,1.25fr) 132px minmax(0,1fr);
+                 grid-template-areas:"hd hd" "lay det" "tl tl" "list tabs"; }
+  #root.p-search { grid-template-columns:1.3fr 1fr; grid-template-rows:auto minmax(0,1.4fr) 132px minmax(0,.8fr);
+                 grid-template-areas:"hd hd" "list tabs" "tl tl" "lay det"; }
+  .pane { background:var(--pn); border:1px solid var(--bd); border-radius:6px; display:flex; flex-direction:column; min-height:0; min-width:0; }
+  .ph { padding:4px 8px; background:#f1f5f9; border-bottom:1px solid var(--bd); font-weight:700; display:flex; gap:6px; align-items:center; flex-wrap:wrap; border-radius:6px 6px 0 0; }
+  .ph .sp { flex:1; }
+  .ph .n { font-weight:400; color:var(--mu); }
+  .pb { flex:1; overflow:auto; min-height:0; }
+  #hd { grid-area:hd; flex-direction:row; align-items:center; gap:10px; padding:5px 10px; flex-wrap:wrap; }
+  #hd .ttl { font-weight:700; }
+  .badge { padding:1px 8px; border-radius:10px; font-size:12px; }
+  .b-off { background:#fee2e2; color:#991b1b; font-weight:700; }
+  .b-tz { background:#e2e8f0; }
+  #lay { grid-area:lay; } #det { grid-area:det; } #tl { grid-area:tl; } #list { grid-area:list; } #tabs { grid-area:tabs; }
+  .legend { font-weight:400; font-size:12px; color:var(--mu); display:flex; gap:10px; flex-wrap:wrap; }
+  .sw { display:inline-block; width:11px; height:11px; border:1px solid #64748b; vertical-align:-1px; margin-right:3px; }
+  /* 詳細資訊 */
+  .det { padding:8px 10px; }
+  .det h3 { margin:2px 0 6px; font-size:14px; }
+  .kv { display:grid; grid-template-columns:78px 1fr; gap:3px 8px; margin-bottom:8px; }
+  .kv > div:nth-child(odd) { color:var(--mu); }
+  .lnk { color:var(--ac); cursor:pointer; text-decoration:underline; }
+  .tag { display:inline-block; padding:0 6px; border-radius:8px; font-size:11px; margin-left:4px; }
+  .tg-unk { background:#e5e7eb; } .tg-warn { background:#fef3c7; color:#92400e; } .tg-err { background:#fee2e2; color:#991b1b; } .tg-ok { background:#dcfce7; color:#166534; }
+  /* 時間軸 */
+  #tl .pb { overflow:hidden; display:flex; flex-direction:column; padding:4px 8px; gap:3px; }
+  svg.tlsvg { width:100%; display:block; cursor:pointer; }
+  .ctl { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .now { font:600 14px Consolas,monospace; min-width:150px; }
+  /* 事件清單 */
+  table { border-collapse:collapse; width:100%; }
+  th { position:sticky; top:0; background:#f8fafc; z-index:1; text-align:left; font-weight:600; border-bottom:1px solid var(--bd); padding:3px 6px; }
+  td { padding:2px 6px; border-bottom:1px solid #eef2f7; vertical-align:top; white-space:nowrap; }
+  td.msg { white-space:normal; }
+  tr.ev { cursor:pointer; }
+  tr.ev.m-EXE td.mc { background:var(--exe); } tr.ev.m-PLC td.mc { background:var(--plc); } tr.ev.m-Server td.mc { background:var(--svr); }
+  tr.ev.mix.m-EXE { background:var(--exe); } tr.ev.mix.m-PLC { background:var(--plc); } tr.ev.mix.m-Server { background:var(--svr); }
+  tr.ev.cur td { outline:2px solid var(--ac); outline-offset:-2px; font-weight:600; }
+  tr.ev.fut { opacity:.55; }
+  tr.ev .chg { color:var(--ac); font-weight:700; }
+  .fl { font-weight:700; color:#b45309; margin-left:2px; cursor:help; }
+  .tm { font-family:Consolas,monospace; }
+  .chip { background:#dbeafe; border-radius:10px; padding:0 8px; font-weight:400; }
+  .chip b { cursor:pointer; margin-left:4px; }
+  /* 分頁 */
+  .tabbar button { border-radius:5px 5px 0 0; }
+  .raw { font:12px/1.5 Consolas,monospace; white-space:pre; padding:4px 0; }
+  .raw .ln { display:inline-block; width:56px; text-align:right; color:var(--mu); padding-right:8px; user-select:none; }
+  .raw .hl { background:#fde68a; display:block; }
+  .raw div { padding-left:4px; }
+  .hint { color:var(--mu); font-size:12px; padding:4px 8px; }
+  .kbd { font:11px Consolas,monospace; border:1px solid var(--bd); border-bottom-width:2px; border-radius:3px; padding:0 4px; background:#fff; }
+  /* SVG */
+  .t { font-size:.38px; fill:#0f172a; pointer-events:none; }
+  .ts { font-size:.3px; fill:#334155; pointer-events:none; }
+  .clk { cursor:pointer; }
+  .selbox { fill:none; stroke:#f59e0b; stroke-width:.09; stroke-dasharray:.25 .15; pointer-events:none; }
+</style>
+</head>
+<body>
+<div class="banner">PROTOTYPE・拋棄式原型・全部是虛構資料・Docking 以固定版面模擬（實作時以 AvalonDock 拖曳停靠）</div>
+<div id="root" class="p-play">
+  <div id="hd" class="pane"></div>
+  <div id="lay" class="pane"><div class="ph">Layout 回放<span class="sp"></span><span class="legend" id="legend"></span></div><div class="pb" id="layb"></div></div>
+  <div id="det" class="pane"><div class="ph">詳細資訊</div><div class="pb" id="detb"></div></div>
+  <div id="tl" class="pane"><div class="ph">時間軸<span class="sp"></span><span class="n">總覽：事件密度・紅色＝警報期間・橘色刻度＝時間不確定｜細部：前後 30 秒</span></div><div class="pb" id="tlb"></div></div>
+  <div id="list" class="pane"><div class="ph" id="listh"></div><div class="pb" id="listb"></div></div>
+  <div id="tabs" class="pane"><div class="ph tabbar" id="tabh"></div><div class="pb" id="tabb"></div></div>
+</div>
+
+<script>
+"use strict";
+// ================= 虛構 Layout（依 ADR-0006 的資料結構） =================
+const LAYOUT = {
+  storageCodeRule: "RRCCCLL",
+  elements: [
+    { id:"rk-1", type:"rack", name:"料架 R01", row:"01", colFrom:1, colTo:10, levels:5, x:2, y:1.2, w:20, h:1.5 },
+    { id:"vh-1", type:"vehicle", name:"SRCA01", aliases:["SRCA01"], x:3, y:3.4, w:3, h:1.5 },
+    { id:"vh-2", type:"vehicle", name:"SSCA01", aliases:["SSCA01"], x:8, y:10.2, w:3, h:1.5 },
+    { id:"st-1", type:"station", name:"入庫口1", aliases:["A-01","1001"], x:2, y:6.6, w:2.2, h:2.2 },
+    { id:"st-2", type:"station", name:"輸送站2", aliases:["A-02","1002"], x:6, y:6.6, w:2.2, h:2.2 },
+    { id:"st-3", type:"station", name:"輸送站3", aliases:["A-03","1003"], x:10, y:6.6, w:2.2, h:2.2 },
+    { id:"st-4", type:"station", name:"出庫站4", aliases:["A-04","1004"], x:14, y:6.6, w:2.2, h:2.2 },
+    { id:"eq-1", type:"dock", name:"EQ901", aliases:["EQ901"], x:19, y:6.6, w:2.2, h:2.2 },
+    { id:"cv-1", type:"conveyor", from:"st-1", to:"st-2" },
+    { id:"cv-2", type:"conveyor", from:"st-2", to:"st-3" },
+    { id:"cv-3", type:"conveyor", from:"st-4", to:"eq-1" },
+  ],
+};
+const EL = Object.fromEntries(LAYOUT.elements.map((e) => [e.id, e]));
+const ALIAS = {};
+for (const e of LAYOUT.elements) for (const a of e.aliases || []) ALIAS[a.toLowerCase()] = e;
+const elOf = (code) => code && ALIAS[String(code).toLowerCase()];
+const isStorage = (c) => /^\d{7}$/.test(String(c));
+
+// ================= 虛構 LOG（依 ADR-0004 的事件模型） =================
+const T_END = 360;                     // 案件長度（秒），從 10:00:00 開始
+const MOD_ORDER = { EXE:0, PLC:1, Server:2 };
+const D = [];
+function E(t, file, level, msg, fx, extra) {
+  const mod = file.split("/")[0];
+  D.push(Object.assign({ t, rawT:t, file, mod, logger:file.split("/")[1].replace(".txt", ""), level, msg, fx: fx ? [].concat(fx) : [] }, extra || {}));
+}
+const PLC = "PLC/PLCLOG.txt", PDB = "PLC/DBUPDATE_LOG.txt", WCS = "Server/WCSDebug.txt", CMDF = "Server/WCSCMD.txt", TASK = "EXE/TaskLOG.txt";
+// --- 命令 C0001：入庫 ---
+E(2.0,   PLC, "DEBUG", "[A-01] 站點模式代號 -> 1", { k:"mode", code:"A-01", val:1 });
+E(5.0,   PLC, "DEBUG", "[A-01] 在席 ON", { k:"pres", code:"A-01", on:true });
+E(6.0,   PLC, "DEBUG", "[A-01] 讀到棧板條碼 PLT-EX-0001", { k:"pallet", code:"A-01", pallet:"PLT-EX-0001", drums:["D-0001-1","D-0001-2","D-0001-3","D-0001-4"] });
+for (let i = 1; i <= 4; i++) E(6.0, PLC, "DEBUG", `[A-01] 讀到桶條碼 D-0001-${i}`, null, { refs:["A-01","PLT-EX-0001"] });
+E(7.0,   PLC, "DEBUG", "[A-01] 寫入命令編號 C0001", { k:"cmdNew", cmd:"C0001", type:"S", pallet:"PLT-EX-0001", from:"A-01", to:"0100302" });
+E(8.0,   TASK, "INFO", "建立任務 C0001（入庫）A-01 → 0100302", null, { refs:["C0001","A-01"] });
+E(10.0,  WCS, "DEBUG", "派送 C0001 第1段 → SSCA01 類型 P 目的地 1003", { k:"seg", cmd:"C0001", n:1, veh:"SSCA01", dest:"1003" });
+E(10.0,  CMDF, "DEBUG", "SSCA01 命令表加入 C0001", null, { refs:["SSCA01","C0001"] });
+E(10.0,  PLC, "DEBUG", "[A-01] 取物可 ON", { k:"sig", code:"A-01", name:"取物可", on:true });
+E(11.0,  PLC, "DEBUG", "[A-01] 在席 OFF", { k:"pres", code:"A-01", on:false });
+E(40.0,  WCS, "DEBUG", "C0001 第1段 抵達 1003（SSCA01）", { k:"arr", cmd:"C0001", n:1, veh:"SSCA01", dest:"1003" });
+E(41.0,  PLC, "DEBUG", "[A-03] 在席 ON", { k:"pres", code:"A-03", on:true });
+E(45.0,  WCS, "DEBUG", "派送 C0001 第2段 → SRCA01 類型 S 目的地 0100302", { k:"seg", cmd:"C0001", n:2, veh:"SRCA01", dest:"0100302" });
+E(46.0,  PLC, "DEBUG", "[A-03] 在席 OFF", { k:"pres", code:"A-03", on:false });
+E(95.0,  WCS, "DEBUG", "C0001 第2段 抵達 0100302（SRCA01）", { k:"arr", cmd:"C0001", n:2, veh:"SRCA01", dest:"0100302" });
+E(95.33, PLC, "DEBUG", "[A-02] 置物可 ON", { k:"sig", code:"A-02", name:"置物可", on:true });
+E(95.30, PLC, "DEBUG", "[A-03] 取物可 OFF（原始檔中排在上一行之後＝時間倒退）", { k:"sig", code:"A-03", name:"取物可", on:false }, { rawT:95.34 });
+E(96.0,  TASK, "INFO", "完成回報 C0001", { k:"done", cmd:"C0001" });
+E(100.0, WCS, "DEBUG", "SRCA01 連線狀態 ON-LINE，自動模式", { k:"conn", code:"SRCA01", conn:"ON-LINE", mode:"自動" });
+// --- 命令 C0002：出庫（來源儲位的棧板在案件開始前就在那裡） ---
+E(120.0, TASK, "INFO", "建立任務 C0002（出庫）0100501 → EQ901", { k:"cmdNew", cmd:"C0002", type:"R", pallet:"PLT-EX-0002", from:"0100501", to:"EQ901" });
+E(122.0, WCS, "DEBUG", "派送 C0002 第1段 → SRCA01 類型 R 目的地 1004", { k:"seg", cmd:"C0002", n:1, veh:"SRCA01", dest:"1004" });
+E(125.0, PLC, "DEBUG", "[A-04] 在席 OFF", { k:"pres", code:"A-04", on:false });
+E(150.0, WCS, "DEBUG", "SSCA01 連線狀態 ON-LINE，手動模式", { k:"conn", code:"SSCA01", conn:"ON-LINE", mode:"手動" });
+E(170.0, WCS, "DEBUG", "C0002 第1段 抵達 1004（SRCA01）※ A-04 的在席一直沒有 ON", { k:"arr", cmd:"C0002", n:1, veh:"SRCA01", dest:"1004" });
+E(172.0, WCS, "DEBUG", "SSCA01 切換為自動模式", { k:"conn", code:"SSCA01", conn:"ON-LINE", mode:"自動" });
+E(175.0, WCS, "DEBUG", "派送 C0002 第2段 → SSCA01 類型 P 目的地 EQ901", { k:"seg", cmd:"C0002", n:2, veh:"SSCA01", dest:"EQ901" });
+E(176.0, PDB, "INFO", "警報發生 SSCA01 E101（虛構：走行逾時）", { k:"alarm", code:"SSCA01", on:true, alarm:"E101" });
+E(180.0, "Server/UnknownLOG.txt", "DEBUG", "沒有登記在廠別設定中的 Logger（虛構）", null, { unknownKind:true });
+E(200.0, PDB, "INFO", "警報發生 A-02 E205（虛構：條碼讀取失敗）", { k:"alarm", code:"A-02", on:true, alarm:"E205" });
+E(205.0, WCS, "DEBUG", "這一行的時間戳記無法解析（虛構）", null, { invalid:true, rawT:205.5 });
+E(230.0, PDB, "INFO", "警報復歸 SSCA01 E101", { k:"alarm", code:"SSCA01", on:false, alarm:"E101" });
+E(250.0, TASK, "INFO", "��� 無法解碼的位元組（虛構）", null, { encErr:true });
+E(260.0, WCS, "DEBUG", "C0002 第2段 抵達 EQ901（SSCA01）", { k:"arr", cmd:"C0002", n:2, veh:"SSCA01", dest:"EQ901" });
+E(261.0, TASK, "INFO", "完成回報 C0002", { k:"done", cmd:"C0002" });
+// --- 命令 C0003：入庫，案件結束時還沒完成 ---
+E(300.0, PLC, "DEBUG", "[A-01] 在席 ON", { k:"pres", code:"A-01", on:true });
+E(302.0, PLC, "DEBUG", "[A-01] 讀到棧板條碼 PLT-EX-0003", { k:"pallet", code:"A-01", pallet:"PLT-EX-0003", drums:["D-0003-1","D-0003-2","D-0003-3"] });
+E(302.5, PLC, "DEBUG", "[A-01] 寫入命令編號 C0003", { k:"cmdNew", cmd:"C0003", type:"S", pallet:"PLT-EX-0003", from:"A-01", to:"0100703" });
+E(305.0, WCS, "DEBUG", "派送 C0003 第1段 → SSCA01 類型 P 目的地 1003", { k:"seg", cmd:"C0003", n:1, veh:"SSCA01", dest:"1003" });
+E(306.0, PLC, "DEBUG", "[A-01] 在席 OFF", { k:"pres", code:"A-01", on:false });
+// --- 不改變狀態的雜訊事件（SQL、心跳） ---
+{
+  let k = 0;
+  for (let t = 1.3; t < T_END; t += 2.9, k++) {
+    const mod = ["EXE", "PLC", "Server"][k % 3];
+    if (k % 5 === 0) E(+t.toFixed(4), PLC, "DEBUG", "[A-09] 心跳（A-09 尚未對應到 Layout）", null, { refs:["A-09"] });
+    else if (k % 7 === 0) E(+t.toFixed(4), WCS, "DEBUG", "SSCA03 狀態查詢（SSCA03 尚未對應到 Layout）", null, { refs:["SSCA03"] });
+    else E(+t.toFixed(4), `${mod}/DBUPDATE_LOG.txt`, "DEBUG", `DBWrite OK（虛構 SQL #${k}）`);
+  }
+}
+
+// --- 依原始檔順序編行號，處理時間無效與時間倒退 ---
+const FILES = {};
+for (const d of D) (FILES[d.file] = FILES[d.file] || []).push(d);
+for (const [f, list] of Object.entries(FILES)) {
+  list.sort((a, b) => a.rawT - b.rawT);
+  let prev = null;
+  list.forEach((d, i) => {
+    d.line = 1 + i * 2;                 // 紀錄之間有空行
+    if (d.invalid) { d.t = prev ? prev.t : 0; d.inherited = true; }
+    if (prev && d.t < prev.t) d.back = true;
+    prev = d;
+  });
+}
+// --- 全部模組依時間排序（ADR-0004） ---
+const EV = [...D].sort((a, b) => a.t - b.t || (a.file === b.file ? a.line - b.line : (MOD_ORDER[a.mod] - MOD_ORDER[b.mod]) || a.logger.localeCompare(b.logger)));
+EV.forEach((e, i) => {
+  e.i = i;
+  e.same = (i > 0 && EV[i - 1].t === e.t) || (i < EV.length - 1 && EV[i + 1].t === e.t);
+  const r = new Set(e.refs || []);
+  for (const f of e.fx) for (const key of ["code", "veh", "dest", "from", "to", "cmd", "pallet"]) if (f[key]) r.add(f[key]);
+  e.refSet = r;
+  e.change = e.fx.length > 0;
+});
+const CHANGES = EV.filter((e) => e.change);
+// 警報期間（給時間軸總覽用）
+const ALARM_SPANS = [];
+{
+  const open = {};
+  for (const e of EV) for (const f of e.fx) if (f.k === "alarm") {
+    if (f.on) open[f.code] = { code:f.code, alarm:f.alarm, from:e.t, to:null };
+    else if (open[f.code]) { open[f.code].to = e.t; ALARM_SPANS.push(open[f.code]); delete open[f.code]; }
+  }
+  for (const a of Object.values(open)) { a.to = T_END; a.noReset = true; ALARM_SPANS.push(a); }
+}
+
+// ================= 世界狀態推導（ADR-0005） =================
+function locOf(code) {
+  if (isStorage(code)) return { kind:"storage", id:code };
+  const el = elOf(code);
+  if (!el) return { kind:"unknown", id:code };
+  return { kind: el.type === "dock" ? "dock" : el.type === "vehicle" ? "vehicle" : "station", id: el.id };
+}
+function emptyWorld() { return { st:{}, veh:{}, pal:{}, cmd:{}, alarm:{}, stor:{}, out:[] }; }
+const stOf = (W, id) => (W.st[id] = W.st[id] || { pres:null, presT:null, mode:null, sig:{} });
+const vhOf = (W, id) => (W.veh[id] = W.veh[id] || { conn:"未知", mode:"未知", work:"未知", cmd:null, dest:null });
+function leave(W, p) { if (p.loc.kind === "storage") W.stor[p.loc.id] = null; }
+function arriveAt(W, p, loc) { p.loc = loc; if (loc.kind === "storage") W.stor[loc.id] = p.id; if (loc.kind === "station") stOf(W, loc.id); }
+function apply(W, f, e) {
+  const el = elOf(f.code);
+  switch (f.k) {
+    case "pres": if (el) { const s = stOf(W, el.id); s.pres = f.on; s.presT = e.t; } break;
+    case "mode": if (el) stOf(W, el.id).mode = f.val; break;
+    case "sig":  if (el) stOf(W, el.id).sig[f.name] = { on:f.on, t:e.t }; break;
+    case "pallet": if (el) { W.pal[f.pallet] = { id:f.pallet, drums:f.drums, loc:{ kind:"station", id:el.id }, since:e.t }; stOf(W, el.id); } break;
+    case "cmdNew": {
+      W.cmd[f.cmd] = { id:f.cmd, type:f.type, pallet:f.pallet, from:f.from, to:f.to, status:"已建立", seg:0, veh:null, dest:null, t0:e.t };
+      if (!W.pal[f.pallet]) { W.pal[f.pallet] = { id:f.pallet, drums:null, loc:null, since:e.t, preexisting:true }; arriveAt(W, W.pal[f.pallet], locOf(f.from)); }
+      break;
+    }
+    case "seg": {
+      const c = W.cmd[f.cmd], v = elOf(f.veh); if (!c || !v) break;
+      Object.assign(c, { seg:f.n, status:`第 ${f.n} 段執行中`, veh:v.name, dest:f.dest });
+      const p = W.pal[c.pallet]; if (p) { leave(W, p); p.loc = { kind:"vehicle", id:v.id }; p.since = e.t; }
+      Object.assign(vhOf(W, v.id), { work:"執行中", cmd:f.cmd, dest:f.dest });
+      break;
+    }
+    case "arr": {
+      const c = W.cmd[f.cmd], v = elOf(f.veh); if (!c) break;
+      const loc = locOf(f.dest), p = W.pal[c.pallet];
+      if (loc.kind === "dock") { if (p) { p.loc = { kind:"gone", id:loc.id }; p.since = e.t; W.out.push({ pallet:p.id, t:e.t, dock:loc.id }); } c.status = "已完成（已交出）"; }
+      else { if (p) { arriveAt(W, p, loc); p.since = e.t; } c.status = `第 ${f.n} 段已抵達`; }
+      if (v) Object.assign(vhOf(W, v.id), { work:"閒置", cmd:null, dest:null });
+      break;
+    }
+    case "done": if (W.cmd[f.cmd]) W.cmd[f.cmd].status = W.cmd[f.cmd].status.startsWith("已完成") ? W.cmd[f.cmd].status : "已完成"; break;
+    case "conn": if (el) Object.assign(vhOf(W, el.id), { conn:f.conn, mode:f.mode }); break;
+    case "alarm": if (el) { if (f.on) W.alarm[el.id] = { alarm:f.alarm, since:e.t }; else delete W.alarm[el.id]; } break;
+  }
+}
+const worldCache = new Map();
+function worldAt(idx) {
+  if (worldCache.has(idx)) return worldCache.get(idx);
+  const W = emptyWorld();
+  for (let i = 0; i <= idx; i++) for (const f of EV[i].fx) apply(W, f, EV[i]);
+  worldCache.set(idx, W);
+  return W;
+}
+const FINAL = worldAt(EV.length - 1);
+const palletsAt = (W, kind, id) => Object.values(W.pal).filter((p) => p.loc && p.loc.kind === kind && p.loc.id === id);
+const mismatch = (W, id) => { const s = W.st[id]; return !!(s && s.pres === false && palletsAt(W, "station", id).length); };
+const noResetAlarm = (id) => ALARM_SPANS.some((a) => a.noReset && elOf(a.code) && elOf(a.code).id === id);
+
+// ================= 畫面狀態 =================
+const S = { idx:-1, time:0, playing:false, speed:5, skipIdle:true, view:"mix", filter:null, sel:null, tab:"raw", offset:false, preset:"play", cmdSel:null, onlyAbn:false, sortKey:"name", drumsOpen:false };
+
+// ================= 小工具 =================
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+const pad = (n, w = 2) => String(n).padStart(w, "0");
+function fmt(t, raw) {
+  const tot = 36000 + t + (raw || !S.offset ? 0 : 2);
+  const h = Math.floor(tot / 3600), m = Math.floor((tot % 3600) / 60), s = tot % 60;
+  return `${pad(h)}:${pad(m)}:${s.toFixed(4).padStart(7, "0")}`;
+}
+function flagsOf(e) {
+  const f = [];
+  if (e.same) f.push(["⧗", "同時間戳記：先後只為了排序穩定，不代表因果"]);
+  if (e.back) f.push(["↶", "時間倒退：原始檔中這一筆比上一行早；原始行序見「原始 LOG」"]);
+  if (e.inherited) f.push(["⌀", "時間無效：時間為沿用（同檔前一筆有效事件的時間）"]);
+  if (e.unknownKind) f.push(["？", "未知種類：Logger 沒有登記在廠別設定中"]);
+  if (e.encErr) f.push(["�", "編碼錯誤：有無法解碼的位元組"]);
+  return f;
+}
+const flagHTML = (e) => flagsOf(e).map(([i, t]) => `<span class="fl" title="${esc(t)}">${i}</span>`).join("");
+function matchesFilter(e) {
+  if (!S.filter) return true;
+  const el = EL[S.filter];
+  const codes = new Set((el.aliases || []).map((a) => a.toLowerCase()));
+  for (const r of e.refSet) if (codes.has(String(r).toLowerCase())) return true;
+  return false;
+}
+const center = (e) => ({ x:e.x + e.w / 2, y:e.y + e.h / 2 });
+
+// ================= 時間控制 =================
+function lastIdxAtOrBefore(t) { let lo = 0, hi = EV.length - 1, r = -1; while (lo <= hi) { const m = (lo + hi) >> 1; if (EV[m].t <= t) { r = m; lo = m + 1; } else hi = m - 1; } return r; }
+function setTime(t) { S.time = Math.max(0, Math.min(T_END, t)); S.idx = lastIdxAtOrBefore(S.time); render(); }
+function setIdx(i) { if (i < 0) { S.idx = -1; S.time = 0; } else { S.idx = Math.min(EV.length - 1, i); S.time = EV[S.idx].t; } render(); }
+function step(kind, dir) {
+  const from = S.idx;
+  if (kind === "event") { setIdx(from + dir); return; }
+  const pred = kind === "change" ? (e) => e.change : matchesFilter;
+  if (dir > 0) { for (let i = from + 1; i < EV.length; i++) if (pred(EV[i])) return setIdx(i); }
+  else { for (let i = from - 1; i >= 0; i--) if (pred(EV[i])) return setIdx(i); setIdx(-1); }
+}
+let timer = null;
+function play(on) {
+  S.playing = on;
+  clearInterval(timer);
+  if (on) timer = setInterval(() => {
+    let t = S.time + 0.1 * S.speed;
+    if (S.skipIdle) {
+      const next = CHANGES.find((e) => e.t > S.time);
+      if (next && next.t - S.time > 10) t = Math.max(t, next.t);
+    }
+    if (t >= T_END) { setTime(T_END); play(false); return; }
+    setTime(t);
+  }, 100);
+  render();
+}
+
+// ================= 繪製：標頭 =================
+function renderHeader() {
+  document.getElementById("hd").innerHTML = `
+    <span class="ttl">案件：範例案件（虛構）</span><span>廠別：範例廠（虛構）</span>
+    <span class="badge b-tz">時區 UTC+8（台北）</span>
+    ${S.offset ? `<span class="badge b-off" title="案件偏移量（ADR-0003）：顯示時間＝原始時間＋2.0 秒；原始 LOG 不變">⚠ 已校正 +2.0 秒</span>` : ""}
+    <button data-act="offset" class="${S.offset ? "on" : ""}">模擬設定偏移量</button>
+    <span style="flex:1"></span>
+    <span>版面：</span>
+    <button data-act="preset" data-p="play" class="${S.preset === "play" ? "on" : ""}">回放</button>
+    <button data-act="preset" data-p="search" class="${S.preset === "search" ? "on" : ""}">搜尋</button>
+    <button data-act="preset" data-p="play">還原預設</button>
+    <span class="hint"><span class="kbd">→</span> 下一個狀態變化　<span class="kbd">Shift</span>+<span class="kbd">→</span> 下一筆事件　<span class="kbd">Ctrl</span>+<span class="kbd">→</span> 下一筆符合篩選　<span class="kbd">空白鍵</span> 播放／暫停</span>`;
+}
+
+// ================= 繪製：Layout =================
+function renderLayout(W) {
+  document.getElementById("legend").innerHTML = `
+    <span><span class="sw" style="background:#e5e7eb"></span>未知</span><span><span class="sw" style="background:#fff"></span>空</span>
+    <span><span class="sw" style="background:#bfdbfe"></span>有貨</span><span><span class="sw" style="background:#fee2e2;border-color:#dc2626"></span>異常中</span>
+    <span><span class="sw" style="background:#fde68a"></span>搬送機執行中</span><span>●在席 ON ○OFF ◌未知</span><span>⚠ 不一致</span>`;
+  const Wd = 24, Hd = 12.4;
+  let s = `<svg viewBox="0 0 ${Wd} ${Hd}" style="width:100%;height:100%;display:block" preserveAspectRatio="xMidYMid meet">
+    <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker></defs>`;
+  for (const e of LAYOUT.elements) {
+    if (e.type === "conveyor") {
+      const a = center(EL[e.from]), b = center(EL[e.to]), dx = (b.x - a.x), dy = (b.y - a.y);
+      s += `<line x1="${a.x + dx * .22}" y1="${a.y + dy * .22}" x2="${b.x - dx * .22}" y2="${b.y - dy * .22}" stroke="#94a3b8" stroke-width=".1" marker-end="url(#arr)"/>`;
+    }
+  }
+  for (const e of LAYOUT.elements) {
+    const sel = S.sel === "el:" + e.id;
+    if (e.type === "rack") {
+      const n = e.colTo - e.colFrom + 1, cw = e.w / n;
+      s += `<text class="t" x="${e.x}" y="${e.y - .15}">${esc(e.name)}（點一格看該列側視圖）</text>`;
+      for (let i = 0; i < n; i++) {
+        const col = e.colFrom + i;
+        let known = 0, full = 0;
+        for (let l = 1; l <= e.levels; l++) { const code = e.row + pad(col, 3) + pad(l); if (code in W.stor) { known++; if (W.stor[code]) full++; } }
+        const fill = known === 0 ? "#e5e7eb" : `rgba(37,99,235,${(0.08 + 0.7 * full / e.levels).toFixed(2)})`;
+        const csel = S.sel === `cell:${col}`;
+        s += `<rect class="clk" data-sel="cell:${col}" x="${e.x + i * cw}" y="${e.y}" width="${cw}" height="${e.h}" fill="${fill}" stroke="${csel ? "#f59e0b" : "#94a3b8"}" stroke-width="${csel ? .1 : .03}"><title>列 ${col}：已知 ${known} 層、有貨 ${full} 層</title></rect>`;
+      }
+      s += `<rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" fill="none" stroke="#475569" stroke-width=".06" pointer-events="none"/>`;
+      continue;
+    }
+    if (e.type === "conveyor") continue;
+    const c = center(e), alarm = W.alarm[e.id];
+    if (e.type === "station") {
+      const st = W.st[e.id], pals = palletsAt(W, "station", e.id), known = !!st || pals.length > 0;
+      const fill = !known ? "#e5e7eb" : alarm ? "#fee2e2" : pals.length ? "#bfdbfe" : "#ffffff";
+      const pres = !st || st.pres === null ? "#cbd5e1" : st.pres ? "#22c55e" : "#1e293b";
+      s += `<g class="clk" data-sel="el:${e.id}">
+        <rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" rx=".12" fill="${fill}" stroke="${alarm ? "#dc2626" : "#2563eb"}" stroke-width="${alarm ? .14 : .06}"/>
+        <text class="t" x="${c.x}" y="${e.y + .55}" text-anchor="middle">${esc(e.name)}</text>
+        <text class="ts" x="${c.x}" y="${e.y + .9}" text-anchor="middle">${esc(e.aliases.join("・"))}</text>
+        <circle cx="${e.x + e.w - .25}" cy="${e.y + .25}" r=".16" fill="${pres}" stroke="#334155" stroke-width=".03" opacity="${st && st.pres === false ? .6 : 1}"/>
+        ${pals.map((p, k) => `<rect x="${c.x - .55}" y="${e.y + 1.15 + k * .45}" width="1.1" height=".38" fill="#b45309" rx=".05"/><text class="ts" x="${c.x}" y="${e.y + 1.43 + k * .45}" text-anchor="middle" style="fill:#fff">${esc(p.id.slice(-4))}</text>`).join("")}
+        ${mismatch(W, e.id) ? `<text x="${e.x + .1}" y="${e.y + e.h - .12}" style="font-size:.5px">⚠</text>` : ""}
+        ${!known ? `<text class="ts" x="${c.x}" y="${e.y + 1.6}" text-anchor="middle">未知</text>` : ""}
+      </g>`;
+    } else if (e.type === "vehicle") {
+      const v = W.veh[e.id], pals = palletsAt(W, "vehicle", e.id);
+      const fill = !v ? "#e5e7eb" : v.work === "執行中" ? "#fde68a" : "#ffffff";
+      const l1 = !v ? "未知" : v.work === "執行中" ? `執行中 → ${v.dest}` : v.work;
+      const l2 = !v ? "" : v.conn === "未知" ? "連線：未知" : `${v.conn}・${v.mode}`;
+      s += `<g class="clk" data-sel="el:${e.id}">
+        <rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" rx=".3" fill="${fill}" stroke="${alarm ? "#dc2626" : "#b45309"}" stroke-width="${alarm ? .14 : .06}" ${v && v.conn === "OFF-LINE" ? `stroke-dasharray=".2 .1"` : ""}/>
+        <text class="t" x="${e.x + .2}" y="${e.y + .45}">◆ ${esc(e.name)}</text>
+        <text class="ts" x="${e.x + .2}" y="${e.y + .85}">${esc(l1)}</text>
+        <text class="ts" x="${e.x + .2}" y="${e.y + 1.2}">${esc(l2)}</text>
+        ${pals.map((p) => `<rect x="${e.x + e.w - 1.2}" y="${e.y + .2}" width="1" height=".38" fill="#b45309" rx=".05"/><text class="ts" x="${e.x + e.w - .7}" y="${e.y + .48}" text-anchor="middle" style="fill:#fff">${esc(p.id.slice(-4))}</text>`).join("")}
+      </g>`;
+    } else if (e.type === "dock") {
+      const outs = W.out.filter((o) => o.dock === e.id);
+      s += `<g class="clk" data-sel="el:${e.id}">
+        <rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" fill="#ede9fe" stroke="#7c3aed" stroke-width=".06"/>
+        <text class="t" x="${c.x}" y="${e.y + .6}" text-anchor="middle">⇨ ${esc(e.name)}</text>
+        <text class="ts" x="${c.x}" y="${e.y + 1.1}" text-anchor="middle">對接設備</text>
+        <text class="ts" x="${c.x}" y="${e.y + 1.5}" text-anchor="middle">已交出 ${outs.length} 個</text>
+      </g>`;
+    }
+    if (sel) s += `<rect class="selbox" x="${e.x - .12}" y="${e.y - .12}" width="${e.w + .24}" height="${e.h + .24}"/>`;
+  }
+  s += `</svg>`;
+  document.getElementById("layb").innerHTML = s;
+}
+
+// ================= 繪製：詳細資訊 =================
+function palletLine(W, p) {
+  const where = !p.loc ? "未知" : p.loc.kind === "station" ? `站點 ${EL[p.loc.id].name}` : p.loc.kind === "vehicle" ? `搬送機 ${EL[p.loc.id].name} 上` : p.loc.kind === "storage" ? `儲位 ${p.loc.id}` : p.loc.kind === "gone" ? `已交出（${EL[p.loc.id].name}）` : p.loc.id;
+  return where;
+}
+function palletBlock(W, p) {
+  const drums = p.drums ? `${p.drums.length} 個 <span class="lnk" data-act="drums">${S.drumsOpen ? "收合" : "展開"}</span>${S.drumsOpen ? "<br>" + p.drums.map(esc).join("<br>") : ""}`
+                        : `<span class="tag tg-unk">未知</span>（案件中沒有讀到桶條碼）`;
+  const cmds = Object.values(W.cmd).filter((c) => c.pallet === p.id);
+  return `<div class="kv"><div>棧板</div><div><b>${esc(p.id)}</b>${p.preexisting ? `<span class="tag tg-warn" title="第一次被提到時就已經在來源儲位">案件開始前已存在</span>` : ""}</div>
+    <div>位置</div><div>${esc(palletLine(W, p))}</div><div>桶</div><div>${drums}</div>
+    <div>命令</div><div>${cmds.map((c) => `<span class="lnk" data-act="cmd" data-cmd="${c.id}">${c.id}</span>`).join("、") || "—"}</div></div>`;
+}
+function renderDetail(W) {
+  const b = document.getElementById("detb");
+  if (!S.sel) { b.innerHTML = `<div class="hint">點 Layout 上的站點、搬送機、對接設備或料架的一格，這裡會顯示目前時刻的詳細狀態。</div>`; return; }
+  let h = `<div class="det">`;
+  if (S.sel.startsWith("cell:")) {
+    const col = +S.sel.slice(5), rk = EL["rk-1"];
+    h += `<h3>${esc(rk.name)}・列 ${col} 側視圖</h3><table><tr><th>層</th><th>儲位</th><th>內容</th></tr>`;
+    for (let l = rk.levels; l >= 1; l--) {
+      const code = rk.row + pad(col, 3) + pad(l);
+      const v = code in W.stor ? (W.stor[code] ? `<span class="lnk" data-act="pal" data-p="${W.stor[code]}">${W.stor[code]}</span>` : "空") : `<span class="tag tg-unk">未知</span>`;
+      h += `<tr><td>第 ${l} 層</td><td class="tm">${code}</td><td>${v}</td></tr>`;
+    }
+    h += `</table>`;
+  } else if (S.sel.startsWith("pal:")) {
+    const p = W.pal[S.sel.slice(4)] || FINAL.pal[S.sel.slice(4)];
+    h += `<h3>貨物</h3>` + (W.pal[p.id] ? palletBlock(W, W.pal[p.id]) : `<div class="hint">這個時刻還沒有在 LOG 中出現。</div>`);
+  } else {
+    const e = EL[S.sel.slice(3)], alarm = W.alarm[e.id];
+    h += `<h3>${{ station:"站點", vehicle:"搬送機", dock:"對接設備" }[e.type]}：${esc(e.name)}</h3>
+      <div class="kv"><div>別名</div><div>${esc((e.aliases || []).join("、"))}</div>
+      <div>異常</div><div>${alarm ? `<span class="tag tg-err">異常中 ${esc(alarm.alarm)}</span> 自 ${fmt(alarm.since)}${noResetAlarm(e.id) ? `<span class="tag tg-warn">未見復歸紀錄</span>` : ""}` : "—"}</div>`;
+    if (e.type === "station") {
+      const st = W.st[e.id], pals = palletsAt(W, "station", e.id);
+      h += `<div>在席</div><div>${!st || st.pres === null ? `<span class="tag tg-unk">未知</span>` : (st.pres ? "ON" : "OFF") + `（${fmt(st.presT)}）`}</div>
+        <div>站點模式</div><div>${st && st.mode !== null ? `代號 ${st.mode}<span class="hint">（名稱未設定）</span>` : `<span class="tag tg-unk">未知</span>`}</div>
+        <div>不一致</div><div>${mismatch(W, e.id) ? `<span class="tag tg-warn">⚠ 命令說貨物在這裡，但在席是 OFF</span>` : "—"}</div>
+        <div>其他訊號</div><div>${st && Object.keys(st.sig).length ? Object.entries(st.sig).map(([k, v]) => `${esc(k)} ${v.on ? "ON" : "OFF"}`).join("<br>") : "—"}</div></div>`;
+      h += pals.length ? pals.map((p) => palletBlock(W, p)).join("") : `<div class="hint">${st ? "目前沒有貨物。" : "狀態未知（LOG 還沒有提到這個站點）。"}</div>`;
+    } else if (e.type === "vehicle") {
+      const v = W.veh[e.id], pals = palletsAt(W, "vehicle", e.id);
+      h += `<div>連線</div><div>${v ? esc(v.conn) : "未知"}</div><div>模式</div><div>${v ? esc(v.mode) : "未知"}</div>
+        <div>作業</div><div>${!v ? "未知" : v.work === "執行中" ? `執行中：<span class="lnk" data-act="cmd" data-cmd="${v.cmd}">${v.cmd}</span> → ${esc(v.dest)}` : esc(v.work)}</div></div>`;
+      if (v && v.conn === "未知") h += `<div class="hint">ON-LINE／OFF-LINE 只有在切換時才有紀錄，第一次切換之前都是未知。</div>`;
+      h += pals.map((p) => palletBlock(W, p)).join("");
+    } else {
+      const outs = W.out.filter((o) => o.dock === e.id);
+      h += `</div><div class="sec">已交出的貨物：</div>${outs.map((o) => `<div>${fmt(o.t)}　<span class="lnk" data-act="pal" data-p="${o.pallet}">${o.pallet}</span></div>`).join("") || `<div class="hint">還沒有。</div>`}`;
+    }
+    h += `<p><button data-act="filter" data-el="${e.id}">只看這個元素</button></p>`;
+  }
+  b.innerHTML = h + `</div>`;
+}
+
+// ================= 繪製：時間軸 =================
+function renderTimeline() {
+  const b = document.getElementById("tlb");
+  const BIN = 5, nb = Math.ceil(T_END / BIN), cnt = new Array(nb).fill(0);
+  for (const e of EV) cnt[Math.min(nb - 1, Math.floor(e.t / BIN))]++;
+  const mx = Math.max(...cnt);
+  let o = `<svg class="tlsvg" id="ov" viewBox="0 0 ${T_END} 30" preserveAspectRatio="none" style="height:34px">
+    <rect x="0" y="0" width="${T_END}" height="30" fill="#f8fafc"/>`;
+  for (const a of ALARM_SPANS) o += `<rect x="${a.from}" y="0" width="${a.to - a.from}" height="30" fill="rgba(220,38,38,.18)"><title>警報 ${a.alarm}（${a.code}）${a.noReset ? "：未見復歸紀錄" : ""}</title></rect>`;
+  cnt.forEach((c, i) => { const h = 22 * c / mx; o += `<rect x="${i * BIN + .4}" y="${30 - h}" width="${BIN - .8}" height="${h}" fill="#94a3b8"/>`; });
+  for (const e of EV) if (flagsOf(e).length) o += `<rect x="${e.t - .3}" y="0" width=".6" height="5" fill="#f59e0b"/>`;
+  o += `<rect x="${S.time - .6}" y="0" width="1.2" height="30" fill="#dc2626"/></svg>`;
+  const W0 = S.time - 30, W1 = S.time + 30;
+  let d = `<svg class="tlsvg" id="dt" viewBox="${W0} 0 60 22" preserveAspectRatio="none" style="height:26px"><rect x="${W0}" y="0" width="60" height="22" fill="#fff"/>`;
+  for (let t = Math.ceil(W0 / 5) * 5; t <= W1; t += 5) d += `<line x1="${t}" y1="0" x2="${t}" y2="22" stroke="#e2e8f0" stroke-width=".08"/>`;
+  const col = { EXE:"#d97706", PLC:"#16a34a", Server:"#4f46e5" };
+  for (const e of EV) if (e.t >= W0 && e.t <= W1) d += `<rect x="${e.t - .06}" y="${e.change ? 2 : 12}" width=".12" height="${e.change ? 18 : 8}" fill="${col[e.mod]}" opacity="${matchesFilter(e) ? 1 : .2}"><title>${fmt(e.t)} ${e.mod} ${esc(e.msg)}</title></rect>`;
+  d += `<rect x="${S.time - .08}" y="0" width=".16" height="22" fill="#dc2626"/></svg>`;
+  b.innerHTML = o + d + `<div class="ctl">
+      <span class="now">${fmt(S.time)}</span>
+      <button data-act="home" title="Home">⏮</button>
+      <button data-act="step" data-k="change" data-d="-1" title="上一個狀態變化（←）">◀◀</button>
+      <button data-act="step" data-k="event" data-d="-1" title="上一筆事件（Shift+←）">◀</button>
+      <button data-act="play" class="${S.playing ? "on" : ""}" title="空白鍵">${S.playing ? "⏸ 暫停" : "▶ 播放"}</button>
+      <button data-act="step" data-k="event" data-d="1" title="下一筆事件（Shift+→）">▶</button>
+      <button data-act="step" data-k="change" data-d="1" title="下一個狀態變化（→）">▶▶</button>
+      <button data-act="end" title="End">⏭</button>
+      <span>速度</span>${[1, 2, 5, 20, 60].map((v) => `<button data-act="speed" data-v="${v}" class="${S.speed === v ? "on" : ""}">×${v}</button>`).join("")}
+      <label><input type="checkbox" id="skip" ${S.skipIdle ? "checked" : ""}> 略過閒置時段（超過 10 秒沒有狀態變化）</label>
+      <span class="hint">細部時間軸：粗刻度＝狀態變化，細刻度＝其他事件；顏色＝模組</span>
+    </div>`;
+}
+
+// ================= 繪製：事件清單 =================
+function renderList() {
+  document.getElementById("listh").innerHTML = `事件清單 <span class="n">（${EV.filter(matchesFilter).length} 筆／共 ${EV.length} 筆）</span>
+    <button data-act="view" data-v="mix" class="${S.view === "mix" ? "on" : ""}">混合</button>
+    <button data-act="view" data-v="split" class="${S.view === "split" ? "on" : ""}">分軌</button>
+    ${S.filter ? `<span class="chip">只看：${esc(EL[S.filter].name)}<b data-act="unfilter" title="取消篩選">×</b></span>` : ""}
+    <span class="sp"></span><span class="n">⧗同時間戳記 ↶時間倒退 ⌀時間無效（沿用） ？未知種類 �編碼錯誤　<span class="chg">●</span>＝會改變狀態</span>`;
+  const rows = EV.filter(matchesFilter);
+  let cur = -1;
+  for (const e of rows) if (e.i <= S.idx) cur = e.i;
+  let h;
+  if (S.view === "mix") {
+    h = `<table><tr><th></th><th>時間</th><th>模組</th><th>Logger</th><th>等級</th><th>訊息</th><th>旗標</th></tr>`;
+    for (const e of rows) h += `<tr class="ev mix m-${e.mod} ${e.i === cur ? "cur" : ""} ${e.i > S.idx ? "fut" : ""}" data-i="${e.i}">
+      <td>${e.change ? `<span class="chg">●</span>` : ""}</td><td class="tm">${fmt(e.t)}</td><td>${e.mod}</td><td>${esc(e.logger)}</td><td>${e.level}</td><td class="msg">${esc(e.msg)}</td><td>${flagHTML(e)}</td></tr>`;
+  } else {
+    h = `<table><tr><th>時間</th><th style="width:30%">EXE</th><th style="width:30%">PLC</th><th style="width:30%">Server</th></tr>`;
+    for (const e of rows) {
+      const cell = (m) => e.mod === m ? `<td class="msg mc">${e.change ? `<span class="chg">● </span>` : ""}${esc(e.msg)} ${flagHTML(e)}<div class="hint" style="padding:0">${esc(e.logger)}</div></td>` : `<td></td>`;
+      h += `<tr class="ev m-${e.mod} ${e.i === cur ? "cur" : ""} ${e.i > S.idx ? "fut" : ""}" data-i="${e.i}"><td class="tm">${fmt(e.t)}</td>${cell("EXE")}${cell("PLC")}${cell("Server")}</tr>`;
+    }
+  }
+  const lb = document.getElementById("listb");
+  lb.innerHTML = h + `</table>`;
+  const r = lb.querySelector("tr.cur");
+  if (r) { const top = r.offsetTop - lb.clientHeight / 2; if (Math.abs(lb.scrollTop - top) > lb.clientHeight / 3) lb.scrollTop = top; }
+}
+
+// ================= 繪製：分頁（原始 LOG、命令、設備狀態表、未對應） =================
+function renderTabs(W) {
+  const tabs = { raw:"原始 LOG", cmd:"命令", eq:"設備狀態表", um:"未對應的編號" };
+  document.getElementById("tabh").innerHTML = Object.entries(tabs).map(([k, v]) => `<button data-act="tab" data-t="${k}" class="${S.tab === k ? "on" : ""}">${v}</button>`).join("");
+  const b = document.getElementById("tabb");
+  if (S.tab === "raw") {
+    if (S.idx < 0) { b.innerHTML = `<div class="hint">選一筆事件後，這裡會顯示它在原始檔中的位置（原始行序，不受排序影響）。</div>`; return; }
+    const e = EV[S.idx], list = FILES[e.file], k = list.indexOf(e);
+    let h = `<div class="hint">${esc(e.file)}　第 ${e.line} 行　（原始行序；時間倒退的行在這裡維持原位）</div><div class="raw">`;
+    for (let j = Math.max(0, k - 12); j <= Math.min(list.length - 1, k + 12); j++) {
+      const d = list[j];
+      const ts = d.invalid ? "2026-01-05 10:0?:??.????" : `2026-01-05 ${fmt(d.t, true)}`;
+      h += `<div class="${d === e ? "hl" : ""}"><span class="ln">${d.line}</span>${esc(`${ts} | ${d.level} | ${d.logger} | ${d.msg}`)}</div><div><span class="ln">${d.line + 1}</span></div>`;
+    }
+    b.innerHTML = h + `</div>`;
+    const hl = b.querySelector(".hl"); if (hl) b.scrollTop = hl.offsetTop - b.clientHeight / 2;
+  } else if (S.tab === "cmd") {
+    const ids = Object.keys(FINAL.cmd);
+    let h = `<table><tr><th>命令</th><th>類型</th><th>棧板</th><th>目前狀態</th><th>案件結束時</th></tr>`;
+    for (const id of ids) {
+      const c = W.cmd[id], f = FINAL.cmd[id];
+      h += `<tr class="ev ${S.cmdSel === id ? "cur" : ""}" data-act="cmd" data-cmd="${id}"><td>${id}</td><td>${{ S:"入庫", R:"出庫", P:"搬送" }[f.type]}</td><td>${f.pallet}</td>
+        <td>${c ? esc(c.status) + (c.veh && c.status.includes("執行中") ? `（${esc(c.veh)} → ${esc(c.dest)}）` : "") : `<span class="tag tg-unk">尚未建立</span>`}</td>
+        <td>${f.status.startsWith("已完成") ? `<span class="tag tg-ok">${esc(f.status)}</span>` : `<span class="tag tg-warn">案件範圍內未完成</span>`}</td></tr>`;
+    }
+    h += `</table>`;
+    if (S.cmdSel) {
+      const evs = EV.filter((e) => e.refSet.has(S.cmdSel));
+      h += `<div class="hint">命令 ${S.cmdSel} 串起來的事件（跨模組，點一下跳到該時刻）：</div><table>`;
+      for (const e of evs) h += `<tr class="ev mix m-${e.mod} ${e.i === S.idx ? "cur" : ""}" data-i="${e.i}"><td class="tm">${fmt(e.t)}</td><td>${e.mod}</td><td class="msg">${esc(e.msg)}</td></tr>`;
+      h += `</table>`;
+    }
+    b.innerHTML = h;
+  } else if (S.tab === "eq") {
+    const rows = LAYOUT.elements.filter((e) => ["station", "vehicle", "dock"].includes(e.type)).map((e) => {
+      const a = W.alarm[e.id], v = W.veh[e.id], st = W.st[e.id];
+      let state;
+      if (e.type === "vehicle") state = !v ? "未知" : `${v.conn}／${v.mode}／${v.work}${v.cmd ? " " + v.cmd : ""}`;
+      else if (e.type === "station") { const p = palletsAt(W, "station", e.id); state = !st && !p.length ? "未知" : p.length ? `有貨 ${p.map((x) => x.id).join("、")}` : "空"; }
+      else state = `已交出 ${W.out.filter((o) => o.dock === e.id).length} 個`;
+      return { e, name:e.name, kind:{ station:"站點", vehicle:"搬送機", dock:"對接設備" }[e.type], state,
+        pres: e.type !== "station" ? "—" : !st || st.pres === null ? "未知" : st.pres ? "ON" : "OFF",
+        abn: a ? `異常中 ${a.alarm}` : "", mis: e.type === "station" && mismatch(W, e.id) ? "⚠" : "" };
+    }).filter((r) => !S.onlyAbn || r.abn || r.mis)
+      .sort((x, y) => String(x[S.sortKey]).localeCompare(String(y[S.sortKey]), "zh-Hant") * (S.sortKey === "abn" ? -1 : 1));
+    const th = (k, t) => `<th class="lnk" data-act="sort" data-k="${k}">${t}${S.sortKey === k ? " ▾" : ""}</th>`;
+    b.innerHTML = `<div class="hint"><label><input type="checkbox" id="onlyabn" ${S.onlyAbn ? "checked" : ""}> 只看異常中或不一致</label>　點標題排序；點一列在 Layout 上選取</div>
+      <table><tr>${th("name", "名稱")}${th("kind", "種類")}${th("state", "狀態")}${th("pres", "在席")}${th("abn", "異常")}${th("mis", "不一致")}</tr>
+      ${rows.map((r) => `<tr class="ev ${S.sel === "el:" + r.e.id ? "cur" : ""}" data-act="selrow" data-id="${r.e.id}"><td>${esc(r.name)}</td><td>${r.kind}</td><td>${esc(r.state)}</td><td>${r.pres}</td><td>${r.abn ? `<span class="tag tg-err">${esc(r.abn)}</span>` : ""}</td><td>${r.mis}</td></tr>`).join("")}</table>`;
+  } else {
+    const cnt = {};
+    for (const e of EV) for (const r of e.refSet) { const s = String(r); if (!/^(C\d{4}|PLT-|\d{7}$)/.test(s) && !elOf(s)) cnt[s] = (cnt[s] || 0) + 1; }
+    b.innerHTML = `<div class="hint">案件 LOG 中出現、但 Layout 還沒有對應的編號（虛構）。實作時可以拖到 Layout 編輯器的元素上加為別名（ADR-0006）。</div>
+      <table><tr><th>編號</th><th>出現次數</th></tr>${Object.entries(cnt).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join("")}</table>`;
+  }
+}
+
+// ================= 全部繪製 =================
+function render() {
+  document.getElementById("root").className = "p-" + S.preset;
+  const W = S.idx >= 0 ? worldAt(S.idx) : emptyWorld();
+  renderHeader(); renderLayout(W); renderDetail(W); renderTimeline(); renderList(); renderTabs(W);
+}
+
+// ================= 事件處理 =================
+document.addEventListener("click", (ev) => {
+  const row = ev.target.closest("tr[data-i]");
+  if (row && !ev.target.closest("[data-act]")) { play(false); setIdx(+row.dataset.i); return; }
+  const sel = ev.target.closest("[data-sel]");
+  if (sel) { S.sel = sel.dataset.sel; S.drumsOpen = false; render(); return; }
+  const b = ev.target.closest("[data-act]");
+  if (!b) return;
+  switch (b.dataset.act) {
+    case "step": play(false); step(b.dataset.k, +b.dataset.d); return;
+    case "play": play(!S.playing); return;
+    case "home": play(false); setIdx(-1); return;
+    case "end": play(false); setTime(T_END); return;
+    case "speed": S.speed = +b.dataset.v; break;
+    case "view": S.view = b.dataset.v; break;
+    case "filter": S.filter = b.dataset.el; break;
+    case "unfilter": S.filter = null; break;
+    case "tab": S.tab = b.dataset.t; break;
+    case "cmd": S.cmdSel = b.dataset.cmd; S.tab = "cmd"; break;
+    case "pal": S.sel = "pal:" + b.dataset.p; S.drumsOpen = false; break;
+    case "drums": S.drumsOpen = !S.drumsOpen; break;
+    case "offset": S.offset = !S.offset; break;
+    case "preset": S.preset = b.dataset.p; break;
+    case "sort": S.sortKey = b.dataset.k; break;
+    case "selrow": S.sel = "el:" + b.dataset.id; break;
+  }
+  render();
+});
+document.addEventListener("change", (ev) => {
+  if (ev.target.id === "skip") { S.skipIdle = ev.target.checked; render(); }
+  if (ev.target.id === "onlyabn") { S.onlyAbn = ev.target.checked; render(); }
+});
+// 拖曳或點擊時間軸
+let scrub = null;
+document.addEventListener("mousedown", (ev) => {
+  const svg = ev.target.closest && ev.target.closest("svg.tlsvg");
+  if (!svg) return;
+  scrub = svg.id; play(false); scrubTo(ev); ev.preventDefault();
+});
+window.addEventListener("mousemove", (ev) => { if (scrub) scrubTo(ev); });
+window.addEventListener("mouseup", () => { scrub = null; });
+function scrubTo(ev) {
+  const svg = document.getElementById(scrub); if (!svg) return;
+  const r = svg.getBoundingClientRect(), fx = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+  if (scrub === "ov") setTime(fx * T_END);
+  else { const W0 = S.time - 30; scrub = null; setTime(W0 + fx * 60); }
+}
+document.addEventListener("keydown", (ev) => {
+  if (ev.target.closest && ev.target.closest("input, select, textarea")) return;
+  if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") {
+    const d = ev.key === "ArrowRight" ? 1 : -1;
+    play(false);
+    step(ev.shiftKey ? "event" : ev.ctrlKey ? "filter" : "change", d);
+    ev.preventDefault();
+  } else if (ev.key === " ") { play(!S.playing); ev.preventDefault(); }
+  else if (ev.key === "Home") { play(false); setIdx(-1); }
+  else if (ev.key === "End") { play(false); setTime(T_END); }
+});
+
+// 方便分享特定時刻：?t=秒數&sel=el:st-4
+{ const q = new URLSearchParams(location.search); if (q.get("sel")) S.sel = q.get("sel"); if (q.get("tab")) S.tab = q.get("tab"); if (q.get("t")) { setTime(+q.get("t")); } }
+render();
+</script>
+</body>
+</html>

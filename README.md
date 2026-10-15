@@ -24,6 +24,7 @@
 | [docs/requirements.md](docs/requirements.md) | 需求規格：背景、目標、FR／NFR、使用流程、驗收條件、待確認問題 |
 | [docs/architecture.md](docs/architecture.md) | 架構評估：資料流程、候選職責、候選架構方案、待決策事項 |
 | [docs/log-format-notes.md](docs/log-format-notes.md) | LOG 格式調查紀錄模板（每種設備或 LOG 來源各填一份） |
+| `docs/adr/` | 架構決策的個別詳細紀錄（ADR）；索引與現行結論見 `docs/architecture.md` 第 10 章 |
 
 ## 第一階段功能範圍
 

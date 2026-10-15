@@ -60,7 +60,10 @@
     - **考慮過的替代方案**及捨棄原因
     - **尚存風險**與後續驗證方式
     - 決策日期與確認者
-11. 決策紀錄的格式與存放位置尚未決定（**待確認**），在決定前先記在 `docs/architecture.md` 的「決策紀錄」章節。
+11. 決策紀錄分兩層存放：
+    - **`docs/adr/`**：每項決策一個檔案，存放完整紀錄。檔名為 `NNNN-<slug>.md`（例如 `0001-log-storage.md`），編號依序遞增、不重複使用；文中以 `ADR-0001` 稱呼。格式見 `docs/architecture.md`「決策紀錄」章節的範本，必須包含第 10 條列出的所有欄位。
+    - **`docs/architecture.md`「決策紀錄」章節**：決策索引與現行結論。每項決策一列，只寫編號、標題、狀態、一句話結論與連結，不重複詳細內容。
+    - 新增或變更決策時，兩處必須同步更新。決策被取代或廢止時，不刪除原 ADR 檔案，只更新其狀態並在索引標示。
 
 ### 3.6 原始資料與資訊安全
 
@@ -76,6 +79,7 @@
 | `docs/requirements.md` | 需求規格（FR／NFR、使用流程、驗收條件、待確認問題） |
 | `docs/architecture.md` | 架構評估（候選方案、評估項目、待決策事項） |
 | `docs/log-format-notes.md` | LOG 格式調查紀錄模板 |
+| `docs/adr/` | 架構決策的個別詳細紀錄（ADR），索引見 `docs/architecture.md` |
 
 ## 5. 撰寫慣例
 
@@ -95,4 +99,4 @@ Issue 以 GitHub Issues 管理（使用 `gh` CLI）。See `docs/agents/issue-tra
 
 ### Domain docs
 
-Single-context（根目錄 `GLOSSARY.md` + `docs/adr/`；ADR 位置待確認前以 `docs/architecture.md` 決策紀錄為準）。See `docs/agents/domain.md`.
+Single-context（根目錄 `GLOSSARY.md` + `docs/adr/`；`docs/architecture.md` 為決策索引與現行結論）。See `docs/agents/domain.md`.

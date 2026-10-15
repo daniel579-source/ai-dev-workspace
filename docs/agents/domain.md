@@ -2,7 +2,10 @@
 
 How the engineering skills should consume this repo's domain documentation when exploring the codebase.
 
-> **本專案例外**：ADR 存放位置尚未決定（`CLAUDE.md` 3.5 節，待確認）。在決定前，架構決策以 `docs/architecture.md` 的「決策紀錄」章節為準；若 `docs/adr/` 不存在，讀該章節即可。
+> **本專案規則**（`CLAUDE.md` 3.5 節，優先於下方通用說明）：
+> - `docs/architecture.md` 的「決策紀錄」章節是**決策索引與現行結論**，探索前先讀它，再依索引讀相關的 ADR。
+> - `docs/adr/NNNN-<slug>.md` 是**個別決策的詳細紀錄**。ADR 必須包含 `CLAUDE.md` 3.5 節要求的所有欄位（背景、決策、理由、替代方案、尚存風險、後續驗證、日期、確認者），不採用一段話的精簡格式；範本見 `docs/architecture.md`。
+> - 新增或變更 ADR 時，必須同步更新 `docs/architecture.md` 的索引。
 
 ## Before exploring, read these
 

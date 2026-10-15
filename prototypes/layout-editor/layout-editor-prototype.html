@@ -1,0 +1,600 @@
+<!doctype html>
+<!--
+  PROTOTYPE（拋棄式原型）— Layout 編輯器
+  問題：Layout 編輯器的版面該長什麼樣子？
+  計畫：同一份虛構 Layout，三種結構不同的編輯器版面，以 ?variant=A|B|C 或下方切換列切換（鍵盤 ← →）。
+  - A 三欄式：工具箱｜畫布｜屬性，下方是「未對應」清單（拖曳對應）
+  - B 畫布優先：畫布全滿，工具箱與屬性浮動，「未對應」在右側抽屜
+  - C 對應優先：左側是未對應清單（下拉選單對應）與元素表格，右側是畫布預覽與屬性
+  所有資料都是虛構的範例；不寫入檔案、不連網，狀態只在記憶體中。
+  依據：ADR-0005（回放的世界模型）與「Layout 模型與設定檔」ticket 的 Q1～Q8。
+-->
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Layout 編輯器原型（PROTOTYPE・虛構資料）</title>
+<style>
+  :root { --bd:#cbd5e1; --bg:#f8fafc; --pn:#ffffff; --tx:#0f172a; --mu:#64748b; --ac:#2563eb; --er:#dc2626; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--tx); font:14px/1.4 "Segoe UI","Microsoft JhengHei",sans-serif; }
+  #app { height: calc(100vh - 20px); display:flex; flex-direction:column; }
+  button { font:inherit; border:1px solid var(--bd); background:#fff; border-radius:6px; padding:3px 9px; cursor:pointer; }
+  button:hover { border-color:var(--ac); }
+  button.on { background:#dbeafe; border-color:var(--ac); }
+  input, select { font:inherit; border:1px solid var(--bd); border-radius:4px; padding:2px 5px; }
+  input[type=number] { width:70px; }
+  .top { display:flex; gap:8px; align-items:center; padding:8px 12px; background:var(--pn); border-bottom:1px solid var(--bd); flex-wrap:wrap; }
+  .top .title { font-weight:700; margin-right:8px; }
+  .top .meta { color:var(--mu); }
+  .msg { color:var(--er); font-weight:600; }
+  .msg.ok { color:#15803d; }
+  .canvas-wrap { overflow:auto; background:#fff; position:relative; }
+  svg#cv { display:block; user-select:none; }
+  .tool { display:flex; gap:6px; }
+  .tool.v { flex-direction:column; }
+  .tool button { text-align:left; white-space:nowrap; }
+  .sec-title { font-weight:700; margin:4px 0 6px; }
+  .hint { color:var(--mu); font-size:12px; }
+  .field { display:flex; align-items:center; gap:6px; margin:4px 0; }
+  .field > label { width:72px; color:var(--mu); flex:none; }
+  .chips { display:flex; flex-wrap:wrap; gap:4px; }
+  .chip { background:#e0e7ff; border-radius:10px; padding:1px 8px; font-size:12px; }
+  .chip b { cursor:pointer; margin-left:4px; color:var(--mu); }
+  .um { display:inline-flex; gap:6px; align-items:center; border:1px dashed var(--ac); border-radius:6px; padding:3px 8px; margin:3px; background:#eff6ff; cursor:grab; }
+  .um .k { color:var(--mu); font-size:12px; }
+  table { border-collapse:collapse; width:100%; }
+  td, th { border-bottom:1px solid #e2e8f0; padding:4px 6px; text-align:left; vertical-align:top; }
+  tr.sel td { background:#dbeafe; }
+  tr[data-act] { cursor:pointer; }
+  /* A 三欄式 */
+  .a-main { flex:1; display:flex; min-height:0; }
+  .a-main .tool { padding:10px; border-right:1px solid var(--bd); background:var(--pn); }
+  .a-main .canvas-wrap { flex:1; }
+  .a-main .props { width:300px; padding:10px; border-left:1px solid var(--bd); background:var(--pn); overflow:auto; }
+  .a-bottom { height:96px; padding:6px 12px; border-top:1px solid var(--bd); background:var(--pn); overflow:auto; margin-bottom:52px; }
+  /* B 畫布優先 */
+  .b-main { flex:1; position:relative; min-height:0; }
+  .b-main .canvas-wrap { position:absolute; inset:0; bottom:52px; padding-left:150px; }
+  .float { position:absolute; background:rgba(255,255,255,.96); border:1px solid var(--bd); border-radius:10px; box-shadow:0 6px 20px rgba(0,0,0,.12); padding:10px; }
+  .tool-f { top:12px; left:12px; }
+  .props-f { top:12px; right:12px; width:290px; max-height:calc(100% - 90px); overflow:auto; }
+  .drawer { position:absolute; top:0; right:0; bottom:52px; width:300px; background:var(--pn); border-left:1px solid var(--bd); padding:10px; overflow:auto; box-shadow:-6px 0 20px rgba(0,0,0,.08); }
+  /* C 對應優先 */
+  .c-main { flex:1; display:flex; min-height:0; margin-bottom:52px; }
+  .c-left { width:46%; display:flex; flex-direction:column; border-right:1px solid var(--bd); background:var(--pn); overflow:auto; }
+  .c-left section { padding:10px; border-bottom:1px solid var(--bd); }
+  .c-right { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .c-right .canvas-wrap { flex:1; }
+  .c-props { height:230px; overflow:auto; padding:10px; border-top:1px solid var(--bd); background:var(--pn); }
+  .c-um-row { display:flex; gap:6px; align-items:center; margin:3px 0; }
+  .c-um-row code { min-width:70px; }
+  /* 共用：切換列、彈窗、JSON */
+  #switcher { position:fixed; left:50%; bottom:10px; transform:translateX(-50%); background:#0f172a; color:#fff; border-radius:999px; padding:6px 10px; display:flex; gap:10px; align-items:center; box-shadow:0 4px 16px rgba(0,0,0,.35); z-index:50; }
+  #switcher button { background:#1e293b; color:#fff; border-color:#334155; border-radius:999px; }
+  #switcher .lab { min-width:200px; text-align:center; font-weight:600; }
+  #modal { position:fixed; inset:0; background:rgba(15,23,42,.45); display:flex; align-items:center; justify-content:center; z-index:60; }
+  #modal[hidden] { display:none; }
+  .mbox { background:#fff; border-radius:10px; padding:16px; width:min(720px, 92vw); max-height:84vh; overflow:auto; }
+  .mbox textarea { width:100%; height:360px; font:12px/1.4 Consolas,monospace; }
+  #json { position:fixed; right:12px; bottom:60px; width:380px; max-height:46vh; overflow:auto; background:#0f172a; color:#e2e8f0; border-radius:10px; padding:10px; font:12px/1.4 Consolas,monospace; z-index:40; white-space:pre; }
+  #json[hidden] { display:none; }
+  .banner { background:#fef3c7; color:#92400e; padding:2px 10px; font-size:12px; text-align:center; }
+  /* SVG */
+  .grid1 { stroke:#f1f5f9; stroke-width:.03; }
+  .grid5 { stroke:#e2e8f0; stroke-width:.05; }
+  .area { fill:rgba(16,185,129,.06); stroke:#10b981; stroke-width:.05; stroke-dasharray:.3 .2; }
+  .st { fill:#dbeafe; stroke:#2563eb; stroke-width:.06; }
+  .rack { fill:#f8fafc; stroke:#475569; stroke-width:.06; }
+  .cell { stroke:#94a3b8; stroke-width:.02; cursor:pointer; }
+  .cell:hover { stroke:#f59e0b; stroke-width:.08; }
+  .veh { fill:#fde68a; stroke:#b45309; stroke-width:.06; }
+  .dock { fill:#ede9fe; stroke:#7c3aed; stroke-width:.06; }
+  .conv { stroke:#64748b; stroke-width:.12; }
+  .conv-hit { stroke:transparent; stroke-width:.6; cursor:pointer; }
+  .selbox { fill:none; stroke:#f59e0b; stroke-width:.08; stroke-dasharray:.25 .15; }
+  .handle { fill:#f59e0b; cursor:nwse-resize; }
+  .t { font-size:.36px; fill:#0f172a; pointer-events:none; }
+  .ts { font-size:.26px; fill:#475569; pointer-events:none; }
+  .pres-on { fill:#22c55e; stroke:#14532d; stroke-width:.03; }
+  .pres-off { fill:#1e293b; stroke:#000; stroke-width:.03; opacity:.55; }
+  .pres-unk { fill:#cbd5e1; stroke:#64748b; stroke-width:.03; }
+  .dropok { outline:3px solid #22c55e; }
+</style>
+</head>
+<body>
+<div class="banner">PROTOTYPE・拋棄式原型・全部是虛構資料・不會寫入任何檔案</div>
+<div id="app"></div>
+<div id="switcher">
+  <button data-sw="-1" title="上一個（←）">◀</button>
+  <span class="lab" id="swlab"></span>
+  <button data-sw="1" title="下一個（→）">▶</button>
+</div>
+<div id="modal" hidden></div>
+<pre id="json" hidden></pre>
+
+<script>
+"use strict";
+// ---------- 常數與虛構資料 ----------
+const SNAP = 0.5;            // 格線吸附（公尺）
+const PX_PER_M = 32;         // 畫面縮放
+const VARIANTS = { A: "三欄式", B: "畫布優先", C: "對應優先" };
+const ALIASABLE = ["station", "vehicle", "dock"];
+const TYPES = {
+  station:  { label: "站點",     icon: "□", d: { w: 2, h: 2, height: 1.2 } },
+  rack:     { label: "料架",     icon: "▣", d: { w: 12,  h: 1.5, height: 12.5 } },
+  vehicle:  { label: "搬送機",   icon: "◆", d: { w: 2.5, h: 1.2, height: 2 } },
+  dock:     { label: "對接設備", icon: "⇨", d: { w: 2, h: 2, height: 1.5 } },
+  conveyor: { label: "輸送線",   icon: "─" },
+  area:     { label: "區域",     icon: "▭", d: { w: 6,   h: 4,   height: 0 } },
+  label:    { label: "文字",     icon: "T", d: { w: 3,   h: 1,   height: 0 } },
+};
+// 虛構案件中出現的編號（模擬「載入案件比對」）
+const CASE_IDS = [
+  { code: "A-01",   kind: "站點",     count: 512 },
+  { code: "A-02",   kind: "站點",     count: 431 },
+  { code: "A-04",   kind: "站點",     count: 230 },
+  { code: "1002",   kind: "站點",     count: 88 },
+  { code: "1099",   kind: "站點",     count: 12 },
+  { code: "SRCA01", kind: "搬送機",   count: 301 },
+  { code: "SSCA01", kind: "搬送機",   count: 140 },
+  { code: "EQ901",  kind: "對接設備", count: 40 },
+  { code: "EQ902",  kind: "對接設備", count: 5 },
+];
+
+function initialLayout() {
+  const base = (o) => Object.assign({ rotation: 0, props: {} }, o);
+  return {
+    formatVersion: 1,
+    plant: "範例廠（虛構）",
+    revision: 12,
+    revisedBy: "user01",
+    revisedAt: "2026-10-15T10:00:00+08:00",
+    units: "m",
+    storageCodeRule: "RRCCCLL",
+    elements: [
+      base({ id: "ar-1", type: "area", name: "入庫區", x: 2, y: 10.5, w: 14.5, h: 4, height: 0 }),
+      base({ id: "tx-1", type: "label", name: "北側（示意）", x: 2, y: 0.2, w: 4, h: 1, height: 0 }),
+      base({ id: "rk-1", type: "rack", name: "料架 R01", row: "01", colFrom: 1, colTo: 20, levels: 5, levelHeight: 2.5, x: 2, y: 2, w: 24, h: 1.5, height: 12.5 }),
+      base({ id: "rk-2", type: "rack", name: "料架 R02", row: "02", colFrom: 1, colTo: 20, levels: 5, levelHeight: 2.5, x: 2, y: 6.5, w: 24, h: 1.5, height: 12.5 }),
+      base({ id: "vh-1", type: "vehicle", name: "SRCA01", aliases: ["SRCA01"], x: 4, y: 4.5, w: 2.5, h: 1.2, height: 2 }),
+      base({ id: "vh-2", type: "vehicle", name: "SRCA02", aliases: ["SRCA02"], x: 19, y: 4.5, w: 2.5, h: 1.2, height: 2 }),
+      base({ id: "st-1", type: "station", name: "入庫口1", aliases: ["A-01", "1001"], x: 3, y: 11.5, w: 2, h: 2, height: 1.2, props: { "樓層": "1F" } }),
+      base({ id: "st-2", type: "station", name: "輸送站2", aliases: ["A-02"], x: 7.5, y: 11.5, w: 2, h: 2, height: 1.2 }),
+      base({ id: "st-3", type: "station", name: "輸送站3", aliases: ["A-03"], x: 12, y: 11.5, w: 2, h: 2, height: 1.2 }),
+      base({ id: "eq-1", type: "dock", name: "EQ901", aliases: ["EQ901"], x: 18, y: 11.5, w: 2, h: 2, height: 1.5 }),
+      { id: "cv-1", type: "conveyor", from: "st-1", to: "st-2" },
+      { id: "cv-2", type: "conveyor", from: "st-2", to: "st-3" },
+      { id: "cv-3", type: "conveyor", from: "st-3", to: "eq-1" },
+    ],
+  };
+}
+
+// ---------- 狀態（只在記憶體中） ----------
+const S = {
+  layout: initialLayout(),
+  sel: null,
+  msg: "", msgOk: false,
+  caseLoaded: false,
+  presence: true,
+  drawer: false,
+  jsonOpen: false,
+  variant: (new URLSearchParams(location.search).get("variant") || "A").toUpperCase(),
+};
+if (!VARIANTS[S.variant]) S.variant = "A";
+let seq = 100;
+
+// ---------- 小工具 ----------
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const byId = (id) => S.layout.elements.find((e) => e.id === id);
+const snap = (v) => Math.round(v / SNAP) * SNAP;
+const hash = (s) => { let h = 7; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
+const occ = (el, col) => hash(el.id + ":" + col) % (el.levels + 1);   // 虛構：這一列有幾層有貨
+const center = (e) => ({ x: e.x + e.w / 2, y: e.y + e.h / 2 });
+function say(text, ok) { S.msg = text; S.msgOk = !!ok; }
+
+function aliasOwner(code) {
+  const k = code.trim().toLowerCase();
+  return S.layout.elements.find((e) => (e.aliases || []).some((a) => a.toLowerCase() === k));
+}
+function addAlias(el, code) {
+  code = (code || "").trim();
+  if (!code) return;
+  if (!ALIASABLE.includes(el.type)) { say(`「${TYPES[el.type].label}」不能加別名；只有站點、搬送機、對接設備可以。`); return; }
+  const owner = aliasOwner(code);
+  if (owner && owner !== el) { say(`別名「${code}」已經屬於「${owner.name}」。同一個別名只能屬於一個元素。`); return; }
+  if (owner === el) { say(`「${el.name}」已經有別名「${code}」。`); return; }
+  el.aliases.push(code);
+  say(`已把「${code}」加為「${el.name}」的別名。`, true);
+}
+function unmapped() { return S.caseLoaded ? CASE_IDS.filter((c) => !aliasOwner(c.code)) : []; }
+function storageCode(row, col, level) {
+  const rule = S.layout.storageCodeRule;
+  const n = (ch) => (rule.match(new RegExp(ch, "g")) || []).length;
+  return String(row).padStart(n("R"), "0") + String(col).padStart(n("C"), "0") + String(level).padStart(n("L"), "0");
+}
+function nowIso() {
+  const d = new Date(Date.now() + 8 * 3600 * 1000);
+  return d.toISOString().slice(0, 19) + "+08:00";
+}
+
+// ---------- SVG 畫布 ----------
+function canvasSVG() {
+  const els = S.layout.elements.filter((e) => e.type !== "conveyor");
+  const W = Math.max(34, ...els.map((e) => e.x + e.w + 4));
+  const H = Math.max(18, ...els.map((e) => e.y + e.h + 4));
+  let g = "";
+  for (let x = 0; x <= W; x++) g += `<line class="${x % 5 ? "grid1" : "grid5"}" x1="${x}" y1="0" x2="${x}" y2="${H}"/>`;
+  for (let y = 0; y <= H; y++) g += `<line class="${y % 5 ? "grid1" : "grid5"}" x1="0" y1="${y}" x2="${W}" y2="${y}"/>`;
+  const order = ["area", "conveyor", "rack", "station", "dock", "vehicle", "label"];
+  const sorted = [...S.layout.elements].sort((a, b) => order.indexOf(a.type) - order.indexOf(b.type));
+  return `<svg id="cv" xmlns="http://www.w3.org/2000/svg" width="${W * PX_PER_M}" height="${H * PX_PER_M}" viewBox="0 0 ${W} ${H}">
+    <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#64748b"/></marker></defs>
+    <rect x="0" y="0" width="${W}" height="${H}" fill="#fff"/>${g}
+    ${sorted.map(elSVG).join("")}
+  </svg>`;
+}
+function presClass(el) {
+  if (!S.presence) return "pres-unk";
+  const v = hash(el.id) % 3;            // 虛構：預覽三種燈號
+  return ["pres-on", "pres-off", "pres-unk"][v];
+}
+function elSVG(e) {
+  if (e.type === "conveyor") {
+    const a = byId(e.from), b = byId(e.to);
+    if (!a || !b) return "";
+    const p = center(a), q = center(b);
+    const sel = S.sel === e.id ? ` style="stroke:#f59e0b"` : "";
+    return `<g data-id="${e.id}"><line class="conv-hit" x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}"/>
+      <line class="conv"${sel} x1="${p.x + (q.x - p.x) * 0.15}" y1="${p.y + (q.y - p.y) * 0.15}" x2="${q.x - (q.x - p.x) * 0.15}" y2="${q.y - (q.y - p.y) * 0.15}" marker-end="url(#arr)"/></g>`;
+  }
+  const c = center(e);
+  const tr = e.rotation ? ` transform="rotate(${e.rotation} ${c.x} ${c.y})"` : "";
+  let s = "";
+  switch (e.type) {
+    case "area":
+      s = `<rect class="area" x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}"/><text class="t" x="${e.x + 0.2}" y="${e.y + 0.55}">${esc(e.name)}</text>`;
+      break;
+    case "label":
+      s = `<rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" fill="transparent"/><text class="t" style="font-size:.55px" x="${e.x + 0.1}" y="${e.y + 0.7}">${esc(e.name)}</text>`;
+      break;
+    case "station":
+      s = `<rect class="st" x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" rx=".1"/>
+        <text class="t" x="${c.x}" y="${c.y}" text-anchor="middle">${esc(e.name)}</text>
+        <text class="ts" x="${c.x}" y="${c.y + 0.42}" text-anchor="middle">${esc((e.aliases || []).join("・"))}</text>
+        <circle class="${presClass(e)}" cx="${e.x + e.w - 0.22}" cy="${e.y + 0.22}" r=".15"/>`;
+      break;
+    case "rack": {
+      const n = Math.max(1, e.colTo - e.colFrom + 1), cw = e.w / n;
+      s = `<rect class="rack" x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}"/>`;
+      for (let i = 0; i < n; i++) {
+        const col = e.colFrom + i, o = occ(e, col);
+        const fill = `rgba(37,99,235,${(0.06 + 0.74 * o / Math.max(1, e.levels)).toFixed(2)})`;
+        s += `<rect class="cell" data-cell="${e.id}:${col}" x="${e.x + i * cw}" y="${e.y}" width="${cw}" height="${e.h}" fill="${fill}"><title>列 ${col}：${o}／${e.levels} 層有貨（虛構）— 點一下看側視圖</title></rect>`;
+      }
+      s += `<text class="t" x="${e.x}" y="${e.y - 0.15}">${esc(e.name)}（排 ${esc(e.row)}・列 ${e.colFrom}–${e.colTo}・${e.levels} 層）</text>`;
+      break;
+    }
+    case "vehicle":
+      s = `<rect class="veh" x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" rx=".25"/><text class="t" x="${c.x}" y="${c.y + 0.15}" text-anchor="middle">◆ ${esc(e.name)}</text>`;
+      break;
+    case "dock":
+      s = `<rect class="dock" x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}"/><text class="t" x="${c.x}" y="${c.y + 0.15}" text-anchor="middle">⇨ ${esc(e.name)}</text>`;
+      break;
+  }
+  if (S.sel === e.id) {
+    s += `<rect class="selbox" x="${e.x - 0.1}" y="${e.y - 0.1}" width="${e.w + 0.2}" height="${e.h + 0.2}"/>
+      <rect class="handle" data-handle="${e.id}" x="${e.x + e.w - 0.2}" y="${e.y + e.h - 0.2}" width=".4" height=".4"/>`;
+  }
+  return `<g data-id="${e.id}"${tr}>${s}</g>`;
+}
+
+// ---------- 共用面板 ----------
+function topbar(withDrawer) {
+  const L = S.layout, n = unmapped().length;
+  return `<span class="title">Layout 編輯器（${esc(VARIANTS[S.variant])}）</span>
+    <span class="meta">廠別：${esc(L.plant)}・修訂 ${L.revision}・${esc(L.revisedBy)}・${esc(L.revisedAt)}</span>
+    <button data-act="save">儲存（修訂 +1）</button>
+    <button data-act="export">匯出 JSON</button>
+    <button data-act="import">匯入 JSON</button>
+    <button data-act="case" class="${S.caseLoaded ? "on" : ""}">${S.caseLoaded ? "已載入案件（虛構）" : "載入案件比對"}</button>
+    <button data-act="pres" class="${S.presence ? "on" : ""}">在席燈預覽</button>
+    <button data-act="json" class="${S.jsonOpen ? "on" : ""}">顯示 JSON</button>
+    ${withDrawer ? `<button data-act="drawer" class="${S.drawer ? "on" : ""}">未對應（${S.caseLoaded ? n : "–"}）</button>` : ""}
+    <span class="msg ${S.msgOk ? "ok" : ""}">${esc(S.msg)}</span>`;
+}
+function toolbox(dir) {
+  return `<div class="tool ${dir}">${dir === "v" ? `<div class="sec-title">元素</div>` : `<b style="align-self:center">新增：</b>`}
+    ${Object.entries(TYPES).map(([k, t]) => `<button data-act="add" data-type="${k}">${t.icon} ${t.label}</button>`).join("")}
+  </div>`;
+}
+function unmappedHTML(mode) {
+  if (!S.caseLoaded) return `<div class="sec-title">未對應的編號</div><div class="hint">尚未載入案件。沒有案件時也可以單獨編輯 Layout；按「載入案件比對」會列出虛構案件中出現、但 Layout 還沒對應的編號。</div>`;
+  const list = unmapped();
+  if (!list.length) return `<div class="sec-title">未對應的編號</div><div class="hint">全部都已對應。</div>`;
+  if (mode === "drag") {
+    return `<div class="sec-title">未對應的編號（${list.length}）<span class="hint">　拖到畫布上的站點、搬送機或對接設備，即可加為別名</span></div>
+      ${list.map((c) => `<span class="um" draggable="true" data-code="${esc(c.code)}"><code>${esc(c.code)}</code><span class="k">${esc(c.kind)}・${c.count} 次</span></span>`).join("")}`;
+  }
+  const targets = S.layout.elements.filter((e) => ALIASABLE.includes(e.type));
+  return `<div class="sec-title">未對應的編號（${list.length}）</div>
+    ${list.map((c) => `<div class="c-um-row"><code>${esc(c.code)}</code><span class="hint" style="width:110px">${esc(c.kind)}・${c.count} 次</span>
+      <select id="map-${esc(c.code)}"><option value="">對應到…</option>${targets.map((e) => `<option value="${e.id}">${esc(TYPES[e.type].label)}：${esc(e.name)}</option>`).join("")}</select>
+      <button data-act="map" data-code="${esc(c.code)}">對應</button></div>`).join("")}`;
+}
+function tableHTML() {
+  const rows = S.layout.elements.map((e) => {
+    let detail;
+    if (e.type === "conveyor") detail = `${esc(byId(e.from)?.name ?? "?")} → ${esc(byId(e.to)?.name ?? "?")}`;
+    else if (e.type === "rack") detail = `排 ${esc(e.row)}・列 ${e.colFrom}–${e.colTo}・${e.levels} 層`;
+    else if (ALIASABLE.includes(e.type)) detail = `<span class="chips">${(e.aliases || []).map((a) => `<span class="chip">${esc(a)}</span>`).join("") || `<span class="msg">尚無別名</span>`}</span>`;
+    else detail = `<span class="hint">輔助元素</span>`;
+    return `<tr data-act="select" data-id="${e.id}" class="${S.sel === e.id ? "sel" : ""}"><td>${TYPES[e.type].icon} ${TYPES[e.type].label}</td><td>${esc(e.name ?? "")}</td><td>${detail}</td></tr>`;
+  }).join("");
+  return `<div class="sec-title">元素清單（${S.layout.elements.length}）</div><table><tr><th>種類</th><th>名稱</th><th>別名／內容</th></tr>${rows}</table>`;
+}
+function num(label, f, v, step) { return `<div class="field"><label>${label}</label><input type="number" step="${step || SNAP}" data-f="${f}" value="${v}"></div>`; }
+function txt(label, f, v) { return `<div class="field"><label>${label}</label><input type="text" data-f="${f}" value="${esc(v)}"></div>`; }
+function propsHTML() {
+  const e = S.sel && byId(S.sel);
+  if (!e) {
+    const L = S.layout;
+    return `<div class="sec-title">Layout 設定</div>
+      <div class="field"><label>廠別</label><input type="text" data-lf="plant" value="${esc(L.plant)}"></div>
+      <div class="field"><label>儲位規則</label><input type="text" data-lf="storageCodeRule" value="${esc(L.storageCodeRule)}"></div>
+      <div class="hint">儲位規則：R＝排、C＝列、L＝層，字數就是位數。例如 RRCCCLL 會把 0100802 拆成排 01、列 008、層 02。</div>
+      <div class="field"><label>格式版本</label>${L.formatVersion}</div>
+      <div class="field"><label>單位</label>公尺</div>
+      <p class="hint">點選畫布上的元素即可編輯屬性；拖曳移動，拖右下角的橘色方塊調整大小；點料架的一格看側視圖。</p>`;
+  }
+  const t = TYPES[e.type];
+  let h = `<div class="sec-title">${t.icon} ${t.label}　<span class="hint">${e.id}</span></div>`;
+  if (e.type === "conveyor") {
+    const opts = (cur) => S.layout.elements.filter((x) => ["station", "dock"].includes(x.type)).map((x) => `<option value="${x.id}" ${x.id === cur ? "selected" : ""}>${esc(x.name)}</option>`).join("");
+    h += `<div class="field"><label>起點</label><select data-f="from">${opts(e.from)}</select></div>
+      <div class="field"><label>終點</label><select data-f="to">${opts(e.to)}</select></div>
+      <p class="hint">輸送線只表示方向，不和 LOG 對應，也不從 LOG 推導狀態。</p>`;
+  } else {
+    h += txt("名稱", "name", e.name);
+    if (ALIASABLE.includes(e.type)) {
+      h += `<div class="field"><label>別名</label><span class="chips">${e.aliases.map((a) => `<span class="chip">${esc(a)}<b data-act="delalias" data-alias="${esc(a)}" title="移除">×</b></span>`).join("")}</span></div>
+        <div class="field"><label></label><input id="alias-in" placeholder="輸入編號後按 Enter"><button data-act="addalias">加入</button></div>`;
+    }
+    if (e.type === "rack") {
+      h += txt("排", "row", e.row) + num("起始列", "colFrom", e.colFrom, 1) + num("結束列", "colTo", e.colTo, 1) + num("層數", "levels", e.levels, 1) + num("每層高 m", "levelHeight", e.levelHeight, 0.1);
+    }
+    h += num("x（m）", "x", e.x) + num("y（m）", "y", e.y) + num("寬（m）", "w", e.w) + num("深（m）", "h", e.h);
+    h += e.type === "rack" ? `<div class="field"><label>高度</label>${(e.levels * e.levelHeight).toFixed(1)} m（層數 × 每層高）</div>` : num("高度（m）", "height", e.height, 0.1);
+    h += `<div class="field"><label>旋轉</label>${[0, 90, 180, 270].map((r) => `<button data-act="rot" data-rot="${r}" class="${e.rotation === r ? "on" : ""}">${r}°</button>`).join("")}</div>`;
+    h += `<div class="sec-title" style="margin-top:10px">自訂屬性（文字）</div>
+      ${Object.entries(e.props).map(([k, v]) => `<div class="field"><input type="text" data-pk="${esc(k)}" value="${esc(k)}" style="width:90px">＝<input type="text" data-pv="${esc(k)}" value="${esc(v)}" style="width:110px"><button data-act="delprop" data-key="${esc(k)}">×</button></div>`).join("")}
+      <button data-act="addprop">＋ 新增屬性</button>`;
+  }
+  h += `<p><button data-act="delel" style="color:var(--er)">刪除這個元素</button></p>`;
+  return h;
+}
+
+// ---------- 三種版面 ----------
+const LAYOUTS = {
+  A: () => `<div class="top">${topbar(false)}</div>
+    <div class="a-main"><aside>${toolbox("v")}</aside><div class="canvas-wrap" id="cw"></div><aside class="props">${propsHTML()}</aside></div>
+    <div class="a-bottom">${unmappedHTML("drag")}</div>`,
+  B: () => `<div class="top">${topbar(true)}</div>
+    <div class="b-main"><div class="canvas-wrap" id="cw"></div>
+      <div class="float tool-f">${toolbox("v")}</div>
+      ${S.sel ? `<div class="float props-f" style="${S.drawer ? "right:324px" : ""}">${propsHTML()}</div>` : ""}
+      ${S.drawer ? `<div class="drawer">${unmappedHTML("drag")}</div>` : ""}
+    </div>`,
+  C: () => `<div class="top">${topbar(false)}</div>
+    <div class="c-main">
+      <div class="c-left"><section>${unmappedHTML("select")}</section><section>${tableHTML()}</section></div>
+      <div class="c-right"><div style="padding:6px 10px;border-bottom:1px solid var(--bd);background:var(--pn)">${toolbox("h")}</div>
+        <div class="canvas-wrap" id="cw"></div><div class="c-props">${propsHTML()}</div></div>
+    </div>`,
+};
+
+// ---------- 繪製 ----------
+function drawCanvas() { const cw = document.getElementById("cw"); if (cw) cw.innerHTML = canvasSVG(); }
+function render() {
+  const old = document.getElementById("cw");
+  const sc = old ? [old.scrollLeft, old.scrollTop] : [0, 0];
+  const app = document.getElementById("app");
+  app.innerHTML = LAYOUTS[S.variant]();
+  drawCanvas();
+  const cw = document.getElementById("cw");
+  if (cw) { cw.scrollLeft = sc[0]; cw.scrollTop = sc[1]; }
+  document.getElementById("swlab").textContent = `${S.variant}（${VARIANTS[S.variant]}）`;
+  const js = document.getElementById("json");
+  js.hidden = !S.jsonOpen;
+  if (S.jsonOpen) {
+    const e = S.sel && byId(S.sel);
+    js.textContent = e ? "// 選取中的元素\n" + JSON.stringify(e, null, 2) : "// 整份 Layout\n" + JSON.stringify(S.layout, null, 2);
+  }
+}
+function setVariant(v) {
+  S.variant = v;
+  try { history.replaceState(null, "", "?variant=" + v); } catch (_) { /* file:// 某些瀏覽器不允許 */ }
+  render();
+}
+
+// ---------- 彈窗 ----------
+function openModal(html) { const m = document.getElementById("modal"); m.innerHTML = `<div class="mbox">${html}</div>`; m.hidden = false; }
+function closeModal() { document.getElementById("modal").hidden = true; }
+function openRack(cellKey) {
+  const [id, colS] = cellKey.split(":");
+  const e = byId(id), col = +colS, o = occ(e, col);
+  let rows = "";
+  for (let l = e.levels; l >= 1; l--) {
+    const has = l <= o;
+    const code = storageCode(e.row, col, l);
+    const pallet = has ? `棧板 PLT-EX-${String(hash(code)).slice(0, 4)}（${2 + hash(code) % 4} 桶）` : `<span class="hint">空</span>`;
+    rows += `<tr><td>第 ${l} 層</td><td><code>${code}</code></td><td>${pallet}</td></tr>`;
+  }
+  openModal(`<div class="sec-title">${esc(e.name)}・列 ${col} 側視圖（虛構資料）</div>
+    <table><tr><th>層</th><th>儲位編號</th><th>內容</th></tr>${rows}</table>
+    <p class="hint">儲位編號依 Layout 的儲位規則「${esc(S.layout.storageCodeRule)}」組成。回放時，這裡會顯示推導出來的棧板；未知的儲位顯示灰色。</p>
+    <button data-act="close">關閉</button>`);
+}
+
+// ---------- 事件 ----------
+function toMeters(svg, ev) {
+  const p = svg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY;
+  return p.matrixTransform(svg.getScreenCTM().inverse());
+}
+let drag = null;
+document.addEventListener("mousedown", (ev) => {
+  const svg = ev.target.closest && ev.target.closest("svg#cv");
+  if (!svg || ev.button !== 0) return;
+  const p = toMeters(svg, ev);
+  const h = ev.target.closest("[data-handle]");
+  if (h) { const el = byId(h.dataset.handle); drag = { mode: "resize", el, p0: p, w0: el.w, h0: el.h, sx: ev.clientX, sy: ev.clientY, moved: false }; ev.preventDefault(); return; }
+  const g = ev.target.closest("[data-id]");
+  if (g) {
+    const el = byId(g.dataset.id), cell = ev.target.closest("[data-cell]");
+    S.sel = el.id; say("");
+    drag = { mode: el.type === "conveyor" ? "none" : "move", el, p0: p, x0: el.x, y0: el.y, sx: ev.clientX, sy: ev.clientY, moved: false, cell: cell ? cell.dataset.cell : null };
+    ev.preventDefault(); render(); return;
+  }
+  S.sel = null; render();
+});
+window.addEventListener("mousemove", (ev) => {
+  if (!drag || drag.mode === "none") return;
+  if (!drag.moved && Math.hypot(ev.clientX - drag.sx, ev.clientY - drag.sy) < 4) return;
+  drag.moved = true;
+  const p = toMeters(document.getElementById("cv"), ev);
+  const dx = p.x - drag.p0.x, dy = p.y - drag.p0.y;
+  if (drag.mode === "move") { drag.el.x = Math.max(0, snap(drag.x0 + dx)); drag.el.y = Math.max(0, snap(drag.y0 + dy)); }
+  else { drag.el.w = Math.max(SNAP, snap(drag.w0 + dx)); drag.el.h = Math.max(SNAP, snap(drag.h0 + dy)); }
+  drawCanvas();
+});
+window.addEventListener("mouseup", () => {
+  if (!drag) return;
+  const d = drag; drag = null;
+  if (!d.moved && d.cell) openRack(d.cell);
+  render();
+});
+
+document.addEventListener("click", (ev) => {
+  const sw = ev.target.closest("[data-sw]");
+  if (sw) { const keys = Object.keys(VARIANTS); const i = (keys.indexOf(S.variant) + +sw.dataset.sw + keys.length) % keys.length; setVariant(keys[i]); return; }
+  const b = ev.target.closest("[data-act]");
+  if (!b) return;
+  const act = b.dataset.act, e = S.sel && byId(S.sel);
+  switch (act) {
+    case "add": {
+      const type = b.dataset.type, t = TYPES[type], id = type.slice(0, 2) + "-" + (++seq);
+      let el;
+      if (type === "conveyor") {
+        const ends = S.layout.elements.filter((x) => ["station", "dock"].includes(x.type));
+        if (ends.length < 2) { say("輸送線需要至少兩個站點或對接設備。"); break; }
+        el = { id, type, from: ends[0].id, to: ends[1].id };
+      } else {
+        el = Object.assign({ id, type, name: `新${t.label} ${seq}`, x: 2 + (seq % 5), y: 15, rotation: 0, props: {} }, t.d);
+        if (ALIASABLE.includes(type)) el.aliases = [];
+        if (type === "rack") Object.assign(el, { row: "09", colFrom: 1, colTo: 10, levels: 5, levelHeight: 2.5 });
+      }
+      S.layout.elements.push(el); S.sel = id; say(`已新增${t.label}。`, true);
+      break;
+    }
+    case "save": S.layout.revision++; S.layout.revisedAt = nowIso(); say(`已儲存為修訂 ${S.layout.revision}（原型只存在記憶體中）。`, true); break;
+    case "export":
+      openModal(`<div class="sec-title">匯出 Layout（JSON）</div><textarea readonly>${esc(JSON.stringify(S.layout, null, 2))}</textarea>
+        <p><button data-act="download">下載 layout.json</button> <button data-act="close">關閉</button></p>`);
+      return;
+    case "download": {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(S.layout, null, 2)], { type: "application/json" }));
+      a.download = "layout-prototype.json"; a.click(); return;
+    }
+    case "import":
+      openModal(`<div class="sec-title">匯入 Layout（貼上 JSON）</div><textarea id="imp">${esc(JSON.stringify(S.layout, null, 2))}</textarea>
+        <p><button data-act="doimport">套用</button> <button data-act="close">取消</button></p>`);
+      return;
+    case "doimport":
+      try {
+        const L = JSON.parse(document.getElementById("imp").value);
+        if (L.formatVersion !== 1 || !Array.isArray(L.elements)) throw new Error("formatVersion 必須是 1，且要有 elements");
+        S.layout = L; S.sel = null; say("已匯入。", true); closeModal();
+      } catch (err) { alert("無法匯入：" + err.message); return; }
+      break;
+    case "close": closeModal(); return;
+    case "case": S.caseLoaded = !S.caseLoaded; say(S.caseLoaded ? "已載入虛構案件，列出尚未對應的編號。" : "", true); break;
+    case "pres": S.presence = !S.presence; break;
+    case "json": S.jsonOpen = !S.jsonOpen; break;
+    case "drawer": S.drawer = !S.drawer; break;
+    case "select": S.sel = b.dataset.id; say(""); break;
+    case "map": {
+      const target = byId(document.getElementById("map-" + b.dataset.code).value);
+      if (!target) { say("請先選擇要對應到哪一個元素。"); break; }
+      addAlias(target, b.dataset.code); break;
+    }
+    case "addalias": if (e) addAlias(e, document.getElementById("alias-in").value); break;
+    case "delalias": if (e) { e.aliases = e.aliases.filter((a) => a !== b.dataset.alias); say(`已移除別名「${b.dataset.alias}」。`, true); } break;
+    case "rot": if (e) e.rotation = +b.dataset.rot; break;
+    case "addprop": if (e) { let k = "屬性", i = 1; while (k in e.props) k = "屬性" + (++i); e.props[k] = ""; } break;
+    case "delprop": if (e) delete e.props[b.dataset.key]; break;
+    case "delel":
+      if (e) {
+        S.layout.elements = S.layout.elements.filter((x) => x.id !== e.id && !(x.type === "conveyor" && (x.from === e.id || x.to === e.id)));
+        S.sel = null; say("已刪除（連到它的輸送線也一併刪除）。", true);
+      }
+      break;
+  }
+  render();
+});
+
+document.addEventListener("change", (ev) => {
+  const t = ev.target, e = S.sel && byId(S.sel);
+  if (t.dataset.lf) { S.layout[t.dataset.lf] = t.value; render(); return; }
+  if (!e) return;
+  if (t.dataset.f) {
+    const f = t.dataset.f;
+    e[f] = t.type === "number" ? (parseFloat(t.value) || 0) : t.value;
+    if (e.type === "rack") { e.height = e.levels * e.levelHeight; if (e.colTo < e.colFrom) e.colTo = e.colFrom; }
+  } else if (t.dataset.pk !== undefined) {
+    const oldK = t.dataset.pk, newK = t.value.trim();
+    if (newK && newK !== oldK) {
+      if (newK in e.props) { say(`屬性「${newK}」已經存在。`); }
+      else { const entries = Object.entries(e.props).map(([k, v]) => [k === oldK ? newK : k, v]); e.props = Object.fromEntries(entries); }
+    }
+  } else if (t.dataset.pv !== undefined) {
+    e.props[t.dataset.pv] = t.value;
+  }
+  render();
+});
+
+document.addEventListener("keydown", (ev) => {
+  const typing = ev.target.closest && ev.target.closest("input, textarea, select, [contenteditable]");
+  if (ev.key === "Enter" && ev.target.id === "alias-in") { const e = byId(S.sel); if (e) { addAlias(e, ev.target.value); render(); const i = document.getElementById("alias-in"); if (i) i.focus(); } return; }
+  if (typing) return;
+  if (ev.key === "Escape") { closeModal(); return; }
+  if (ev.key === "ArrowLeft" || ev.key === "ArrowRight") {
+    const keys = Object.keys(VARIANTS), i = (keys.indexOf(S.variant) + (ev.key === "ArrowRight" ? 1 : -1) + keys.length) % keys.length;
+    setVariant(keys[i]);
+  }
+});
+
+// 拖曳「未對應」編號到畫布上的元素
+document.addEventListener("dragstart", (ev) => {
+  const u = ev.target.closest && ev.target.closest(".um");
+  if (u) ev.dataTransfer.setData("text/plain", u.dataset.code);
+});
+document.addEventListener("dragover", (ev) => {
+  if (ev.target.closest && ev.target.closest("svg#cv")) ev.preventDefault();
+});
+document.addEventListener("drop", (ev) => {
+  if (!(ev.target.closest && ev.target.closest("svg#cv"))) return;
+  ev.preventDefault();
+  const code = ev.dataTransfer.getData("text/plain");
+  const g = ev.target.closest("[data-id]");
+  if (!g) { say("請把編號拖到站點、搬送機或對接設備上。"); render(); return; }
+  const el = byId(g.dataset.id);
+  S.sel = el.id;
+  addAlias(el, code);
+  render();
+});
+
+render();
+</script>
+</body>
+</html>

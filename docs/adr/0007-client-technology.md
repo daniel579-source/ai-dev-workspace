@@ -34,6 +34,10 @@
 - 發佈成**單一資料夾**（壓成 zip），解壓後執行其中的 exe。
 - 更新時整個資料夾替換。
 - 案件與使用者資料**不放在程式資料夾內**，替換程式不影響資料；存放位置由「儲存與索引候選方案比較」決定。
+- 2026-10-16 #29 補充：
+  - 以 `scripts/package.ps1` 產生 zip，內含使用說明、`THIRD-PARTY-NOTICES.md` 與 `licenses\`；不含有 unRAR 授權限制的 `7z.dll`。版本號放在 `LogTrace.App.csproj`。
+  - 開發電腦驗證：程式自帶執行環境（`includedFrameworks`）；原生 DLL 只依賴 Windows 10 內建的元件；zip 解壓後的發佈版冒煙測試全部通過。
+  - **乾淨、離線的 Windows 10 待實機確認**（步驟見 `validation/results/release-29-dev-pc.md` 第 7 節）。
 
 ### 3. 元件政策
 
@@ -77,6 +81,7 @@
 - AvalonDock 使用 5.0 版：版面序列化拆到 `Dirkster.AvalonDock.Serializer.Xml` 套件，API 與 4.x 不同。版面儲存已在實作中使用 `Dirkster.AvalonDock.Serializer.Xml` 5.0.1（2026-10-16 #28）。
 - 事件清單建議使用 ListView＋GridView、固定列高；DataGrid 每格的版面配置成本約為 ListView 的 1.7 倍。體感仍不順時，再考慮自行繪製的清單。
 - 時間軸等大量圖形先畫進點陣圖再一次送出，不要每個資料點一個幾何圖形。
+- 2026-10-16 #29 補充：以發佈版、一天份 98.5 萬筆事件在畫面上量測（UI 自動化），點一筆結果到所有面板同步 0.21 秒、方向鍵每步約 0.3 秒（含自動化輪詢的延遲）；匯入到可以瀏覽 40.9 秒。第 1 項的**人工體感仍待確認**。詳見 `validation/results/release-29-dev-pc.md`。
 
 ## 理由
 

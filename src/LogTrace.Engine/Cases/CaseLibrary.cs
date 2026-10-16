@@ -5,7 +5,7 @@ using LogTrace.Engine.Storage;
 namespace LogTrace.Engine.Cases;
 
 /// <summary>案件清單中的一個案件。</summary>
-public sealed record CaseSummary(string Folder, string Name, DateTimeOffset CreatedAt, DateTime LastWriteTime);
+public sealed record CaseSummary(string Folder, string Name, string PlantName, DateTimeOffset CreatedAt, DateTime LastWriteTime);
 
 /// <summary>
 /// 案件存放位置（ADR-0011 第 3 點）：預設 %LOCALAPPDATA%\LogTrace\Cases，可以修改。
@@ -49,7 +49,7 @@ public sealed class CaseLibrary(string root)
             {
                 using var store = new SqliteEventStore(db, readOnly: true);
                 var info = store.LoadInfo();
-                list.Add(new CaseSummary(dir, info.Name, info.CreatedAt, File.GetLastWriteTime(db)));
+                list.Add(new CaseSummary(dir, info.Name, info.Plant.Name, info.CreatedAt, File.GetLastWriteTime(db)));
             }
             catch (Exception ex) when (ex is InvalidDataException or IOException or Microsoft.Data.Sqlite.SqliteException)
             {

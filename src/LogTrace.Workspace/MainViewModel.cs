@@ -43,6 +43,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _library = new CaseLibrary(_settings.CasesRoot ?? defaultCasesRoot);
         UpdateCasesRoot();
         RefreshCases();
+        RefreshPlants();
     }
 
     // ---- 案件管理 ----
@@ -66,6 +67,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CreateCaseCommand))]
     public partial string NewCaseName { get; set; } = "";
+
+    /// <summary>建立案件時可以選的廠別（ADR-0002 第 7 點）：內建預設值，以及存放位置下的廠別設定檔。</summary>
+    public ObservableCollection<PlantChoiceViewModel> Plants { get; } = [];
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CreateCaseCommand))]
+    public partial PlantChoiceViewModel? SelectedPlant { get; set; }
+
+    /// <summary>目前案件所屬的廠別與修訂號。</summary>
+    [ObservableProperty]
+    public partial string? CurrentCasePlant { get; private set; }
 
     [ObservableProperty]
     public partial string? CurrentCaseName { get; private set; }
@@ -216,19 +228,33 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Status = $"案件存放位置改為 {_library.Root}。已有的案件不會搬移。";
     }
 
-    bool CanCreateCase() => !IsBusy && !string.IsNullOrWhiteSpace(NewCaseName);
+    /// <summary>重新列出廠別設定檔（例如在 Layout 編輯器中新增或改名之後）；保留原本的選擇。</summary>
+    public void RefreshPlants()
+    {
+        var selected = SelectedPlant?.Path;
+        Plants.Clear();
+        Plants.Add(PlantChoiceViewModel.BuiltIn);
+        foreach (var path in new PlantConfigLibrary(_plantsRoot).List())
+            Plants.Add(new PlantChoiceViewModel(Path.GetFileNameWithoutExtension(path), path));
+        SelectedPlant = Plants.FirstOrDefault(p => string.Equals(p.Path, selected, StringComparison.OrdinalIgnoreCase)) ?? Plants[0];
+    }
 
+    bool CanCreateCase() => !IsBusy && !string.IsNullOrWhiteSpace(NewCaseName) && SelectedPlant is not null;
+
+    /// <summary>以所選的廠別建立案件；之後的匯入使用該廠別的模組順序、已知 LOG 種類與編碼設定。</summary>
     [RelayCommand(CanExecute = nameof(CanCreateCase))]
     void CreateCase()
     {
         try
         {
+            var plant = SelectedPlant!.Path is { } path ? PlantConfigFile.Load(path).ToPlantConfig() : PlantConfig.Default;
             CloseCurrent();
-            var c = _library.Create(NewCaseName, PlantConfig.Default);
+            var c = _library.Create(NewCaseName, plant);
             SetCurrent(c);
-            Status = $"已建立案件「{c.Info.Name}」。請選擇要匯入的 LOG（資料夾、7z 或 zip）。";
+            Status = $"已建立案件「{c.Info.Name}」（廠別：{plant.Name}）。請選擇要匯入的 LOG（資料夾、7z 或 zip）。";
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidDataException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidDataException
+                                       or PlantConfigFormatException)
         {
             Status = "建立案件失敗：" + ex.Message;
         }
@@ -303,6 +329,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         _case = c;
         CurrentCaseName = c.Info.Name;
+        CurrentCasePlant = c.Info.Plant.Revision == 0 ? c.Info.Plant.Name : $"{c.Info.Plant.Name}（修訂 {c.Info.Plant.Revision}）";
         CurrentCaseFolder = c.Folder;
         SaveSettings(_settings.WithRecent(c.Folder));
         RefreshCases();
@@ -317,6 +344,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _case?.Dispose();
         _case = null;
         CurrentCaseName = null;
+        CurrentCasePlant = null;
         CurrentCaseFolder = null;
     }
 
@@ -389,7 +417,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     static (List<string> Modules, List<EventRowViewModel> Rows) LoadAll(Case c)
     {
-        var order = c.Info.ModuleOrder.ToList();
+        var order = c.Info.Plant.ModuleOrder.ToList();
         var modules = c.GetFiles().Where(f => f.Active).Select(f => f.Module).Distinct(StringComparer.Ordinal)
             .OrderBy(m => order.Contains(m) ? order.IndexOf(m) : order.Count).ThenBy(m => m, StringComparer.Ordinal)
             .ToList();

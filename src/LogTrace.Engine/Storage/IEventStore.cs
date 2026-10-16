@@ -32,8 +32,8 @@ public sealed record AuditEntry(DateTimeOffset Time, string User, string Action,
         new(DateTimeOffset.Now, CurrentUser, action, target, detail);
 }
 
-/// <summary>案件的中繼資料。</summary>
-public sealed record CaseInfo(string Name, string PlantName, IReadOnlyList<string> ModuleOrder, IReadOnlyList<string> KnownLoggers, DateTimeOffset CreatedAt);
+/// <summary>案件的中繼資料。Plant 是建立案件時所選廠別設定的匯入相關部分（ADR-0002 第 7 點）。</summary>
+public sealed record CaseInfo(string Name, LogTrace.Engine.Plants.PlantConfig Plant, DateTimeOffset CreatedAt);
 
 /// <summary>
 /// 儲存層介面（ADR-0001：儲存層要可以替換；ADR-0011：目前實作為 SQLite）。

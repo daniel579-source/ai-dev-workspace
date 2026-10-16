@@ -53,9 +53,9 @@ public sealed class Case : IDisposable
         Directory.CreateDirectory(Path.Combine(folder, RawFolderName));
         File.WriteAllText(Path.Combine(folder, ReadmeFileName), ReadmeText.ReplaceLineEndings("\r\n"), System.Text.Encoding.UTF8);
         var store = new SqliteEventStore(Path.Combine(folder, DatabaseFileName));
-        var info = new CaseInfo(name, plant.Name, plant.ModuleOrder, plant.KnownLoggers, DateTimeOffset.Now);
+        var info = new CaseInfo(name, plant, DateTimeOffset.Now);
         store.SaveInfo(info);
-        store.AddAudit(AuditEntry.Now("建立案件", name, $"廠別：{plant.Name}；位置：{folder}"));
+        store.AddAudit(AuditEntry.Now("建立案件", name, $"廠別：{plant.Name}（修訂 {plant.Revision}）；位置：{folder}"));
         return new Case(folder, store, info);
     }
 
@@ -75,7 +75,7 @@ public sealed class Case : IDisposable
         }
     }
 
-    PlantConfig Plant => new() { Name = Info.PlantName, ModuleOrder = Info.ModuleOrder, KnownLoggers = Info.KnownLoggers };
+    PlantConfig Plant => Info.Plant;
 
     /// <summary>準備匯入一個資料夾、7z 或 zip（「日期 → 模組」結構，可以多天）：分類每個檔案，尚未寫入案件。</summary>
     public PreparedImport PrepareImport(string source, CancellationToken ct = default) =>

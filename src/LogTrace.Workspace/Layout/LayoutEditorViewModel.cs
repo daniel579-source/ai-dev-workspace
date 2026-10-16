@@ -54,6 +54,46 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     [ObservableProperty]
     public partial string StorageCodeRule { get; set; } = "";
 
+    // ---- LOG 設定（ADR-0002 第 7 點：建立案件時選擇廠別，匯入時使用） ----
+
+    /// <summary>同時間戳記時的模組順序，一行一個（ADR-0004 第 5 點）。</summary>
+    [ObservableProperty]
+    public partial string ModuleOrderText { get; set; } = "";
+
+    /// <summary>已知的 LOG 種類（Logger 名稱），一行一個；不在清單中的標示「未知種類」（ADR-0004）。</summary>
+    [ObservableProperty]
+    public partial string KnownLoggersText { get; set; } = "";
+
+    /// <summary>依模組與 Logger 指定編碼；沒有指定的檔案自動判斷。</summary>
+    public ObservableCollection<EncodingRuleViewModel> EncodingRules { get; } = [];
+
+    public IReadOnlyList<string> EncodingChoices => EncodingRuleViewModel.Choices;
+
+    partial void OnModuleOrderTextChanged(string value) => IsDirty = true;
+    partial void OnKnownLoggersTextChanged(string value) => IsDirty = true;
+
+    static List<string> Lines(string text) =>
+        text.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+
+    void AddRule(EncodingRuleViewModel rule)
+    {
+        rule.PropertyChanged += (_, _) => IsDirty = true;
+        EncodingRules.Add(rule);
+    }
+
+    [RelayCommand]
+    void AddEncodingRule()
+    {
+        AddRule(new EncodingRuleViewModel("", "", Engine.Parsing.LogEncoding.Big5Name));
+        IsDirty = true;
+    }
+
+    [RelayCommand]
+    void RemoveEncodingRule(EncodingRuleViewModel? rule)
+    {
+        if (rule is not null && EncodingRules.Remove(rule)) IsDirty = true;
+    }
+
     [ObservableProperty]
     public partial int Revision { get; private set; }
 
@@ -106,6 +146,10 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         foreach (var e in doc.Layout.Elements) Attach(new LayoutElementViewModel(e));
         PlantName = doc.Plant;
         StorageCodeRule = doc.Layout.StorageCodeRule ?? "";
+        ModuleOrderText = string.Join(Environment.NewLine, doc.ModuleOrder);
+        KnownLoggersText = string.Join(Environment.NewLine, doc.KnownLoggers);
+        EncodingRules.Clear();
+        foreach (var r in doc.Encodings) AddRule(EncodingRuleViewModel.From(r));
         Revision = doc.Revision;
         RevisionInfo = doc.Revision == 0 ? "尚未存檔" : $"修訂 {doc.Revision}（{doc.RevisedBy}，{doc.RevisedAt:yyyy-MM-dd HH:mm}）";
         FilePath = path;
@@ -170,6 +214,9 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         _document.Plant = PlantName.Trim();
         _document.Layout.StorageCodeRule = string.IsNullOrWhiteSpace(StorageCodeRule) ? null : StorageCodeRule.Trim();
         _document.Layout.Elements = Elements.Select(e => e.ToModel()).ToList();
+        _document.ModuleOrder = Lines(ModuleOrderText);
+        _document.KnownLoggers = Lines(KnownLoggersText);
+        _document.Encodings = EncodingRules.Select(r => r.ToModel()).ToList();
         try
         {
             PlantConfigFile.Save(_document, path);

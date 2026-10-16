@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using LogTrace.Engine.Events;
+using LogTrace.Engine.Plants;
 using Microsoft.Data.Sqlite;
 
 namespace LogTrace.Engine.Storage;
@@ -55,9 +56,11 @@ public sealed class SqliteEventStore : IEventStore
         using var tx = _conn.BeginTransaction();
         SetMeta("schema_version", SchemaVersion.ToString(CultureInfo.InvariantCulture));
         SetMeta("name", info.Name);
-        SetMeta("plant", info.PlantName);
-        SetMeta("module_order", JsonSerializer.Serialize(info.ModuleOrder));
-        SetMeta("known_loggers", JsonSerializer.Serialize(info.KnownLoggers));
+        SetMeta("plant", info.Plant.Name);
+        SetMeta("plant_revision", info.Plant.Revision.ToString(CultureInfo.InvariantCulture));
+        SetMeta("module_order", JsonSerializer.Serialize(info.Plant.ModuleOrder));
+        SetMeta("known_loggers", JsonSerializer.Serialize(info.Plant.KnownLoggers));
+        SetMeta("encodings", JsonSerializer.Serialize(info.Plant.Encodings));
         SetMeta("created_at", Iso(info.CreatedAt));
         tx.Commit();
     }
@@ -66,12 +69,16 @@ public sealed class SqliteEventStore : IEventStore
     {
         if (TryGetMeta("schema_version") != SchemaVersion.ToString(CultureInfo.InvariantCulture))
             throw new InvalidDataException("案件資料庫的版本與程式不符，請重新建立案件並匯入。");
-        return new(
-            GetMeta("name"),
-            GetMeta("plant"),
-            JsonSerializer.Deserialize<string[]>(GetMeta("module_order")) ?? [],
-            JsonSerializer.Deserialize<string[]>(GetMeta("known_loggers")) ?? [],
-            ParseIso(GetMeta("created_at")));
+        // plant_revision、encodings 為 #34 加入；之前建立的案件沒有，視為內建預設（修訂 0、自動判斷編碼）
+        var plant = new PlantConfig
+        {
+            Name = GetMeta("plant"),
+            Revision = int.TryParse(TryGetMeta("plant_revision"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var r) ? r : 0,
+            ModuleOrder = JsonSerializer.Deserialize<string[]>(GetMeta("module_order")) ?? [],
+            KnownLoggers = JsonSerializer.Deserialize<string[]>(GetMeta("known_loggers")) ?? [],
+            Encodings = TryGetMeta("encodings") is { } enc ? JsonSerializer.Deserialize<EncodingRule[]>(enc) ?? [] : [],
+        };
+        return new(GetMeta("name"), plant, ParseIso(GetMeta("created_at")));
     }
 
     public long NextImportId()

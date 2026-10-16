@@ -14,6 +14,20 @@ public sealed class ImportSmokeTests : IDisposable
 
     public void Dispose() => _tmp.Dispose();
 
+    /// <summary>唯讀 RichTextBox（詳細資訊）的文字：以 UI Automation 的 TextPattern 讀取。</summary>
+    internal static string DocumentText(AutomationElement element) =>
+        Retry.WhileNull(() => element.Patterns.Text.PatternOrDefault?.DocumentRange.GetText(-1) is { Length: > 0 } t ? t : null, TimeSpan.FromSeconds(5)).Result ?? "";
+
+    /// <summary>選取 AvalonDock 窗格中的分頁（例如「搜尋」）。</summary>
+    internal static void OpenTab(AutomationElement window, string title)
+    {
+        // AvalonDock 的分頁標題在 UI Automation 中是 AutomationId 為 title 的文字
+        var cf = window.ConditionFactory;
+        var tab = Retry.WhileNull(() => window.FindFirstDescendant(cf.ByAutomationId("title").And(cf.ByName(title))), TimeSpan.FromSeconds(10)).Result
+            ?? throw new InvalidOperationException($"找不到分頁 {title}");
+        tab.Click();
+    }
+
     internal static string AppExe()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
@@ -55,7 +69,7 @@ public sealed class ImportSmokeTests : IDisposable
                 TimeSpan.FromSeconds(30));
             Assert.True(rows.Result, "事件清單沒有出現 5 筆事件");
             Assert.Contains("案件共 5 筆事件", Find("Status").Name);
-            Assert.Contains("PLCLOG.txt 第 5 行", Find("EventDetail").AsTextBox().Text);
+            Assert.Contains("PLCLOG.txt 第 5 行", DocumentText(Find("EventDetail")));
         }
         finally
         {
@@ -103,7 +117,7 @@ public sealed class ImportSmokeTests : IDisposable
                 TimeSpan.FromSeconds(10)).Result is not null, "分軌檢視沒有 Server 欄");
             Assert.True(list.FindAllChildren(cf.ByControlType(ControlType.DataItem).Or(cf.ByControlType(ControlType.ListItem)))[6]
                 .AsListBoxItem().IsSelected);
-            Assert.Contains("PLCLOG.txt 第 5～6 行", Find("EventDetail").AsTextBox().Text);
+            Assert.Contains("PLCLOG.txt 第 5～6 行", DocumentText(Find("EventDetail")));
         }
         finally
         {

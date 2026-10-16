@@ -109,6 +109,9 @@ public sealed class PlantConfigDocument
     /// <summary>代表「在席」的訊號名稱（在席指示燈）。</summary>
     public string PresenceSignal { get; set; } = PlantConfig.Default.PresenceSignal;
 
+    /// <summary>個人資料的遮罩規則（正規表示式，ADR-0009 第 1 點）。</summary>
+    public List<string> MaskPatterns { get; set; } = [.. Search.TextMasker.DefaultPatterns];
+
     public LayoutSection Layout { get; set; } = new();
 
     [JsonExtensionData]
@@ -118,6 +121,6 @@ public sealed class PlantConfigDocument
     public PlantConfig ToPlantConfig() => new()
     {
         Name = Plant, Revision = Revision, ModuleOrder = [.. ModuleOrder], KnownLoggers = [.. KnownLoggers], Encodings = [.. Encodings],
-        ParseRules = [.. ParseRules], PresenceSignal = PresenceSignal,
+        ParseRules = [.. ParseRules], PresenceSignal = PresenceSignal, MaskPatterns = [.. MaskPatterns],
     };
 }

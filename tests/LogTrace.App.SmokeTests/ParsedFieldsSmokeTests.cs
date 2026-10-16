@@ -43,11 +43,14 @@ public sealed class ParsedFieldsSmokeTests : IDisposable
             In(main, "ImportSource").AsTextBox().Text = TempFolder.Fixture("fields-cases");
             In(main, "Import").AsButton().Invoke();
             Assert.True(Retry.WhileFalse(() => In(main, "Status").Name.Contains("案件共 11 筆事件"), TimeSpan.FromSeconds(30)).Result, In(main, "Status").Name);
+            // 「搜尋」面板（與「案件」並列的分頁）→ 篩選條件 → Layout 元素
+            ImportSmokeTests.OpenTab(main, "搜尋");
+            In(main, "SearchFilters").Patterns.ExpandCollapse.Pattern.Expand();
             var kind = In(main, "FilterKind").AsComboBox();
             kind.Select("Layout 元素");
             In(main, "FilterElement").AsComboBox().Select(0);
-            In(main, "ApplyFilter").AsButton().Invoke();
-            Assert.True(Retry.WhileFalse(() => In(main, "FilterStatus").Name.Contains("2 筆"), TimeSpan.FromSeconds(10)).Result, In(main, "FilterStatus").Name);
+            In(main, "Search").AsButton().Invoke();
+            Assert.True(Retry.WhileFalse(() => In(main, "SearchStatus").Name.Contains("符合 2 筆"), TimeSpan.FromSeconds(10)).Result, In(main, "SearchStatus").Name);
 
             In(main, "OpenLayoutEditor").AsButton().Invoke();
             var editor = Retry.WhileNull(() => main.FindFirstChild(cf.ByAutomationId("LayoutEditor")) ?? automation.GetDesktop().FindFirstChild(cf.ByAutomationId("LayoutEditor")), TimeSpan.FromSeconds(10)).Result!;

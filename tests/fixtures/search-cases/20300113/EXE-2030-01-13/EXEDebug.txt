@@ -1,0 +1,8 @@
+2030-01-13 09:00:00.0000 | INFO | EXEDebug | 卸貨 回報 OK 第二天  
+
+2030-01-13 09:00:01.0000 | DEBUG | EXEDebug | front door open detected  
+
+2030-01-13 09:00:02.0000 | DEBUG | EXEDebug | door is open  
+
+2030-01-13 08:59:59.0000 | DEBUG | EXEDebug | 時間倒退的虛構紀錄  
+

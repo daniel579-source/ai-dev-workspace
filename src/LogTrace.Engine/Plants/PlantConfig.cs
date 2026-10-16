@@ -63,6 +63,9 @@ public sealed record PlantConfig
     /// </summary>
     public string PresenceSignal { get; init; } = "在席";
 
+    /// <summary>個人資料的遮罩規則（正規表示式，ADR-0009 第 1 點）；預設為台灣手機號碼。</summary>
+    public IReadOnlyList<string> MaskPatterns { get; init; } = Search.TextMasker.DefaultPatterns;
+
     /// <summary>沒有廠別設定檔時使用的內建預設值（不含 Layout）。</summary>
     public static PlantConfig Default { get; } = new() { Name = "內建預設" };
 

@@ -5,6 +5,7 @@ using LogTrace.Engine.Cases;
 using LogTrace.Engine.Import;
 using LogTrace.Engine.Parsing;
 using LogTrace.Engine.Playback;
+using LogTrace.Engine.Search;
 using LogTrace.Workspace.Playback;
 using LogTrace.Engine.Plants;
 
@@ -31,6 +32,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     CaseLibrary _library;
     Case? _case;
     List<EventRowViewModel> _allRows = [];
+    TextMasker _masker = TextMasker.None;
     IReadOnlyList<EventField> _selectedFields = [];
 
     /// <param name="defaultCasesRoot">設定中沒有指定存放位置時使用（預設 %LOCALAPPDATA%\LogTrace\Cases）。</param>
@@ -50,16 +52,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RefreshCases();
         RefreshPlants();
         Playback.GoToEvent = GoToEvent;
+        LoadRecentSearches();
     }
 
     /// <summary>Layout 回放（ADR-0008 第 6 點）；目前時刻＝事件清單選取的事件。</summary>
     public PlaybackViewModel Playback { get; } = new();
 
-    /// <summary>選取指定的事件（例如從 Layout 回放跳到造成狀態的事件）；被篩選掉時先顯示全部。</summary>
+    /// <summary>選取指定的事件（例如從 Layout 回放跳到造成狀態的事件）；不在搜尋結果中時改為「顯示全部並標示符合的」。</summary>
     void GoToEvent(long sequence)
     {
         if (_allRows.FirstOrDefault(r => r.Sequence == sequence) is not { } row) return;
-        if (!Events.Contains(row)) ClearFilter();
+        if (!Events.Contains(row)) ShowAllWithMarks = true;
+        if (!Events.Contains(row)) ShowRows(_allRows);
         SelectedEvent = row;
     }
 
@@ -103,6 +107,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(CloseCaseCommand))]
     [NotifyCanExecuteChangedFor(nameof(OpenCaseFolderCommand))]
     [NotifyCanExecuteChangedFor(nameof(ImportCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SearchCommand))]
     public partial string? CurrentCaseFolder { get; private set; }
 
     // ---- 匯入 ----
@@ -122,6 +127,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(DeleteSelectedCaseCommand))]
     [NotifyCanExecuteChangedFor(nameof(CloseCaseCommand))]
     [NotifyCanExecuteChangedFor(nameof(ChangeCasesRootCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SearchCommand))]
     public partial bool IsBusy { get; private set; }
 
     // ---- 事件清單與原始 LOG ----
@@ -149,7 +155,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public partial RawLineViewModel? RawSelectedLine { get; private set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SelectedDetail))]
+    [NotifyPropertyChangedFor(nameof(SelectedDetail), nameof(SelectedDetailSegments), nameof(SelectedHasMasked))]
     public partial EventRowViewModel? SelectedEvent { get; set; }
 
     /// <summary>選取事件的詳細資訊：原始位置、穩定識別碼、旗標、解析欄位與完整訊息。</summary>
@@ -158,72 +164,27 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         : $"來源：{EventRowViewModel.FormatSource(e.Source)}\n識別碼：{e.Id}\n原始時間：{e.RawTimestamp}"
           + (row.Flags.Count == 0 ? "" : "\n旗標：" + string.Join("、", row.Flags.Select(f => $"{f.Glyph} {f.Name}")))
           + (_selectedFields.Count == 0 ? "" : "\n解析欄位：" + string.Join("、", _selectedFields.Select(f => $"{FieldKinds.Label(f.Kind)} {f.Value}")))
-          + $"\n\n{EventRowViewModel.DisplayText(e.Message)}";
+          + (row.MatchNote is { } note ? $"\n搜尋：{note}" : "")
+          + $"\n\n{Display(e.Message)}";
+
+    /// <summary>詳細資訊分成一般與醒目的片段（搜尋的關鍵字醒目標示，ADR-0010 第 4 點）。</summary>
+    public IReadOnlyList<TextSegment> SelectedDetailSegments
+    {
+        get
+        {
+            if (SelectedEvent is not { } row) return [];
+            var detail = SelectedDetail;
+            int offset = detail.Length - row.Event.Message.Length; // 訊息在最後，長度與原文相同
+            return EventRowViewModel.Segments(detail, row.Highlights.Select(h => (h.Start + offset, h.Length)).ToList());
+        }
+    }
 
     partial void OnSelectedEventChanged(EventRowViewModel? value)
     {
+        RevealSensitive = false;
         _selectedFields = value is not null && _case is not null ? _case.GetFields(value.Sequence) : [];
         UpdateRawLog(value);
         Playback.SetMoment(value?.Sequence ?? 0);
-    }
-
-    // ---- 依解析欄位篩選（#23） ----
-
-    public IReadOnlyList<FieldFilterOption> FilterOptions => FieldFilterOption.All;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsElementFilter))]
-    [NotifyCanExecuteChangedFor(nameof(ApplyFilterCommand))]
-    public partial FieldFilterOption SelectedFilter { get; set; } = FieldFilterOption.All[0];
-
-    public bool IsElementFilter => SelectedFilter.Kind == FieldFilterKind.Element;
-
-    /// <summary>命令、棧板、桶編號的篩選值。</summary>
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ApplyFilterCommand))]
-    public partial string FilterValue { get; set; } = "";
-
-    /// <summary>目前案件所屬廠別的 Layout 中，有別名的元素。</summary>
-    public ObservableCollection<ElementChoiceViewModel> ElementChoices { get; } = [];
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ApplyFilterCommand))]
-    public partial ElementChoiceViewModel? SelectedFilterElement { get; set; }
-
-    /// <summary>目前的篩選說明；沒有篩選時為 null。</summary>
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ClearFilterCommand))]
-    public partial string? FilterStatus { get; private set; }
-
-    bool CanApplyFilter() => _case is not null
-        && (IsElementFilter ? SelectedFilterElement is not null : !string.IsNullOrWhiteSpace(FilterValue));
-
-    /// <summary>只列出符合的事件（依時間排序）；選取的事件仍在結果中時保持選取。</summary>
-    [RelayCommand(CanExecute = nameof(CanApplyFilter))]
-    void ApplyFilter()
-    {
-        var values = IsElementFilter ? SelectedFilterElement!.Aliases : [FilterValue.Trim()];
-        var seqs = _case!.FindSequences(SelectedFilter.FieldKinds, values).ToHashSet();
-        ShowRows(_allRows.Where(r => seqs.Contains(r.Sequence)));
-        var target = IsElementFilter ? $"{SelectedFilterElement!.Name}（別名 {string.Join("・", values)}）" : values[0];
-        FilterStatus = $"篩選：{SelectedFilter.Label} {target}，{Events.Count:N0} 筆";
-    }
-
-    bool CanClearFilter() => FilterStatus is not null;
-
-    [RelayCommand(CanExecute = nameof(CanClearFilter))]
-    void ClearFilter()
-    {
-        ShowRows(_allRows);
-        FilterStatus = null;
-    }
-
-    void ShowRows(IEnumerable<EventRowViewModel> rows)
-    {
-        var selected = SelectedEvent;
-        Events.Clear();
-        foreach (var r in rows) Events.Add(r);
-        SelectedEvent = selected is not null && Events.Contains(selected) ? selected : Events.FirstOrDefault();
     }
 
     /// <summary>從廠別設定存放位置找出案件所屬廠別的設定檔（Layout 快照在 #27 加入）；找不到時為 null。</summary>
@@ -272,7 +233,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             int count = src.LineEnd + RawContextLines - first + 1;
             foreach (var line in _case.ReadRawLines(src.RelativePath, first, count))
             {
-                var vm = new RawLineViewModel(line.LineNo, EventRowViewModel.DisplayText(line.Text),
+                var vm = new RawLineViewModel(line.LineNo, Display(line.Text),
                     line.LineNo >= src.LineStart && line.LineNo <= src.LineEnd);
                 RawLines.Add(vm);
                 if (line.LineNo == src.LineStart) RawSelectedLine = vm;
@@ -438,6 +399,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     void SetCurrent(Case c)
     {
         _case = c;
+        _masker = new TextMasker(c.Info.Plant.MaskPatterns);
         CurrentCaseName = c.Info.Name;
         CurrentCasePlant = c.Info.Plant.Revision == 0 ? c.Info.Plant.Name : $"{c.Info.Plant.Name}（修訂 {c.Info.Plant.Revision}）";
         CurrentCaseFolder = c.Folder;
@@ -451,7 +413,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SelectedEvent = null;
         Events.Clear();
         _allRows = [];
-        FilterStatus = null;
+        ResetSearch();
         ElementChoices.Clear();
         Playback.Clear("請開啟案件。");
         Modules.Clear();
@@ -520,19 +482,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     async Task LoadEventsAsync(Case c)
     {
-        var (modules, rows) = await Task.Run(() => LoadAll(c));
+        var masker = _masker;
+        var (modules, rows) = await Task.Run(() => LoadAll(c, masker));
         SelectedEvent = null;
         Events.Clear();
         Modules.Clear();
         foreach (var m in modules) Modules.Add(m);
         _allRows = rows;
-        FilterStatus = null;
+        LoadSearchChoices(rows, modules);
         foreach (var r in rows) Events.Add(r);
         var doc = FindPlantDocument(c);
         LoadElementChoices(doc);
         await LoadPlaybackAsync(c, doc, rows);
         SelectedEvent = Events.FirstOrDefault();
-        ApplyFilterCommand.NotifyCanExecuteChanged();
+        SearchCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>建立世界模型（開啟案件時在記憶體中建立快照）並載入 Layout 回放。</summary>
@@ -551,7 +514,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Playback.Load(model, doc.Layout, rows.Select(r => r.Event).ToList(), hasStateRules);
     }
 
-    static (List<string> Modules, List<EventRowViewModel> Rows) LoadAll(Case c)
+    static (List<string> Modules, List<EventRowViewModel> Rows) LoadAll(Case c, TextMasker masker)
     {
         var order = c.Info.Plant.ModuleOrder.ToList();
         var modules = c.GetFiles().Where(f => f.Active).Select(f => f.Module).Distinct(StringComparer.Ordinal)
@@ -563,7 +526,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             var page = c.GetEvents(next, PageSize);
             if (page.Count == 0) break;
-            rows.AddRange(page.Select(e => new EventRowViewModel(e, modules.IndexOf(e.Module))));
+            rows.AddRange(page.Select(e => new EventRowViewModel(e, modules.IndexOf(e.Module), masker)));
             next = page[^1].Sequence + 1;
         }
         return (modules, rows);

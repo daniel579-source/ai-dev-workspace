@@ -1,0 +1,12 @@
+2030-01-12 08:00:03.0000 | INFO | EXEDebug | 卸貨 回報 OK  
+
+2030-01-12 08:00:04.0000 | ERROR | EXEDebug | System.Exception: 虛構例外
+   at Fake.DoUnload() 卸貨逾時
+   at Fake.Run()  
+
+2030-01-12 08:00:05.0000 | INFO | EXEDebug | 簡訊通知 0912-345-678 設備門開啟異常（虛構）  
+
+2030-01-12 08:00:06.0000 | DEBUG | EXEDebug | bcr01 heartbeat  
+
+2030-01-12 08:00:07.0000 | DEBUG | EXEDebug | Bcr01 Restart Done  
+

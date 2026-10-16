@@ -56,6 +56,12 @@ public interface IEventStore : IDisposable
     /// <summary>以新的解析規則重新抽出的欄位與效果取代原本的，並更新案件保存的規則（單一交易）。</summary>
     void ReplaceFields(IReadOnlyList<Parsing.EventField> fields, IReadOnlyList<Parsing.EventEffect> effects, CaseInfo info, AuditEntry audit);
 
+    /// <summary>補上缺少的搜尋用文字（之前建立的案件）；傳回補上的筆數。</summary>
+    int EnsureSearchText();
+
+    /// <summary>依條件搜尋事件（ADR-0010），傳回事件序號（依時間排序）。依日平行掃描。</summary>
+    IReadOnlyList<long> Search(Search.SearchQuery query, CancellationToken ct);
+
     /// <summary>所有效果，依事件序號（世界模型的輸入，ADR-0005）。</summary>
     IReadOnlyList<Parsing.EventEffect> GetEffects();
 

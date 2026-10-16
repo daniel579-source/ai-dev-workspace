@@ -3,6 +3,7 @@ using System.Text.Json;
 using LogTrace.Engine.Events;
 using LogTrace.Engine.Parsing;
 using LogTrace.Engine.Plants;
+using LogTrace.Engine.Search;
 using Microsoft.Data.Sqlite;
 
 namespace LogTrace.Engine.Storage;
@@ -14,9 +15,11 @@ public sealed class SqliteEventStore : IEventStore
     public const int SchemaVersion = 3;
 
     readonly SqliteConnection _conn;
+    readonly string _path;
 
     public SqliteEventStore(string databasePath, bool readOnly = false)
     {
+        _path = databasePath;
         _conn = new SqliteConnection(new SqliteConnectionStringBuilder
         {
             DataSource = databasePath,
@@ -53,6 +56,7 @@ public sealed class SqliteEventStore : IEventStore
             CREATE TABLE IF NOT EXISTS event_effects(
                 seq INTEGER NOT NULL, effect TEXT NOT NULL, params TEXT NOT NULL);
             CREATE INDEX IF NOT EXISTS event_effects_seq ON event_effects(seq);
+            CREATE TABLE IF NOT EXISTS event_search(seq INTEGER PRIMARY KEY, norm TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS audit(
                 audit_id INTEGER PRIMARY KEY, time TEXT NOT NULL, user TEXT NOT NULL,
                 action TEXT NOT NULL, target TEXT NOT NULL, detail TEXT NOT NULL);
@@ -71,6 +75,7 @@ public sealed class SqliteEventStore : IEventStore
         SetMeta("encodings", JsonSerializer.Serialize(info.Plant.Encodings));
         SetMeta("parse_rules", JsonSerializer.Serialize(info.Plant.ParseRules));
         SetMeta("presence_signal", info.Plant.PresenceSignal);
+        SetMeta("mask_patterns", JsonSerializer.Serialize(info.Plant.MaskPatterns));
         SetMeta("created_at", Iso(info.CreatedAt));
         tx.Commit();
     }
@@ -90,6 +95,7 @@ public sealed class SqliteEventStore : IEventStore
             // parse_rules 為 #23 加入；之前建立的案件使用初始規則
             ParseRules = TryGetMeta("parse_rules") is { } pr ? JsonSerializer.Deserialize<ParseRule[]>(pr) ?? [] : PlantConfig.DefaultParseRules,
             PresenceSignal = TryGetMeta("presence_signal") ?? PlantConfig.Default.PresenceSignal,
+            MaskPatterns = TryGetMeta("mask_patterns") is { } mp ? JsonSerializer.Deserialize<string[]>(mp) ?? [] : TextMasker.DefaultPatterns,
         };
         return new(GetMeta("name"), plant, ParseIso(GetMeta("created_at")));
     }
@@ -116,7 +122,7 @@ public sealed class SqliteEventStore : IEventStore
             cmd.Parameters.AddWithValue("$c", (object?)import.ArchiveCopy ?? DBNull.Value);
             cmd.ExecuteNonQuery();
         }
-        Exec("DELETE FROM events; DELETE FROM files; DELETE FROM event_fields; DELETE FROM event_effects;");
+        Exec("DELETE FROM events; DELETE FROM files; DELETE FROM event_fields; DELETE FROM event_effects; DELETE FROM event_search;");
 
         var activeIds = new Dictionary<string, long>(StringComparer.Ordinal);
         using (var cmd = _conn.CreateCommand())
@@ -174,8 +180,113 @@ public sealed class SqliteEventStore : IEventStore
         }
         InsertFields(fields);
         InsertEffects(effects);
+        InsertSearchText(events.Select(e => (e.Sequence, e.Message)));
         foreach (var a in audit) InsertAudit(a);
         tx.Commit();
+    }
+
+    /// <summary>正規化的搜尋用文字（ADR-0011 第 2 點：匯入時產生）。</summary>
+    void InsertSearchText(IEnumerable<(long Sequence, string Message)> rows)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "INSERT OR REPLACE INTO event_search VALUES($s,$n)";
+        var s = cmd.Parameters.Add(new SqliteParameter { ParameterName = "$s" });
+        var n = cmd.Parameters.Add(new SqliteParameter { ParameterName = "$n" });
+        cmd.Prepare();
+        foreach (var (seq, message) in rows)
+        {
+            (s.Value, n.Value) = (seq, TextNormalizer.Normalize(message));
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    public int EnsureSearchText()
+    {
+        using var count = _conn.CreateCommand();
+        count.CommandText = "SELECT count(*) FROM events e WHERE NOT EXISTS (SELECT 1 FROM event_search s WHERE s.seq = e.seq)";
+        if ((long)count.ExecuteScalar()! == 0) return 0;
+        var missing = new List<(long, string)>();
+        using (var cmd = _conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT seq, message FROM events e WHERE NOT EXISTS (SELECT 1 FROM event_search s WHERE s.seq = e.seq)";
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) missing.Add((r.GetInt64(0), r.GetString(1)));
+        }
+        using var tx = _conn.BeginTransaction();
+        InsertSearchText(missing);
+        tx.Commit();
+        return missing.Count;
+    }
+
+    public IReadOnlyList<long> Search(SearchQuery query, CancellationToken ct)
+    {
+        // 事件序號依時間排序，所以依序號範圍分片、平行掃描（ADR-0011 第 1 點：依日平行；這裡把一天也再分片）。
+        // 每片使用自己的唯讀連線；先以搜尋用文字篩選，再取符合的事件比對其他條件。結果依事件序號排序。
+        long max;
+        using (var cmd = _conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT coalesce(max(seq), 0) FROM events";
+            max = (long)cmd.ExecuteScalar()!;
+        }
+        int parts = Math.Max(1, Math.Min(Environment.ProcessorCount, (int)(max / 20_000) + 1));
+        long size = max / parts + 1;
+        var results = new System.Collections.Concurrent.ConcurrentBag<List<long>>();
+        Parallel.For(0, parts, new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = Environment.ProcessorCount }, part =>
+        {
+            using var conn = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = _path, Mode = SqliteOpenMode.ReadOnly, Pooling = false,
+            }.ToString());
+            conn.Open();
+            results.Add(SearchRange(conn, query, part * size + 1, Math.Min(max, (part + 1) * size), ct));
+        });
+        var all = results.SelectMany(x => x).ToList();
+        all.Sort();
+        return all;
+    }
+
+    static List<long> SearchRange(SqliteConnection conn, SearchQuery q, long firstSeq, long lastSeq, CancellationToken ct)
+    {
+        using var cmd = conn.CreateCommand();
+        var where = new List<string> { "s.seq BETWEEN $first AND $last" };
+        cmd.Parameters.AddWithValue("$first", firstSeq);
+        cmd.Parameters.AddWithValue("$last", lastSeq);
+        if (q.From is { } from) { where.Add("e.ts >= $from"); cmd.Parameters.AddWithValue("$from", from.Ticks); }
+        if (q.To is { } to) { where.Add("e.ts < $to"); cmd.Parameters.AddWithValue("$to", to.Ticks); }
+        int n = 0;
+        string P(object value)
+        {
+            var name = "$p" + n++;
+            cmd.Parameters.AddWithValue(name, value);
+            return name;
+        }
+        string In(IReadOnlyList<string> values) => string.Join(",", values.Select(v => P(v)));
+        string Has(string term) => $"instr(s.norm, {P(TextNormalizer.Normalize(term))}) > 0";
+
+        // 先以不分大小寫的正規化文字篩選；區分大小寫時在下面再以原文確認（「不包含」也改在下面判斷）
+        foreach (var t in q.AllTerms) where.Add(Has(t));
+        if (q.AnyTerms.Count > 0) where.Add("(" + string.Join(" OR ", q.AnyTerms.Select(Has)) + ")");
+        if (!q.CaseSensitive && q.NoneTerms.Count > 0) where.Add("NOT (" + string.Join(" OR ", q.NoneTerms.Select(Has)) + ")");
+        if (q.Modules.Count > 0) where.Add($"f.module IN ({In(q.Modules)})");
+        if (q.Loggers.Count > 0) where.Add($"e.logger IN ({In(q.Loggers)})");
+        if (q.Levels.Count > 0) where.Add($"e.level IN ({In(q.Levels)})");
+        if (q.Flags != EventFlags.None) where.Add($"(e.flags & {P((int)q.Flags)}) != 0");
+        if (q.FieldKinds.Count > 0 && q.FieldValues.Count > 0)
+            where.Add($"e.seq IN (SELECT seq FROM event_fields WHERE kind IN ({In(q.FieldKinds)}) AND value IN ({In(q.FieldValues)}))");
+
+        cmd.CommandText = $"""
+            SELECT e.seq, e.message FROM event_search s CROSS JOIN events e ON e.seq = s.seq JOIN files f ON f.file_id = e.file_id
+            WHERE {string.Join(" AND ", where)} ORDER BY s.seq
+            """;
+        var list = new List<long>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            ct.ThrowIfCancellationRequested();
+            if (q.CaseSensitive && !q.MatchesText(r.GetString(1))) continue;
+            list.Add(r.GetInt64(0));
+        }
+        return list;
     }
 
     public void ReplaceFields(IReadOnlyList<EventField> fields, IReadOnlyList<EventEffect> effects, CaseInfo info, AuditEntry audit)

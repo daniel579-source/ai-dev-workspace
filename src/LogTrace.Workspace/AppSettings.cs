@@ -2,10 +2,56 @@ using System.Text.Json;
 
 namespace LogTrace.Workspace;
 
-/// <summary>程式設定（依使用者保存）：案件存放位置與最近使用的案件。</summary>
+/// <summary>一次搜尋的條件（最近的搜尋，ADR-0010 第 4 點）。</summary>
+public sealed record SavedSearch
+{
+    public string AllOf { get; init; } = "";
+    public string AnyOf { get; init; } = "";
+    public string NoneOf { get; init; } = "";
+    public bool CaseSensitive { get; init; }
+    public string From { get; init; } = "";
+    public string To { get; init; } = "";
+    public IReadOnlyList<string> Modules { get; init; } = [];
+    public IReadOnlyList<string> Loggers { get; init; } = [];
+    public IReadOnlyList<string> Levels { get; init; } = [];
+    public int Flags { get; init; }
+    public FieldFilterKind FieldKind { get; init; }
+    public string FieldValue { get; init; } = "";
+
+    /// <summary>清單中顯示的摘要。</summary>
+    public string Label
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (AllOf.Trim().Length > 0) parts.Add($"全部：{AllOf.Trim()}");
+            if (AnyOf.Trim().Length > 0) parts.Add($"任一：{AnyOf.Trim()}");
+            if (NoneOf.Trim().Length > 0) parts.Add($"不含：{NoneOf.Trim()}");
+            if (FieldKind != FieldFilterKind.None && FieldValue.Length > 0) parts.Add($"{FieldFilterOption.Of(FieldKind).Label}：{FieldValue}");
+            if (Modules.Count + Loggers.Count + Levels.Count > 0 || Flags != 0 || From.Length + To.Length > 0) parts.Add("＋篩選");
+            if (CaseSensitive) parts.Add("區分大小寫");
+            return parts.Count == 0 ? "（全部事件）" : string.Join("　", parts);
+        }
+    }
+}
+
+/// <summary>程式設定（依使用者保存）：案件存放位置、最近使用的案件、最近的搜尋。</summary>
 public sealed record AppSettings
 {
     public const int MaxRecentCases = 10;
+    public const int MaxRecentSearches = 20;
+
+    /// <summary>最近的搜尋，最近的在前（ADR-0010 第 4 點：記住最近 20 次）。</summary>
+    public IReadOnlyList<SavedSearch> RecentSearches { get; init; } = [];
+
+    public AppSettings WithSearch(SavedSearch search) => this with
+    {
+        RecentSearches = [search, .. RecentSearches.Where(s => s != search && !SameContent(s, search)).Take(MaxRecentSearches - 1)],
+    };
+
+    static bool SameContent(SavedSearch a, SavedSearch b) =>
+        a with { Modules = [], Loggers = [], Levels = [] } == b with { Modules = [], Loggers = [], Levels = [] }
+        && a.Modules.SequenceEqual(b.Modules) && a.Loggers.SequenceEqual(b.Loggers) && a.Levels.SequenceEqual(b.Levels);
 
     /// <summary>案件存放位置；null 表示使用預設位置（ADR-0011 第 3 點）。</summary>
     public string? CasesRoot { get; init; }

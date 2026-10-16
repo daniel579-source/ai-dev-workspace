@@ -3,10 +3,14 @@ using LogTrace.Engine.Events;
 namespace LogTrace.Engine.Storage;
 
 /// <summary>匯入案件的一個原始檔（複本位於案件的 raw\ 下，路徑相對於 raw\）。</summary>
-public sealed record StoredFile(string Module, string DayFolder, string Logger, string RelativePath, long Size, string Sha256);
+/// <param name="Encoding">解碼使用的編碼（UTF-8 或 Big5）。</param>
+/// <param name="Unparsable">整個檔案不符合共通格式，沒有產生事件（ADR-0004 第 6 點），可以用原始文字的方式開啟。</param>
+public sealed record StoredFile(
+    string Module, string DayFolder, string Logger, string RelativePath, long Size, string Sha256,
+    string Encoding, int EventCount, bool Unparsable);
 
 /// <summary>案件的中繼資料。</summary>
-public sealed record CaseInfo(string Name, string PlantName, IReadOnlyList<string> ModuleOrder, DateTimeOffset CreatedAt);
+public sealed record CaseInfo(string Name, string PlantName, IReadOnlyList<string> ModuleOrder, IReadOnlyList<string> KnownLoggers, DateTimeOffset CreatedAt);
 
 /// <summary>
 /// 儲存層介面（ADR-0001：儲存層要可以替換；ADR-0011：目前實作為 SQLite）。

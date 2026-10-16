@@ -15,6 +15,8 @@ public sealed class Case : IDisposable
     public const string RawFolderName = "raw";
 
     readonly IEventStore _store;
+    readonly RawLogReader _raw;
+    Dictionary<string, StoredFile>? _files;
 
     public string Folder { get; }
     public CaseInfo Info { get; }
@@ -25,6 +27,7 @@ public sealed class Case : IDisposable
         Folder = folder;
         _store = store;
         Info = info;
+        _raw = new RawLogReader(RawFolder);
     }
 
     public static Case Create(string folder, string name, PlantConfig plant)
@@ -33,7 +36,7 @@ public sealed class Case : IDisposable
             throw new IOException($"案件資料夾已存在：{folder}");
         Directory.CreateDirectory(Path.Combine(folder, RawFolderName));
         var store = new SqliteEventStore(Path.Combine(folder, DatabaseFileName));
-        var info = new CaseInfo(name, plant.Name, plant.ModuleOrder, DateTimeOffset.Now);
+        var info = new CaseInfo(name, plant.Name, plant.ModuleOrder, plant.KnownLoggers, DateTimeOffset.Now);
         store.SaveInfo(info);
         return new Case(folder, store, info);
     }
@@ -43,14 +46,25 @@ public sealed class Case : IDisposable
         var db = Path.Combine(folder, DatabaseFileName);
         if (!File.Exists(db)) throw new FileNotFoundException("不是案件資料夾", db);
         var store = new SqliteEventStore(db);
-        return new Case(folder, store, store.LoadInfo());
+        try
+        {
+            return new Case(folder, store, store.LoadInfo());
+        }
+        catch
+        {
+            store.Dispose();
+            throw;
+        }
     }
 
-    PlantConfig Plant => new() { Name = Info.PlantName, ModuleOrder = Info.ModuleOrder };
+    PlantConfig Plant => new() { Name = Info.PlantName, ModuleOrder = Info.ModuleOrder, KnownLoggers = Info.KnownLoggers };
 
     /// <summary>匯入一個「日期 → 模組」結構的資料夾。</summary>
-    public ImportResult Import(string sourceFolder, CancellationToken ct = default) =>
-        CaseImporter.Import(sourceFolder, RawFolder, Plant, _store, ct);
+    public ImportResult Import(string sourceFolder, CancellationToken ct = default)
+    {
+        _files = null;
+        return CaseImporter.Import(sourceFolder, RawFolder, Plant, _store, ct);
+    }
 
     public long EventCount => _store.GetEventCount();
 
@@ -58,6 +72,19 @@ public sealed class Case : IDisposable
     public IReadOnlyList<LogEvent> GetEvents(long fromSequence, int maxCount) => _store.GetEvents(fromSequence, maxCount);
 
     public IReadOnlyList<StoredFile> GetFiles() => _store.GetFiles();
+
+    StoredFile FindFile(string relativePath)
+    {
+        _files ??= _store.GetFiles().ToDictionary(f => f.RelativePath, StringComparer.Ordinal);
+        return _files.TryGetValue(relativePath, out var f) ? f : throw new FileNotFoundException("案件中沒有這個檔案", relativePath);
+    }
+
+    /// <summary>原始檔複本的行數。</summary>
+    public int GetRawLineCount(string relativePath) => _raw.LineCount(relativePath, FindFile(relativePath).Encoding);
+
+    /// <summary>依原始行序讀取原始檔複本：第 firstLine 行起最多 count 行（ADR-0008「原始 LOG」面板）。</summary>
+    public IReadOnlyList<RawLine> ReadRawLines(string relativePath, int firstLine, int count) =>
+        _raw.Read(relativePath, FindFile(relativePath).Encoding, firstLine, count);
 
     public void Dispose() => _store.Dispose();
 }

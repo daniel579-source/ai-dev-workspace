@@ -2,8 +2,12 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ad="https://github.com/Dirkster99/AvalonDock"
+        xmlns:local="clr-namespace:LogTrace.App"
         Title="LogTrace" Width="1280" Height="800"
         AutomationProperties.AutomationId="MainWindow">
+    <Window.Resources>
+        <local:NotConverter x:Key="Not" />
+    </Window.Resources>
     <DockPanel>
         <!-- 案件與匯入 -->
         <Border DockPanel.Dock="Top" Padding="8" BorderBrush="#DDD" BorderThickness="0,0,0,1">
@@ -48,38 +52,104 @@
                 <ad:LayoutPanel Orientation="Vertical">
                     <ad:LayoutAnchorablePane>
                         <ad:LayoutAnchorable ContentId="events" Title="事件清單" CanClose="False">
-                            <!-- ADR-0007 技術驗證：ListView＋GridView、固定列高 -->
-                            <ListView ItemsSource="{Binding Events}" SelectedItem="{Binding SelectedEvent}"
-                                      AutomationProperties.AutomationId="EventList"
-                                      VirtualizingPanel.IsVirtualizing="True"
-                                      VirtualizingPanel.VirtualizationMode="Recycling"
-                                      VirtualizingPanel.ScrollUnit="Item">
-                                <ListView.ItemContainerStyle>
-                                    <Style TargetType="ListViewItem">
-                                        <Setter Property="Height" Value="22" />
-                                    </Style>
-                                </ListView.ItemContainerStyle>
-                                <ListView.View>
-                                    <GridView>
-                                        <GridViewColumn Header="序號" DisplayMemberBinding="{Binding Sequence}" Width="70" />
-                                        <GridViewColumn Header="時間" DisplayMemberBinding="{Binding Time}" Width="180" />
-                                        <GridViewColumn Header="模組" DisplayMemberBinding="{Binding Module}" Width="60" />
-                                        <GridViewColumn Header="Logger" DisplayMemberBinding="{Binding Logger}" Width="120" />
-                                        <GridViewColumn Header="等級" DisplayMemberBinding="{Binding Level}" Width="60" />
-                                        <GridViewColumn Header="訊息" DisplayMemberBinding="{Binding Message}" Width="520" />
-                                        <GridViewColumn Header="來源" DisplayMemberBinding="{Binding Source}" Width="320" />
-                                    </GridView>
-                                </ListView.View>
-                            </ListView>
+                            <DockPanel>
+                                <!-- 檢視切換與旗標圖例（ADR-0008 第 5 點） -->
+                                <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="#DDD" BorderThickness="0,0,0,1">
+                                    <DockPanel>
+                                        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                                            <RadioButton Content="混合檢視" IsChecked="{Binding IsTrackView, Converter={StaticResource Not}}" Margin="0,0,10,0"
+                                                         AutomationProperties.AutomationId="MixedView" />
+                                            <RadioButton Content="分軌檢視" IsChecked="{Binding IsTrackView}" Margin="0,0,20,0"
+                                                         AutomationProperties.AutomationId="TrackView" />
+                                        </StackPanel>
+                                        <ItemsControl ItemsSource="{Binding FlagLegend}" AutomationProperties.AutomationId="FlagLegend">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,14,0" ToolTip="{Binding Description}" Background="Transparent">
+                                                        <TextBlock Text="{Binding Glyph}" Foreground="#B35C00" FontWeight="Bold" Margin="0,0,3,0" />
+                                                        <TextBlock Text="{Binding Name}" Foreground="#555" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </DockPanel>
+                                </Border>
+                                <!-- ADR-0007 技術驗證：ListView＋GridView、固定列高。View 由 MainWindow.xaml.cs 依混合／分軌切換 -->
+                                <ListView x:Name="EventList" ItemsSource="{Binding Events}" SelectedItem="{Binding SelectedEvent}"
+                                          AutomationProperties.AutomationId="EventList"
+                                          VirtualizingPanel.IsVirtualizing="True"
+                                          VirtualizingPanel.VirtualizationMode="Recycling"
+                                          VirtualizingPanel.ScrollUnit="Item">
+                                    <ListView.ItemContainerStyle>
+                                        <Style TargetType="ListViewItem">
+                                            <Setter Property="Height" Value="22" />
+                                            <!-- 以底色區分模組（依模組順序） -->
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ModuleIndex}" Value="0">
+                                                    <Setter Property="Background" Value="#EEF4FF" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding ModuleIndex}" Value="1">
+                                                    <Setter Property="Background" Value="#EFFAF0" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding ModuleIndex}" Value="2">
+                                                    <Setter Property="Background" Value="#FFF6E8" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding ModuleIndex}" Value="3">
+                                                    <Setter Property="Background" Value="#F6EEFF" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ListView.ItemContainerStyle>
+                                </ListView>
+                            </DockPanel>
                         </ad:LayoutAnchorable>
                     </ad:LayoutAnchorablePane>
-                    <ad:LayoutAnchorablePane DockHeight="180">
-                        <ad:LayoutAnchorable ContentId="detail" Title="詳細資訊" CanClose="False">
-                            <TextBox Text="{Binding SelectedDetail, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"
-                                     VerticalScrollBarVisibility="Auto" FontFamily="Consolas, Microsoft JhengHei UI" BorderThickness="0"
-                                     AutomationProperties.AutomationId="EventDetail" />
-                        </ad:LayoutAnchorable>
-                    </ad:LayoutAnchorablePane>
+                    <ad:LayoutPanel Orientation="Horizontal" DockHeight="240">
+                        <ad:LayoutAnchorablePane DockWidth="420">
+                            <ad:LayoutAnchorable ContentId="detail" Title="詳細資訊" CanClose="False">
+                                <TextBox Text="{Binding SelectedDetail, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"
+                                         VerticalScrollBarVisibility="Auto" FontFamily="Consolas, Microsoft JhengHei UI" BorderThickness="0"
+                                         AutomationProperties.AutomationId="EventDetail" />
+                            </ad:LayoutAnchorable>
+                        </ad:LayoutAnchorablePane>
+                        <ad:LayoutAnchorablePane>
+                            <ad:LayoutAnchorable ContentId="rawlog" Title="原始 LOG" CanClose="False">
+                                <!-- ADR-0008 第 6 點：依原始行序顯示選取事件所在的檔案，標出該事件的行 -->
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Top" Text="{Binding RawFile}" Padding="6,3" Foreground="#555"
+                                               AutomationProperties.AutomationId="RawFile" />
+                                    <ListBox x:Name="RawLog" ItemsSource="{Binding RawLines}" SelectedItem="{Binding RawSelectedLine, Mode=OneWay}"
+                                             FontFamily="Consolas, Microsoft JhengHei UI" BorderThickness="0"
+                                             AutomationProperties.AutomationId="RawLog"
+                                             VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem">
+                                                <Setter Property="Padding" Value="0" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding InSelectedEvent}" Value="True">
+                                                        <Setter Property="Background" Value="#FFF3B0" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding LineNo}" Width="56" TextAlignment="Right" Foreground="#999" Margin="0,0,10,0" />
+                                                    <TextBlock Text="{Binding Text}" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </DockPanel>
+                            </ad:LayoutAnchorable>
+                        </ad:LayoutAnchorablePane>
+                    </ad:LayoutPanel>
                 </ad:LayoutPanel>
             </ad:LayoutRoot>
         </ad:DockingManager>

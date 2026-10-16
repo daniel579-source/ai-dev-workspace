@@ -33,8 +33,13 @@ $env:LOGTRACE_PERF_SOURCE = "D:/_case/tv-data/logs/20300107"; $env:LOGTRACE_PERF
 $env:LOGTRACE_PERF_SEARCH_SOURCE = "D:/_case/tv-data/logs"
 dotnet test tests/LogTrace.Engine.Tests -c Release --filter "Category=Perf" --logger "console;verbosity=detailed"
 
-# 發佈：self-contained 單一資料夾（ADR-0007），目標電腦不需要安裝 .NET
-dotnet publish src/LogTrace.App -c Release -r win-x64 --self-contained -o publish/LogTrace
+# 打包：self-contained 單一資料夾＋zip（ADR-0007），目標電腦不需要安裝 .NET；
+# 含使用說明（docs/user-guide.md）、第三方元件清單（THIRD-PARTY-NOTICES.md）與授權全文（licenses/）
+pwsh scripts/package.ps1                                     # → publish/LogTrace-<版本>-win-x64.zip
+
+# 以冒煙測試驗證發佈版（zip 解壓後的 LogTrace.exe）；LOGTRACE_E2E_SOURCE 另以一天份資料在畫面上走主要流程
+$env:LOGTRACE_APP_EXE = "D:/temp/LogTrace/LogTrace.exe"; $env:LOGTRACE_E2E_SOURCE = "D:/_case/tv-data/logs/20300107"
+dotnet test tests/LogTrace.App.SmokeTests --logger "console;verbosity=detailed"
 ```
 
 | 專案 | 內容 |

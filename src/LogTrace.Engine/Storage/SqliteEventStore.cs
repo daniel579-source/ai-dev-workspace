@@ -582,7 +582,7 @@ public sealed class SqliteEventStore : IEventStore
         using var cmd = _conn.CreateCommand();
         var names = kinds.Select((k, i) => "$k" + i).ToList();
         cmd.CommandText = $"""
-            SELECT kind, value, count(DISTINCT seq) FROM event_fields
+            SELECT kind, value, count(DISTINCT seq) FROM event_fields INDEXED BY event_fields_seq
             WHERE seq BETWEEN $from AND $to AND kind IN ({string.Join(",", names)})
             GROUP BY kind, value COLLATE NOCASE ORDER BY count(DISTINCT seq) DESC, value
             """;

@@ -34,9 +34,16 @@ public sealed partial class MainViewModel
         StopIndexBuild();
         c.Index.DiskLimitRatio = IndexDiskLimitRatio;
         var cts = _indexCts = new CancellationTokenSource();
+        // 進度回報是非同步送達的（沒有畫面執行緒時在執行緒集區）：完成之後才到的進度一律忽略，不蓋掉最後的狀態
+        var gate = new object();
+        bool finished = false;
         var progress = new Progress<IndexBuildProgress>(p =>
         {
-            if (_indexCts == cts && p.Day is not null) IndexStatus = $"全文索引：建立中（{p.BuiltDays}/{p.TotalDays} 天，正在處理 {p.Day}）；尚未建好的日期以掃描搜尋";
+            lock (gate)
+            {
+                if (!finished && _indexCts == cts && p.Day is not null)
+                    IndexStatus = $"全文索引：建立中（{p.BuiltDays}/{p.TotalDays} 天，正在處理 {p.Day}）；尚未建好的日期以掃描搜尋";
+            }
         });
         IsIndexing = true;
         IndexStatus = "全文索引：準備中…";
@@ -61,9 +68,13 @@ public sealed partial class MainViewModel
             }
             void Done()
             {
-                if (_indexCts != cts) return;
-                IndexStatus = status;
-                IsIndexing = false;
+                lock (gate)
+                {
+                    finished = true;
+                    if (_indexCts != cts) return;
+                    IndexStatus = status;
+                    IsIndexing = false;
+                }
             }
             if (ui is null) Done();
             else ui.Post(_ => Done(), null);

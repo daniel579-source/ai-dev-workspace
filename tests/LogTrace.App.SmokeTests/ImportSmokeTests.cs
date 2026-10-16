@@ -35,8 +35,16 @@ public sealed class ImportSmokeTests : IDisposable
         tab.Click();
     }
 
+    /// <summary>
+    /// 受測的程式：預設是建置輸出；設定 LOGTRACE_APP_EXE 時改測發佈版（例如 zip 解壓後的 LogTrace.exe，#29）。
+    /// </summary>
     internal static string AppExe()
     {
+        if (Environment.GetEnvironmentVariable("LOGTRACE_APP_EXE") is { Length: > 0 } published)
+        {
+            Assert.True(File.Exists(published), $"找不到 {published}");
+            return published;
+        }
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "LogTrace.slnx"))) dir = dir.Parent;
         Assert.NotNull(dir);

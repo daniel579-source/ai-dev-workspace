@@ -14,7 +14,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="$(Pkg7z_Libs)\bin\x64\7za.dll" Link="7z\7za.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
-    <None Include="$(Pkg7z_Libs)\3rd-party-NOTICES.txt" Link="7z\7-Zip-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
+    <!-- 7za.dll 的授權要求散布時附上授權資訊（#29） -->
+    <None Include="$(Pkg7z_Libs)\bin\License.7za-7zxa.txt" Link="7z\License.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,76 @@
+<Window x:Class="TechValidation.UiSpike.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ad="https://github.com/Dirkster99/AvalonDock"
+        xmlns:local="clr-namespace:TechValidation.UiSpike"
+        Title="技術驗證：WPF ＋ AvalonDock（#15，虛構資料）" Width="1400" Height="900">
+    <DockPanel>
+        <ToolBar DockPanel.Dock="Top">
+            <Button Content="儲存版面" Click="SaveLayout_Click" />
+            <Button Content="載入版面" Click="LoadLayout_Click" />
+            <Button Content="還原預設版面" Click="ResetLayout_Click" />
+            <Separator />
+            <Button Content="執行自我檢查" Click="SelfTest_Click" />
+            <Separator />
+            <TextBlock x:Name="FpsText" VerticalAlignment="Center" Margin="8,0" />
+        </ToolBar>
+        <ad:DockingManager x:Name="Dock">
+            <ad:LayoutRoot>
+                <ad:LayoutPanel Orientation="Vertical">
+                    <ad:LayoutPanel Orientation="Horizontal">
+                        <ad:LayoutAnchorablePane DockWidth="*">
+                            <ad:LayoutAnchorable ContentId="layout" Title="Layout 畫布" CanClose="False">
+                                <local:LayoutCanvasHost x:Name="CanvasHost" />
+                            </ad:LayoutAnchorable>
+                        </ad:LayoutAnchorablePane>
+                        <ad:LayoutAnchorablePane DockWidth="*">
+                            <ad:LayoutAnchorable ContentId="events" Title="事件清單" CanClose="False">
+                                <DataGrid x:Name="EventGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                                          EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                                          VirtualizingPanel.IsVirtualizing="True"
+                                          VirtualizingPanel.VirtualizationMode="Recycling"
+                                          VirtualizingPanel.ScrollUnit="Item"
+                                          RowHeight="22"
+                                          HeadersVisibility="Column" GridLinesVisibility="None">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="序號" Binding="{Binding Seq}" Width="70" />
+                                        <DataGridTextColumn Header="時間" Binding="{Binding Time}" Width="190" />
+                                        <DataGridTextColumn Header="模組" Binding="{Binding Module}" Width="60" />
+                                        <DataGridTextColumn Header="Logger" Binding="{Binding Logger}" Width="120" />
+                                        <DataGridTextColumn Header="旗標" Binding="{Binding Flags}" Width="50" />
+                                        <DataGridTextColumn Header="訊息" Binding="{Binding Message}" Width="*" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </ad:LayoutAnchorable>
+                            <ad:LayoutAnchorable ContentId="eventsListView" Title="事件清單（ListView 比較用）" CanClose="False">
+                                <ListView x:Name="EventListView"
+                                          VirtualizingPanel.IsVirtualizing="True"
+                                          VirtualizingPanel.VirtualizationMode="Recycling"
+                                          VirtualizingPanel.ScrollUnit="Item">
+                                    <ListView.View>
+                                        <GridView>
+                                            <GridViewColumn Header="序號" DisplayMemberBinding="{Binding Seq}" Width="70" />
+                                            <GridViewColumn Header="時間" DisplayMemberBinding="{Binding Time}" Width="190" />
+                                            <GridViewColumn Header="模組" DisplayMemberBinding="{Binding Module}" Width="60" />
+                                            <GridViewColumn Header="Logger" DisplayMemberBinding="{Binding Logger}" Width="120" />
+                                            <GridViewColumn Header="旗標" DisplayMemberBinding="{Binding Flags}" Width="50" />
+                                            <GridViewColumn Header="訊息" DisplayMemberBinding="{Binding Message}" Width="500" />
+                                        </GridView>
+                                    </ListView.View>
+                                </ListView>
+                            </ad:LayoutAnchorable>
+                            <ad:LayoutAnchorable ContentId="selftest" Title="自我檢查" CanClose="False">
+                                <TextBox x:Name="SelfTestText" IsReadOnly="True" FontFamily="Consolas" VerticalScrollBarVisibility="Auto" TextWrapping="Wrap" />
+                            </ad:LayoutAnchorable>
+                        </ad:LayoutAnchorablePane>
+                    </ad:LayoutPanel>
+                    <ad:LayoutAnchorablePane DockHeight="170">
+                        <ad:LayoutAnchorable ContentId="timeline" Title="時間軸" CanClose="False">
+                            <local:TimelineControl x:Name="Timeline" />
+                        </ad:LayoutAnchorable>
+                    </ad:LayoutAnchorablePane>
+                </ad:LayoutPanel>
+            </ad:LayoutRoot>
+        </ad:DockingManager>
+    </DockPanel>
+</Window>

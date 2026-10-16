@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TechValidation.Bench/TechValidation.Bench.csproj" />
+    <Project Path="src/TechValidation.Core/TechValidation.Core.csproj" />
+    <Project Path="src/TechValidation.DataGen/TechValidation.DataGen.csproj" />
+    <Project Path="src/TechValidation.UiSpike/TechValidation.UiSpike.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TechValidation.Tests/TechValidation.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -2,8 +2,8 @@
 
 | 項目 | 內容 |
 |---|---|
-| 文件狀態 | 草稿 v1.3（**架構評估中**；已定案的決策見第 10 章，其餘仍為候選） |
-| 最後更新 | 2026-10-12 |
+| 文件狀態 | 草稿 v1.4（**架構評估中**；已定案的決策見第 10 章，其餘仍為候選） |
+| 最後更新 | 2026-10-16 |
 | 相關文件 | `docs/requirements.md`、`docs/log-format-notes.md` |
 
 > **重要**：本文件中的架構選項與技術名稱一律為**候選方案**，不代表已經決定。正式決策必須記錄在第 10 節，並寫明理由、替代方案與風險。
@@ -250,14 +250,14 @@
 | ADR-0001 | 部署形態採單機桌面程式 | 已接受（2026-10-15） | 免安裝、離線的 Windows 10／11 64 位元單機程式；資料在本機；Layout 以檔案分享；儲存層可替換 | [docs/adr/0001-deployment-standalone-desktop.md](adr/0001-deployment-standalone-desktop.md) |
 | ADR-0002 | LOG 以「案件」為單位在本機手動匯入 | 已接受（2026-10-15） | 手動匯入資料夾或 7z／zip；每次分析一個案件、只屬於一個廠別；原始檔複製進案件並記錄雜湊；多廠別以廠別設定處理 | [docs/adr/0002-case-based-manual-import.md](adr/0002-case-based-manual-import.md) |
 | ADR-0003 | 時間策略 | 已接受（2026-10-15） | 顯示廠別當地時間（預設台北）、不處理日光節約時間；保留原始時間字串，標準化時間精度 100 μs；模組之間不做偏差校正；案件可設一個整體偏移量；標示同時間戳記、時間倒退、時間無效、已校正 | [docs/adr/0003-time-strategy.md](adr/0003-time-strategy.md) |
-| ADR-0004 | 事件模型與排序規則 | 已接受（2026-10-15） | 事件以行首時間戳記切分，含延續行；以模組、日期、檔案路徑、起始行號識別；基本欄位與解析欄位兩層；所有模組完全依時間排序，同時間依行號與模組固定順序；搜尋結果同一規則 | [docs/adr/0004-event-model-and-ordering.md](adr/0004-event-model-and-ordering.md) |
+| ADR-0004 | 事件模型與排序規則 | 已接受（2026-10-15） | 事件以行首時間戳記切分，含延續行；以模組、日期、檔案路徑、起始行號識別；基本欄位與解析欄位兩層；所有模組完全依時間排序，同時間依行號與模組固定順序；搜尋結果同一規則；解碼結果含替代字元或私用區字元時標示編碼錯誤（2026-10-16 補充） | [docs/adr/0004-event-model-and-ordering.md](adr/0004-event-model-and-ordering.md) |
 | ADR-0005 | 回放的世界模型 | 已接受（2026-10-15） | 世界由站點、搬送機、對接設備、儲位、貨物（棧板＋桶）、命令組成；貨物位置只由命令決定，在席位元獨立顯示並提示不一致；未知不當作空的；第一階段 2D，Layout 保留 3D 資訊 | [docs/adr/0005-playback-world-model.md](adr/0005-playback-world-model.md) |
 | ADR-0006 | Layout 模型與設定檔 | 已接受（2026-10-16） | 元素分有 LOG 意義（站點、料架、搬送機、對接設備）與輔助兩類；別名完全比對且唯一，未對應編號可從案件比對；以公尺為單位並保留 3D 資訊；Layout 是廠別設定檔（JSON）的一個區段，案件保存快照；編輯器採三欄式 | [docs/adr/0006-layout-model-and-config.md](adr/0006-layout-model-and-config.md) |
-| ADR-0007 | 用戶端技術選型 | 已接受，待技術驗證（2026-10-16） | C# + .NET 10（LTS）+ WPF，self-contained 單一資料夾發佈，不依賴 WebView2；元件以免付費為主（AvalonDock、CommunityToolkit.Mvvm、日後 3D 用 HelixToolkit）；實作前先做技術驗證 | [docs/adr/0007-client-technology.md](adr/0007-client-technology.md) |
+| ADR-0007 | 用戶端技術選型 | 已接受，待技術驗證（2026-10-16） | C# + .NET 10（LTS）+ WPF，self-contained 單一資料夾發佈，不依賴 WebView2；元件以免付費為主（AvalonDock、CommunityToolkit.Mvvm、日後 3D 用 HelixToolkit）；實作前先做技術驗證；開發電腦的驗證：時間軸、版面、畫布通過，事件清單體感與乾淨 Windows 10 待測；AvalonDock 5 需另加序列化套件，事件清單建議 ListView | [docs/adr/0007-client-technology.md](adr/0007-client-technology.md) |
 | ADR-0008 | 回放畫面與操作 | 已接受（2026-10-16） | → 走到下一個狀態變化（Shift 逐筆事件、Ctrl 逐筆符合篩選）；播放可略過閒置時段；時間軸分總覽與細部；所有面板共用一個「目前時刻」；事件清單分混合與分軌；原始 LOG 依原始行序；版面依使用者保存 | [docs/adr/0008-playback-ui.md](adr/0008-playback-ui.md) |
 | ADR-0009 | 敏感資訊處理與存取權限 | 已接受（2026-10-16） | 只遮罩電話號碼；不另設帳號、不分權、程式不加密（依賴作業系統帳號與全碟加密）；不提供分享匯出；稽核只記錄匯入、偏移量、套用 Layout；不自動刪除、不提供備份；真實 LOG 不進 GitHub；AI 協作工具可在本機讀取但不得寫入文件 | [docs/adr/0009-sensitive-data-and-access.md](adr/0009-sensitive-data-and-access.md) |
 | ADR-0010 | 搜尋模式與比對規則 | 已接受（2026-10-16） | 不分大小寫、全半形相同的部分比對，含延續行；三個輸入框表達 AND／OR／NOT，正規表示式為進階選項；可搭配模組、Logger、等級、旗標、解析欄位篩選；效能目標一天 2 秒、七天 10 秒（量級為假設） | [docs/adr/0010-search-matching.md](adr/0010-search-matching.md) |
-| ADR-0011 | 儲存與索引 | 已接受，待實測（2026-10-16） | 混合方案：SQLite 存事件、欄位、參照、快照；3 字以上用 FTS5 trigram 索引，短詞與正規表示式用依日平行掃描；匯入時產生正規化文字並編事件序號；案件放在 %LOCALAPPDATA%；用量 ≤ 原始 LOG 5 倍；一天份 2 分鐘內完成基本匯入，索引背景建立 | [docs/adr/0011-storage-and-index.md](adr/0011-storage-and-index.md) |
+| ADR-0011 | 儲存與索引 | 已接受，待實測（2026-10-16） | 混合方案：SQLite 存事件、欄位、參照、快照；3 字以上用 FTS5 trigram 索引，短詞與正規表示式用依日平行掃描；匯入時產生正規化文字並編事件序號；案件放在 %LOCALAPPDATA%；用量 ≤ 原始 LOG 5 倍；一天份 2 分鐘內完成基本匯入，索引背景建立；開發電腦實測（熱快取）全部達標，索引只對罕見詞有利，已調整何時用索引的規則，是否保留 FTS5 待冷快取與工程師電腦結果 | [docs/adr/0011-storage-and-index.md](adr/0011-storage-and-index.md) |
 
 狀態：提議中／已接受／已取代（註明被哪一項取代）／已廢止。
 
@@ -307,3 +307,4 @@
 | 2026-10-16 | v1.1 | 新增 ADR-0009（敏感資訊處理與存取權限）；第 6 章註明已決；第 8 章認證與授權、備份方案改為已決 |
 | 2026-10-16 | v1.2 | 新增 ADR-0010（搜尋模式與比對規則） |
 | 2026-10-16 | v1.3 | 新增 ADR-0011（儲存與索引）；第 7 章註明已決；第 8 章儲存技術、全文搜尋方式改為已決 |
+| 2026-10-16 | v1.4 | 技術驗證（#15）結果：更新 ADR-0007、ADR-0011（實測結果、何時用索引的規則）、ADR-0004（編碼錯誤的判定方式） |

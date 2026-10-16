@@ -1,0 +1,91 @@
+{
+  "environment": {
+    "os": "Microsoft Windows 10.0.26300",
+    "framework": ".NET 10.0.13",
+    "self_contained": true,
+    "runtime_dir": "D:\\_case\\ai-dev-workspace\\validation\\publish\\UiSpike",
+    "sqlite": "sqlite 3.53.3, trigram match=1",
+    "fts5_trigram_ok": true,
+    "nfkc_ok": true,
+    "nfkc_detail": "NFKC OK",
+    "normalization_cases_passed": "14/14",
+    "icu": "ICU",
+    "wpf_render_tier": 2
+  },
+  "事件清單（DataGrid）：連續捲動（每格約 300 px）": {
+    "Frames": 300,
+    "AvgMs": 46.75375966666668,
+    "P95Ms": 63.47860000000037,
+    "MaxMs": 90.36690000000002,
+    "Over33": 299,
+    "Fps": 21.388654241488837,
+    "WorkAvgMs": 44.89840299999998,
+    "WorkP95Ms": 59.0162
+  },
+  "事件清單（DataGrid）：拖曳捲軸（每格跳到隨機位置）": {
+    "Frames": 200,
+    "AvgMs": 45.5742795,
+    "P95Ms": 56.64429999999993,
+    "MaxMs": 81.33389999999963,
+    "Over33": 200,
+    "Fps": 21.942200973248518,
+    "WorkAvgMs": 43.76262450000001,
+    "WorkP95Ms": 49.167799999999716
+  },
+  "事件清單（ListView）：連續捲動（每格約 300 px）": {
+    "Frames": 300,
+    "AvgMs": 27.756497999999986,
+    "P95Ms": 36.94140000000061,
+    "MaxMs": 63.147399999999834,
+    "Over33": 20,
+    "Fps": 36.027599735384506,
+    "WorkAvgMs": 26.491093333333332,
+    "WorkP95Ms": 31.432600000000093
+  },
+  "事件清單（ListView）：拖曳捲軸（每格跳到隨機位置）": {
+    "Frames": 200,
+    "AvgMs": 32.419156500000014,
+    "P95Ms": 42.65430000000015,
+    "MaxMs": 66.97929999999997,
+    "Over33": 44,
+    "Fps": 30.845959857098673,
+    "WorkAvgMs": 31.05761099999997,
+    "WorkP95Ms": 35.85209999999984
+  },
+  "時間軸：縮放＋平移": {
+    "Frames": 300,
+    "AvgMs": 16.76322,
+    "P95Ms": 22.33579999999995,
+    "MaxMs": 37.86510000000001,
+    "Over33": 1,
+    "Fps": 59.65441007157336,
+    "WorkAvgMs": 1.507480666666642,
+    "WorkP95Ms": 2.1692000000002736
+  },
+  "Layout 畫布：拖曳元素": {
+    "Frames": 300,
+    "AvgMs": 18.390498666666662,
+    "P95Ms": 35.10099999999966,
+    "MaxMs": 59.649899999999995,
+    "Over33": 20,
+    "Fps": 54.37590454317209,
+    "WorkAvgMs": 0.5501529999999937,
+    "WorkP95Ms": 0.8299000000000092
+  },
+  "Layout 畫布：縮放＋平移": {
+    "Frames": 300,
+    "AvgMs": 16.72754100000001,
+    "P95Ms": 22.02509999999984,
+    "MaxMs": 32.00619999999992,
+    "Over33": 0,
+    "Fps": 59.7816499149516,
+    "WorkAvgMs": 0.04631233333334268,
+    "WorkP95Ms": 0.07819999999992433
+  },
+  "layout_roundtrip": {
+    "changed_differs": true,
+    "restored_equals_original": true,
+    "corrupt_file_falls_back": true,
+    "all_contents_present_after_restore": true
+  }
+}

@@ -1,0 +1,11 @@
+<Project>
+  <!-- LogTrace 共用設定（validation\ 有自己的設定，不受影響） -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- ADR-0011：不得啟用 InvariantGlobalization，否則 NFKC 正規化不會生效 -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LogTrace.App/LogTrace.App.csproj" />
+    <Project Path="src/LogTrace.Engine/LogTrace.Engine.csproj" />
+    <Project Path="src/LogTrace.Workspace/LogTrace.Workspace.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LogTrace.App.SmokeTests/LogTrace.App.SmokeTests.csproj" />
+    <Project Path="tests/LogTrace.Engine.Tests/LogTrace.Engine.Tests.csproj" />
+    <Project Path="tests/LogTrace.Workspace.Tests/LogTrace.Workspace.Tests.csproj" />
+  </Folder>
+</Solution>

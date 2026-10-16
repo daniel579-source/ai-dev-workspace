@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Markup;
 using LogTrace.Workspace;
 
@@ -28,10 +29,48 @@ public partial class MainWindow : Window
 
     MainViewModel? _vm;
 
+    readonly System.Windows.Threading.DispatcherTimer _playTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
+    DateTime _lastTick;
+
     public MainWindow()
     {
         InitializeComponent();
         DataContextChanged += (_, _) => Attach(DataContext as MainViewModel);
+        OverviewTimeline.Seek = t => _vm?.SeekTime(t);
+        DetailTimeline.Seek = t => _vm?.SeekTime(t);
+        // 播放：以實際經過的時間推進目前時刻（ADR-0008 第 2 點）
+        _playTimer.Tick += (_, _) =>
+        {
+            var now = DateTime.UtcNow;
+            _vm?.Tick(now - _lastTick);
+            _lastTick = now;
+        };
+    }
+
+    /// <summary>
+    /// 回放的按鍵（ADR-0008 第 1 點）：→／← 狀態變化、Shift 逐筆事件、Ctrl 符合篩選的事件、空白鍵播放、Home／End。
+    /// 焦點在輸入框時不攔截，避免影響打字。
+    /// </summary>
+    void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (_vm is null || Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase or ComboBox or ComboBoxItem) return;
+        var mods = Keyboard.Modifiers;
+        System.Windows.Input.ICommand? command = (e.Key, mods) switch
+        {
+            (Key.Right, ModifierKeys.None) => _vm.NextChangeCommand,
+            (Key.Left, ModifierKeys.None) => _vm.PreviousChangeCommand,
+            (Key.Right, ModifierKeys.Shift) => _vm.NextEventCommand,
+            (Key.Left, ModifierKeys.Shift) => _vm.PreviousEventCommand,
+            (Key.Right, ModifierKeys.Control) => _vm.NextMatchCommand,
+            (Key.Left, ModifierKeys.Control) => _vm.PreviousMatchCommand,
+            (Key.Space, ModifierKeys.None) => _vm.TogglePlayCommand,
+            (Key.Home, ModifierKeys.None) => _vm.GoToStartCommand,
+            (Key.End, ModifierKeys.None) => _vm.GoToEndCommand,
+            _ => null,
+        };
+        if (command is null) return;
+        if (command.CanExecute(null)) command.Execute(null);
+        e.Handled = true;
     }
 
     void Attach(MainViewModel? vm)
@@ -54,6 +93,14 @@ public partial class MainWindow : Window
     {
         switch (e.PropertyName)
         {
+            case nameof(MainViewModel.IsPlaying):
+                _lastTick = DateTime.UtcNow;
+                if (_vm!.IsPlaying) _playTimer.Start();
+                else _playTimer.Stop();
+                break;
+            case nameof(MainViewModel.SelectedEvent) when _vm?.SelectedEvent is { } selected:
+                EventList.ScrollIntoView(selected); // 目前時刻移動時（方向鍵、播放、時間軸），事件清單跟著捲動
+                break;
             case nameof(MainViewModel.IsTrackView):
                 UpdateEventView();
                 break;

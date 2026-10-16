@@ -5,7 +5,7 @@ public enum FieldFilterKind
 {
     /// <summary>不依解析欄位篩選。</summary>
     None,
-    /// <summary>Layout 元素：比對元素的所有別名（站點、搬送機、對接設備欄位）。</summary>
+    /// <summary>Layout 元素：比對元素的所有別名（站點、搬送機、對接設備，以及來源、目的地欄位）。</summary>
     Element,
     Command,
     Pallet,
@@ -30,7 +30,8 @@ public sealed record FieldFilterOption(FieldFilterKind Kind, string Label)
     public IReadOnlyList<string> FieldKinds => Kind switch
     {
         FieldFilterKind.None => [],
-        FieldFilterKind.Element => Engine.Parsing.FieldKinds.Identifiers,
+        // 以元素為來源或目的地的事件（例如命令抵達這個站點）也算相關
+        FieldFilterKind.Element => [.. Engine.Parsing.FieldKinds.Identifiers, Engine.Parsing.FieldKinds.Source, Engine.Parsing.FieldKinds.Destination],
         FieldFilterKind.Command => [Engine.Parsing.FieldKinds.Command],
         FieldFilterKind.Pallet => [Engine.Parsing.FieldKinds.Pallet],
         _ => [Engine.Parsing.FieldKinds.Bin],

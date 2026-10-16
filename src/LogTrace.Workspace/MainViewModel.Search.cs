@@ -138,6 +138,8 @@ public sealed partial class MainViewModel
         _lastQuery = null;
         MatchCount = 0;
         SearchStatus = null;
+        FocusedElement = null;
+        Timeline.SetSearchMatches(_matches);
         foreach (var r in _allRows)
         {
             r.IsMatch = false;
@@ -206,6 +208,8 @@ public sealed partial class MainViewModel
                 r.Highlights = r.IsMatch ? query.FindMatches(r.Event.Message) : [];
             }
             ShowSearchResult();
+            Timeline.SetSearchMatches(_matches);
+            FocusedElement = null;
             SearchStatus = $"符合 {MatchCount:N0} 筆（共 {_allRows.Count:N0} 筆，{clock.Elapsed.TotalSeconds:N2} 秒）";
             Remember(query);
         }

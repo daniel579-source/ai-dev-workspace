@@ -185,7 +185,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RevealSensitive = false;
         _selectedFields = value is not null && _case is not null ? _case.GetFields(value.Sequence) : [];
         UpdateRawLog(value);
-        Playback.SetMoment(value?.Sequence ?? 0);
+        OnSelectionMovedMoment(value);
     }
 
     /// <summary>
@@ -481,6 +481,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ResetSearch();
         ElementChoices.Clear();
         Playback.Clear("請開啟案件。");
+        ClearMoment();
         Modules.Clear();
         _case?.Dispose();
         _case = null;
@@ -568,17 +569,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>建立世界模型（開啟案件時在記憶體中建立快照）並載入 Layout 回放。</summary>
     async Task LoadPlaybackAsync(Case c, PlantConfigDocument? doc, List<EventRowViewModel> rows)
     {
+        var effects = await Task.Run(() => c.GetEffects());
+        var changes = effects.Select(e => e.Sequence).ToList();
         if (doc is null)
         {
             Playback.Clear(c.Info.Plant.Revision == 0
                 ? "這個案件使用內建預設的廠別設定，沒有 Layout。請在 Layout 編輯器建立廠別設定，並以它建立案件。"
                 : $"找不到廠別「{c.Info.Plant.Name}」的設定檔，無法顯示 Layout。");
+            LoadMoment(changes, []);
             return;
         }
         var presence = c.Info.Plant.PresenceSignal;
-        var model = await Task.Run(() => new WorldModel(c.GetEffects(), doc.Layout, presence));
+        var model = await Task.Run(() => new WorldModel(effects, doc.Layout, presence));
         var hasStateRules = c.Info.Plant.ParseRules.Any(r => r.Effect is { } e && e != EffectKinds.Signal);
         Playback.Load(model, doc.Layout, rows.Select(r => r.Event).ToList(), hasStateRules);
+        var names = doc.Layout.Elements.ToDictionary(e => e.Id, e => e.Name ?? e.Id);
+        LoadMoment(changes, model.AlarmPeriods().Select(a => ($"{names.GetValueOrDefault(a.ElementId, a.ElementId)} {a.Code}", a.StartSequence, a.EndSequence)));
     }
 
     static (List<string> Modules, List<EventRowViewModel> Rows) LoadAll(Case c, TextMasker masker)

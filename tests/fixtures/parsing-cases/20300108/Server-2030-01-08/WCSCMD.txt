@@ -1,0 +1,6 @@
+2030-01-08 08:00:00.0000 | DEBUG | WCSCMD | 加入命令 CMD_NO=00020001  
+
+2030-01-08 08:00:04.0000 | ERROR | WCSCMD | System.Exception: 虛構例外  
+   at Fake.Method() in Fake.cs:line 1
+   at Fake.Other()
+

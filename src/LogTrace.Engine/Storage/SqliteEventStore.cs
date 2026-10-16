@@ -26,7 +26,8 @@ public sealed class SqliteEventStore : IEventStore
             CREATE TABLE IF NOT EXISTS files(
                 file_id INTEGER PRIMARY KEY,
                 module TEXT NOT NULL, day_folder TEXT NOT NULL, logger TEXT NOT NULL,
-                rel_path TEXT NOT NULL UNIQUE, size INTEGER NOT NULL, sha256 TEXT NOT NULL);
+                rel_path TEXT NOT NULL UNIQUE, size INTEGER NOT NULL, sha256 TEXT NOT NULL,
+                encoding TEXT NOT NULL, event_count INTEGER NOT NULL, unparsable INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS events(
                 seq INTEGER PRIMARY KEY,
                 file_id INTEGER NOT NULL REFERENCES files(file_id),
@@ -37,21 +38,32 @@ public sealed class SqliteEventStore : IEventStore
             """);
     }
 
+    /// <summary>案件資料庫的結構版本；與程式不符時拒絕開啟（第一階段開發中，不做移轉）。</summary>
+    public const int SchemaVersion = 2;
+
     public void SaveInfo(CaseInfo info)
     {
         using var tx = _conn.BeginTransaction();
+        SetMeta("schema_version", SchemaVersion.ToString(CultureInfo.InvariantCulture));
         SetMeta("name", info.Name);
         SetMeta("plant", info.PlantName);
         SetMeta("module_order", JsonSerializer.Serialize(info.ModuleOrder));
+        SetMeta("known_loggers", JsonSerializer.Serialize(info.KnownLoggers));
         SetMeta("created_at", info.CreatedAt.ToString("o", CultureInfo.InvariantCulture));
         tx.Commit();
     }
 
-    public CaseInfo LoadInfo() => new(
-        GetMeta("name"),
-        GetMeta("plant"),
-        JsonSerializer.Deserialize<string[]>(GetMeta("module_order")) ?? [],
-        DateTimeOffset.Parse(GetMeta("created_at"), CultureInfo.InvariantCulture));
+    public CaseInfo LoadInfo()
+    {
+        if (TryGetMeta("schema_version") != SchemaVersion.ToString(CultureInfo.InvariantCulture))
+            throw new InvalidDataException("案件資料庫的版本與程式不符，請重新建立案件並匯入。");
+        return new(
+            GetMeta("name"),
+            GetMeta("plant"),
+            JsonSerializer.Deserialize<string[]>(GetMeta("module_order")) ?? [],
+            JsonSerializer.Deserialize<string[]>(GetMeta("known_loggers")) ?? [],
+            DateTimeOffset.Parse(GetMeta("created_at"), CultureInfo.InvariantCulture));
+    }
 
     public void SaveImport(IReadOnlyList<StoredFile> files, IReadOnlyList<LogEvent> events)
     {
@@ -59,7 +71,7 @@ public sealed class SqliteEventStore : IEventStore
         var fileIds = new Dictionary<string, long>(StringComparer.Ordinal);
         using (var cmd = _conn.CreateCommand())
         {
-            cmd.CommandText = "INSERT INTO files(module, day_folder, logger, rel_path, size, sha256) VALUES($m,$d,$l,$p,$s,$h) RETURNING file_id";
+            cmd.CommandText = "INSERT INTO files(module, day_folder, logger, rel_path, size, sha256, encoding, event_count, unparsable) VALUES($m,$d,$l,$p,$s,$h,$e,$n,$u) RETURNING file_id";
             foreach (var f in files)
             {
                 cmd.Parameters.Clear();
@@ -69,6 +81,9 @@ public sealed class SqliteEventStore : IEventStore
                 cmd.Parameters.AddWithValue("$p", f.RelativePath);
                 cmd.Parameters.AddWithValue("$s", f.Size);
                 cmd.Parameters.AddWithValue("$h", f.Sha256);
+                cmd.Parameters.AddWithValue("$e", f.Encoding);
+                cmd.Parameters.AddWithValue("$n", f.EventCount);
+                cmd.Parameters.AddWithValue("$u", f.Unparsable);
                 fileIds[f.RelativePath] = (long)cmd.ExecuteScalar()!;
             }
         }
@@ -140,10 +155,12 @@ public sealed class SqliteEventStore : IEventStore
     public IReadOnlyList<StoredFile> GetFiles()
     {
         using var cmd = _conn.CreateCommand();
-        cmd.CommandText = "SELECT module, day_folder, logger, rel_path, size, sha256 FROM files ORDER BY file_id";
+        cmd.CommandText = "SELECT module, day_folder, logger, rel_path, size, sha256, encoding, event_count, unparsable FROM files ORDER BY file_id";
         using var r = cmd.ExecuteReader();
         var list = new List<StoredFile>();
-        while (r.Read()) list.Add(new StoredFile(r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetInt64(4), r.GetString(5)));
+        while (r.Read())
+            list.Add(new StoredFile(r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetInt64(4), r.GetString(5),
+                r.GetString(6), r.GetInt32(7), r.GetBoolean(8)));
         return list;
     }
 
@@ -165,11 +182,13 @@ public sealed class SqliteEventStore : IEventStore
         cmd.ExecuteNonQuery();
     }
 
-    string GetMeta(string key)
+    string GetMeta(string key) => TryGetMeta(key) ?? throw new InvalidDataException($"案件資料缺少 {key}");
+
+    string? TryGetMeta(string key)
     {
         using var cmd = _conn.CreateCommand();
         cmd.CommandText = "SELECT value FROM meta WHERE key = $k";
         cmd.Parameters.AddWithValue("$k", key);
-        return cmd.ExecuteScalar() as string ?? throw new InvalidDataException($"案件資料缺少 {key}");
+        return cmd.ExecuteScalar() as string;
     }
 }

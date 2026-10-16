@@ -1,9 +1,10 @@
+using System.Globalization;
 using System.Text;
 using LogTrace.Engine.Events;
 
 namespace LogTrace.Engine.Parsing;
 
-/// <summary>解析後、尚未排序與編序號的事件。</summary>
+/// <summary>解析後、尚未排序與編序號的事件。沒有時間戳記的事件（檔案開頭的前置內容），Level 與 Logger 為空字串。</summary>
 public sealed record ParsedEvent(
     DateTime Timestamp,
     string RawTimestamp,
@@ -16,20 +17,31 @@ public sealed record ParsedEvent(
     int ByteLength,
     EventFlags Flags);
 
+/// <summary>一個檔案的解析結果。</summary>
+/// <param name="Unparsable">整個檔案沒有任何以時間戳記開頭的行（ADR-0004 第 6 點）：不產生事件。</param>
+public sealed record ParseResult(IReadOnlyList<ParsedEvent> Events, string Encoding, bool Unparsable);
+
 /// <summary>
-/// 共通容器格式 `時間 | 等級 | Logger | 訊息` 的切分（ADR-0004 第 1 點）：
-/// 以行首時間戳記開始一筆事件，其後不以時間戳記開頭的行為延續行；紀錄之間的空行與行尾空白不算進事件。
-/// 目前以 UTF-8 解碼；Big5、時間倒退等旗標在後續 ticket 補齊。
+/// 共通容器格式 `時間 | 等級 | Logger | 訊息` 的切分（ADR-0004 第 1、6 點）：
+/// <list type="bullet">
+/// <item>以行首時間戳記開始一筆事件，其後不以時間戳記開頭的行為延續行；紀錄之間的空行與行尾空白不算進事件。</item>
+/// <item>外觀是時間戳記、但日期或時間無效的行，仍然開始一筆事件，標示「時間無效」。</item>
+/// <item>第一個時間戳記之前的內容（前置內容）不丟棄，成為一筆標示「時間無效」與「未知種類」的事件。</item>
+/// <item>無法解碼的位元組保留在原始檔，事件標示「編碼錯誤」。</item>
+/// </list>
 /// </summary>
 public static class LogRecordParser
 {
     const int TimestampLength = 24; // yyyy-MM-dd HH:mm:ss.ffff
-    static readonly Encoding Utf8 = new UTF8Encoding(false, false);
 
-    public static IReadOnlyList<ParsedEvent> Parse(ReadOnlySpan<byte> bytes)
+    public static ParseResult Parse(ReadOnlySpan<byte> bytes) => Parse(bytes, LogEncoding.Detect(bytes));
+
+    public static ParseResult Parse(ReadOnlySpan<byte> bytes, string encodingName)
     {
+        var encoding = LogEncoding.Get(encodingName);
         var events = new List<ParsedEvent>();
         Pending? cur = null;
+        bool sawHeader = false;
         int lineNo = 0, pos = 0;
 
         while (pos < bytes.Length)
@@ -41,46 +53,56 @@ public static class LogRecordParser
             while (contentEnd > pos && bytes[contentEnd - 1] is (byte)'\r' or (byte)' ' or (byte)'\t') contentEnd--;
             var line = bytes[pos..contentEnd];
 
-            if (TryParseHeader(line, out var header))
+            if (TryParseHeader(line, encoding, out var header))
             {
-                if (cur is not null) events.Add(cur.Finish(bytes));
+                if (cur is not null) events.Add(cur.Finish(bytes, encoding));
                 cur = new Pending(header, lineNo, pos, pos + header.MessageOffset, contentEnd);
+                sawHeader = true;
             }
-            else if (cur is not null && line.Length > 0)
+            else if (line.Length > 0)
             {
-                cur.LastLine = lineNo;
-                cur.LastEnd = contentEnd;
+                if (cur is null) cur = new Pending(null, lineNo, pos, pos, contentEnd);
+                else
+                {
+                    cur.LastLine = lineNo;
+                    cur.LastEnd = contentEnd;
+                }
             }
             pos = nl < 0 ? bytes.Length : lineEnd + 1;
         }
-        if (cur is not null) events.Add(cur.Finish(bytes));
-        return events;
+        if (cur is not null) events.Add(cur.Finish(bytes, encoding));
+
+        return sawHeader ? new ParseResult(events, encodingName, false) : new ParseResult([], encodingName, true);
     }
 
-    /// <summary>正在累積延續行的事件。</summary>
-    sealed class Pending(Header header, int lineStart, long byteOffset, long messageStart, long firstLineEnd)
+    /// <summary>正在累積延續行的事件；header 為 null 表示檔案開頭的前置內容。</summary>
+    sealed class Pending(Header? header, int lineStart, long byteOffset, long messageStart, long firstLineEnd)
     {
-        readonly Header _header = header;
         readonly int _lineStart = lineStart;
-        readonly long _byteOffset = byteOffset;
-        readonly long _messageStart = messageStart;
         public int LastLine = lineStart;
         public long LastEnd = firstLineEnd;
 
-        public ParsedEvent Finish(ReadOnlySpan<byte> bytes)
+        public ParsedEvent Finish(ReadOnlySpan<byte> bytes, Encoding encoding)
         {
-            long msgStart = Math.Min(_messageStart, LastEnd);
+            long msgStart = Math.Min(messageStart, LastEnd);
             // 行尾空白不算進事件內容（ADR-0004 第 1 點）；延續行以 \n 連接
-            var lines = Utf8.GetString(bytes[(int)msgStart..(int)LastEnd]).Split('\n');
+            var lines = encoding.GetString(bytes[(int)msgStart..(int)LastEnd]).Split('\n');
             var message = string.Join('\n', lines.Select(l => l.TrimEnd(' ', '\t', '\r')));
-            return new ParsedEvent(_header.Timestamp, _header.RawTimestamp, _header.Level, _header.Logger, message,
-                _lineStart, LastLine, _byteOffset, (int)(LastEnd - _byteOffset), _header.Valid ? EventFlags.None : EventFlags.TimeInvalid);
+
+            var flags = EventFlags.None;
+            if (header is not { Valid: true }) flags |= EventFlags.TimeInvalid;
+            if (header is null) flags |= EventFlags.UnknownKind;
+            if (LogEncoding.HasDecodingError(message) || header is { HasDecodingError: true }) flags |= EventFlags.EncodingError;
+
+            var h = header ?? default;
+            return new ParsedEvent(h.Timestamp, h.RawTimestamp ?? "", h.Level ?? "", h.Logger ?? "", message,
+                _lineStart, LastLine, byteOffset, (int)(LastEnd - byteOffset), flags);
         }
     }
 
-    readonly record struct Header(DateTime Timestamp, bool Valid, string RawTimestamp, string Level, string Logger, int MessageOffset);
+    readonly record struct Header(DateTime Timestamp, bool Valid, string RawTimestamp, string Level, string Logger, int MessageOffset, bool HasDecodingError);
 
-    static bool TryParseHeader(ReadOnlySpan<byte> line, out Header header)
+    static bool TryParseHeader(ReadOnlySpan<byte> line, Encoding encoding, out Header header)
     {
         header = default;
         if (line.Length < TimestampLength + 3) return false;
@@ -119,10 +141,12 @@ public static class LogRecordParser
         }
         else return false;
 
-        var raw = Encoding.ASCII.GetString(line[..TimestampLength]);
+        var raw = System.Text.Encoding.ASCII.GetString(line[..TimestampLength]);
         bool valid = DateTime.TryParseExact(raw, "yyyy-MM-dd HH:mm:ss.ffff",
-            System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var ts);
-        header = new Header(ts, valid, raw, Utf8.GetString(level), Utf8.GetString(logger), messageOffset);
+            CultureInfo.InvariantCulture, DateTimeStyles.None, out var ts);
+        string levelText = encoding.GetString(level), loggerText = encoding.GetString(logger);
+        header = new Header(ts, valid, raw, levelText, loggerText, messageOffset,
+            LogEncoding.HasDecodingError(levelText) || LogEncoding.HasDecodingError(loggerText));
         return true;
     }
 }

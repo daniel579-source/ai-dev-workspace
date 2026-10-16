@@ -7,6 +7,12 @@ namespace LogTrace.Engine.Plants;
 public sealed record EncodingRule(string? Module, string Logger, string Encoding);
 
 /// <summary>
+/// 解析欄位的抽取規則（ADR-0005 第 8 點）：Pattern 是正規表示式，具名群組的名稱就是欄位種類（FieldKinds），
+/// 例如 (?&lt;station&gt;…)。Module、Logger 為 null 時套用到所有模組或 Logger；比對不分大小寫。
+/// </summary>
+public sealed record ParseRule(string Name, string? Module, string? Logger, string Pattern);
+
+/// <summary>
 /// 匯入與排序使用的廠別設定（ADR-0002 第 7 點）：從廠別設定檔（PlantConfigDocument）取出，或使用內建預設值。
 /// 案件建立時保存一份在案件中。
 /// </summary>
@@ -33,6 +39,22 @@ public sealed record PlantConfig
 
     /// <summary>依模組與 Logger 指定的編碼；沒有指定的檔案自動判斷。</summary>
     public IReadOnlyList<EncodingRule> Encodings { get; init; } = [];
+
+    /// <summary>解析欄位的抽取規則；匯入時套用，修改後可以重新解析。</summary>
+    public IReadOnlyList<ParseRule> ParseRules { get; init; } = DefaultParseRules;
+
+    /// <summary>
+    /// 初始的抽取規則：只涵蓋 docs/log-format-notes.md 第 3、4 節在樣本中看到的格式，可以在廠別設定中調整。
+    /// 警報、連線、自動／手動、儲位、桶、命令類型等格式尚未確認（待確認），不提供初始規則。
+    /// </summary>
+    public static IReadOnlyList<ParseRule> DefaultParseRules { get; } =
+    [
+        new("命令編號（8 位數字，前導 000）", null, null, @"(?<![0-9])(?<command>000[0-9]{5})(?![0-9])"),
+        new("站點與設備（[A-nn] 或 [A-nn-設備]）", "PLC", null, @"^\[(?<station>[A-Z]-[0-9]{2})(?:-(?<vehicle>[A-Z]{4}[0-9]{2}))?\]"),
+        new("站點狀態變化（訊號 = ON／OFF）", "PLC", null, @"^\[(?<station>[A-Z]-[0-9]{2})\]\[Station_Status_Change\] => (?<signal>.+?) = (?<signalValue>ON|OFF)\s*$"),
+        new("棧板命令（9 位數字）", null, null, @"棧板命令\s*=\s*(?<pallet>[0-9]{9})(?![0-9])"),
+        new("設備（4 個英文字母＋2 位數字）", null, null, @"(?<![A-Za-z0-9])(?<vehicle>[A-Z]{4}[0-9]{2})(?![0-9])"),
+    ];
 
     /// <summary>沒有廠別設定檔時使用的內建預設值（不含 Layout）。</summary>
     public static PlantConfig Default { get; } = new() { Name = "內建預設" };

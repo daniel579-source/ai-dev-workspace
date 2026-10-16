@@ -50,7 +50,20 @@ public interface IEventStore : IDisposable
     /// 以單一交易寫入一次匯入：匯入紀錄、案件中所有的檔案版本（取代原本的清單）、重新排序後的全部事件、稽核紀錄。
     /// 事件以 RelativePath 對應到該路徑目前參與查詢的版本。
     /// </summary>
-    void SaveImport(ImportRecord import, IReadOnlyList<StoredFile> files, IReadOnlyList<LogEvent> events, IReadOnlyList<AuditEntry> audit);
+    void SaveImport(ImportRecord import, IReadOnlyList<StoredFile> files, IReadOnlyList<LogEvent> events,
+        IReadOnlyList<Parsing.EventField> fields, IReadOnlyList<AuditEntry> audit);
+
+    /// <summary>以新的解析規則重新抽出的欄位取代所有解析欄位，並更新案件保存的規則（單一交易）。</summary>
+    void ReplaceFields(IReadOnlyList<Parsing.EventField> fields, CaseInfo info, AuditEntry audit);
+
+    /// <summary>一筆事件的解析欄位。</summary>
+    IReadOnlyList<Parsing.EventField> GetFields(long sequence);
+
+    /// <summary>指定種類的欄位值與出現的事件數（值不分大小寫）。</summary>
+    IReadOnlyList<(string Kind, string Value, long Count)> GetFieldValueCounts(IReadOnlyList<string> kinds);
+
+    /// <summary>有任一指定種類的欄位、值為任一指定值（不分大小寫）的事件序號，依序號排列。</summary>
+    IReadOnlyList<long> FindSequences(IReadOnlyList<string> kinds, IReadOnlyList<string> values);
 
     void AddAudit(AuditEntry entry);
     IReadOnlyList<AuditEntry> GetAudit();

@@ -1,5 +1,6 @@
 using LogTrace.Engine.Events;
 using LogTrace.Engine.Import;
+using LogTrace.Engine.Parsing;
 using LogTrace.Engine.Plants;
 using LogTrace.Engine.Storage;
 
@@ -35,7 +36,7 @@ public sealed class Case : IDisposable
     Dictionary<string, StoredFile>? _activeFiles;
 
     public string Folder { get; }
-    public CaseInfo Info { get; }
+    public CaseInfo Info { get; private set; }
     public string RawFolder => Path.Combine(Folder, RawFolderName);
 
     Case(string folder, IEventStore store, CaseInfo info)
@@ -127,6 +128,49 @@ public sealed class Case : IDisposable
     {
         var f = FindActiveFile(relativePath);
         return _raw.Read(f.StoragePath, f.Encoding, firstLine, count);
+    }
+
+    // ---- 解析欄位（ADR-0005 第 8 點） ----
+
+    /// <summary>一筆事件的解析欄位。</summary>
+    public IReadOnlyList<EventField> GetFields(long sequence) => _store.GetFields(sequence);
+
+    /// <summary>
+    /// 案件中出現的站點、搬送機、對接設備編號與出現的事件數（ADR-0006 第 3 點「未對應的編號」的來源）。
+    /// </summary>
+    public IReadOnlyList<(string Kind, string Value, long Count)> GetIdentifierCounts() =>
+        _store.GetFieldValueCounts(FieldKinds.Identifiers);
+
+    /// <summary>
+    /// 依解析欄位篩選事件，傳回事件序號（依時間排序）。kinds 中任一種欄位的值等於 values 中任一值（不分大小寫）即符合；
+    /// 例如篩選 Layout 元素時，kinds 為站點、搬送機、對接設備，values 為元素的所有別名。
+    /// </summary>
+    public IReadOnlyList<long> FindSequences(IReadOnlyList<string> kinds, IReadOnlyList<string> values) =>
+        _store.FindSequences(kinds, values.Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v.Trim()).ToList());
+
+    /// <summary>
+    /// 以新的抽取規則重新解析所有事件的欄位（例如修改了廠別設定的規則），並把規則存進案件、寫入稽核紀錄。
+    /// 事件與排序不變。
+    /// </summary>
+    public int ReparseFields(IReadOnlyList<ParseRule> rules, CancellationToken ct = default)
+    {
+        foreach (var rule in rules)
+            if (FieldExtractor.Check(rule) is { } problem) throw new ArgumentException(problem, nameof(rules));
+        var extractor = new FieldExtractor(rules);
+        var fields = new List<EventField>();
+        long next = 1;
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            var page = _store.GetEvents(next, 10_000);
+            if (page.Count == 0) break;
+            fields.AddRange(extractor.ExtractAll(page));
+            next = page[^1].Sequence + 1;
+        }
+        var info = Info with { Plant = Info.Plant with { ParseRules = [.. rules] } };
+        _store.ReplaceFields(fields, info, AuditEntry.Now("重新解析欄位", Info.Name, $"{rules.Count} 條規則；{fields.Count} 個欄位值"));
+        Info = info;
+        return fields.Count;
     }
 
     public void Dispose() => _store.Dispose();

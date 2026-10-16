@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using LogTrace.Engine.Events;
+using LogTrace.Engine.Parsing;
 using LogTrace.Engine.Plants;
 using Microsoft.Data.Sqlite;
 
@@ -45,6 +46,10 @@ public sealed class SqliteEventStore : IEventStore
                 byte_offset INTEGER NOT NULL, byte_len INTEGER NOT NULL,
                 ts INTEGER NOT NULL, raw_ts TEXT NOT NULL,
                 level TEXT NOT NULL, logger TEXT NOT NULL, message TEXT NOT NULL, flags INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS event_fields(
+                seq INTEGER NOT NULL, kind TEXT NOT NULL, value TEXT NOT NULL COLLATE NOCASE);
+            CREATE INDEX IF NOT EXISTS event_fields_kind_value ON event_fields(kind, value);
+            CREATE INDEX IF NOT EXISTS event_fields_seq ON event_fields(seq);
             CREATE TABLE IF NOT EXISTS audit(
                 audit_id INTEGER PRIMARY KEY, time TEXT NOT NULL, user TEXT NOT NULL,
                 action TEXT NOT NULL, target TEXT NOT NULL, detail TEXT NOT NULL);
@@ -61,6 +66,7 @@ public sealed class SqliteEventStore : IEventStore
         SetMeta("module_order", JsonSerializer.Serialize(info.Plant.ModuleOrder));
         SetMeta("known_loggers", JsonSerializer.Serialize(info.Plant.KnownLoggers));
         SetMeta("encodings", JsonSerializer.Serialize(info.Plant.Encodings));
+        SetMeta("parse_rules", JsonSerializer.Serialize(info.Plant.ParseRules));
         SetMeta("created_at", Iso(info.CreatedAt));
         tx.Commit();
     }
@@ -77,6 +83,8 @@ public sealed class SqliteEventStore : IEventStore
             ModuleOrder = JsonSerializer.Deserialize<string[]>(GetMeta("module_order")) ?? [],
             KnownLoggers = JsonSerializer.Deserialize<string[]>(GetMeta("known_loggers")) ?? [],
             Encodings = TryGetMeta("encodings") is { } enc ? JsonSerializer.Deserialize<EncodingRule[]>(enc) ?? [] : [],
+            // parse_rules 為 #23 加入；之前建立的案件使用初始規則
+            ParseRules = TryGetMeta("parse_rules") is { } pr ? JsonSerializer.Deserialize<ParseRule[]>(pr) ?? [] : PlantConfig.DefaultParseRules,
         };
         return new(GetMeta("name"), plant, ParseIso(GetMeta("created_at")));
     }
@@ -88,7 +96,8 @@ public sealed class SqliteEventStore : IEventStore
         return (long)cmd.ExecuteScalar()!;
     }
 
-    public void SaveImport(ImportRecord import, IReadOnlyList<StoredFile> files, IReadOnlyList<LogEvent> events, IReadOnlyList<AuditEntry> audit)
+    public void SaveImport(ImportRecord import, IReadOnlyList<StoredFile> files, IReadOnlyList<LogEvent> events,
+        IReadOnlyList<EventField> fields, IReadOnlyList<AuditEntry> audit)
     {
         using var tx = _conn.BeginTransaction();
         using (var cmd = _conn.CreateCommand())
@@ -102,7 +111,7 @@ public sealed class SqliteEventStore : IEventStore
             cmd.Parameters.AddWithValue("$c", (object?)import.ArchiveCopy ?? DBNull.Value);
             cmd.ExecuteNonQuery();
         }
-        Exec("DELETE FROM events; DELETE FROM files;");
+        Exec("DELETE FROM events; DELETE FROM files; DELETE FROM event_fields;");
 
         var activeIds = new Dictionary<string, long>(StringComparer.Ordinal);
         using (var cmd = _conn.CreateCommand())
@@ -158,8 +167,78 @@ public sealed class SqliteEventStore : IEventStore
                 cmd.ExecuteNonQuery();
             }
         }
+        InsertFields(fields);
         foreach (var a in audit) InsertAudit(a);
         tx.Commit();
+    }
+
+    public void ReplaceFields(IReadOnlyList<EventField> fields, CaseInfo info, AuditEntry audit)
+    {
+        using var tx = _conn.BeginTransaction();
+        Exec("DELETE FROM event_fields;");
+        InsertFields(fields);
+        SetMeta("parse_rules", JsonSerializer.Serialize(info.Plant.ParseRules));
+        InsertAudit(audit);
+        tx.Commit();
+    }
+
+    void InsertFields(IReadOnlyList<EventField> fields)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "INSERT INTO event_fields VALUES($s,$k,$v)";
+        var s = cmd.Parameters.Add(new SqliteParameter { ParameterName = "$s" });
+        var k = cmd.Parameters.Add(new SqliteParameter { ParameterName = "$k" });
+        var v = cmd.Parameters.Add(new SqliteParameter { ParameterName = "$v" });
+        cmd.Prepare();
+        foreach (var f in fields)
+        {
+            (s.Value, k.Value, v.Value) = (f.Sequence, f.Kind, f.Value);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    public IReadOnlyList<EventField> GetFields(long sequence)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT seq, kind, value FROM event_fields WHERE seq = $s ORDER BY rowid";
+        cmd.Parameters.AddWithValue("$s", sequence);
+        using var r = cmd.ExecuteReader();
+        var list = new List<EventField>();
+        while (r.Read()) list.Add(new EventField(r.GetInt64(0), r.GetString(1), r.GetString(2)));
+        return list;
+    }
+
+    public IReadOnlyList<(string Kind, string Value, long Count)> GetFieldValueCounts(IReadOnlyList<string> kinds)
+    {
+        using var cmd = _conn.CreateCommand();
+        var names = kinds.Select((k, i) => "$k" + i).ToList();
+        cmd.CommandText = $"""
+            SELECT kind, value, count(DISTINCT seq) FROM event_fields WHERE kind IN ({string.Join(",", names)})
+            GROUP BY kind, value COLLATE NOCASE ORDER BY kind, count(DISTINCT seq) DESC, value
+            """;
+        for (int i = 0; i < kinds.Count; i++) cmd.Parameters.AddWithValue(names[i], kinds[i]);
+        using var r = cmd.ExecuteReader();
+        var list = new List<(string, string, long)>();
+        while (r.Read()) list.Add((r.GetString(0), r.GetString(1), r.GetInt64(2)));
+        return list;
+    }
+
+    public IReadOnlyList<long> FindSequences(IReadOnlyList<string> kinds, IReadOnlyList<string> values)
+    {
+        if (kinds.Count == 0 || values.Count == 0) return [];
+        using var cmd = _conn.CreateCommand();
+        var kn = kinds.Select((_, i) => "$k" + i).ToList();
+        var vn = values.Select((_, i) => "$v" + i).ToList();
+        cmd.CommandText = $"""
+            SELECT DISTINCT seq FROM event_fields
+            WHERE kind IN ({string.Join(",", kn)}) AND value IN ({string.Join(",", vn)}) ORDER BY seq
+            """;
+        for (int i = 0; i < kinds.Count; i++) cmd.Parameters.AddWithValue(kn[i], kinds[i]);
+        for (int i = 0; i < values.Count; i++) cmd.Parameters.AddWithValue(vn[i], values[i]);
+        using var r = cmd.ExecuteReader();
+        var list = new List<long>();
+        while (r.Read()) list.Add(r.GetInt64(0));
+        return list;
     }
 
     public void AddAudit(AuditEntry entry) => InsertAudit(entry);

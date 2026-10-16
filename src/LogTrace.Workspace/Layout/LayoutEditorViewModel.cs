@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using LogTrace.Engine.Cases;
 using LogTrace.Engine.Plants;
 
 namespace LogTrace.Workspace.Layout;
@@ -9,7 +10,7 @@ namespace LogTrace.Workspace.Layout;
 /// <summary>
 /// Layout 編輯器（ADR-0006 第 9 點）：三欄式——左邊元素清單與工具箱、中間畫布、右邊屬性。
 /// 編輯廠別設定檔（JSON）；畫布上的拖曳、調整大小以公尺計，吸附到 0.5 公尺的格線。
-/// 「載入案件比對／未對應的編號」在後續 ticket 加入。
+/// 「載入案件比對」列出案件中出現、但還沒對應的編號，拖到元素上即成為別名（ADR-0006 第 3 點）。
 /// </summary>
 public sealed partial class LayoutEditorViewModel : ObservableObject
 {
@@ -20,15 +21,24 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
 
     readonly PlantConfigLibrary _library;
     readonly IUserInteraction _ui;
+    readonly CaseLibrary? _cases;
+    IReadOnlyList<(string Kind, string Value, long Count)> _caseIds = [];
     PlantConfigDocument _document = new();
     (LayoutElementViewModel Element, double X, double Y, double W, double H)? _drag;
 
-    public LayoutEditorViewModel(PlantConfigLibrary library, IUserInteraction ui)
+    /// <param name="cases">「載入案件比對」可以選的案件；null 時不提供。</param>
+    public LayoutEditorViewModel(PlantConfigLibrary library, IUserInteraction ui, CaseLibrary? cases = null)
     {
         _library = library;
         _ui = ui;
-        Elements.CollectionChanged += (_, _) => RefreshEndpoints();
+        _cases = cases;
+        Elements.CollectionChanged += (_, _) =>
+        {
+            RefreshEndpoints();
+            RefreshUnmapped();
+        };
         RefreshConfigs();
+        RefreshCaseChoices();
         Load(new PlantConfigDocument { Plant = "新廠別" }, null);
         Status = "建立新的廠別設定，或從清單開啟既有的設定。";
     }
@@ -150,8 +160,12 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         KnownLoggersText = string.Join(Environment.NewLine, doc.KnownLoggers);
         EncodingRules.Clear();
         foreach (var r in doc.Encodings) AddRule(EncodingRuleViewModel.From(r));
+        ParseRules.Clear();
+        foreach (var r in doc.ParseRules) AddParseRule(ParseRuleViewModel.From(r));
         Revision = doc.Revision;
-        RevisionInfo = doc.Revision == 0 ? "尚未存檔" : $"修訂 {doc.Revision}（{doc.RevisedBy}，{doc.RevisedAt:yyyy-MM-dd HH:mm}）";
+        RevisionInfo = doc.Revision == 0 ? "尚未存檔"
+            : doc.RevisedAt is { } at ? $"修訂 {doc.Revision}（{doc.RevisedBy}，{at:yyyy-MM-dd HH:mm}）"
+            : $"修訂 {doc.Revision}";
         FilePath = path;
         RefreshEndpoints();
         IsDirty = false;
@@ -217,6 +231,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         _document.ModuleOrder = Lines(ModuleOrderText);
         _document.KnownLoggers = Lines(KnownLoggersText);
         _document.Encodings = EncodingRules.Select(r => r.ToModel()).ToList();
+        _document.ParseRules = ParseRules.Select(r => r.ToModel()).ToList();
         try
         {
             PlantConfigFile.Save(_document, path);
@@ -257,7 +272,11 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         e.Props.CollectionChanged -= OnElementCollectionChanged;
     }
 
-    void OnElementCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) => IsDirty = true;
+    void OnElementCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        IsDirty = true;
+        RefreshUnmapped();
+    }
 
     void OnElementChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -414,28 +433,129 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanEditSelection))]
     void AddAlias()
     {
-        var e = SelectedElement!;
-        var alias = NewAlias.Trim();
-        if (alias.Length == 0) return;
+        if (TryAddAlias(SelectedElement!, NewAlias)) NewAlias = "";
+    }
+
+    bool TryAddAlias(LayoutElementViewModel e, string text)
+    {
+        var alias = text.Trim();
+        if (alias.Length == 0) return false;
         if (!e.CanHaveAliases)
         {
             Status = $"「{e.TypeLabel}」不能加別名；只有站點、搬送機、對接設備可以。";
-            return;
+            return false;
         }
         var owner = AliasOwner(alias);
         if (owner == e)
         {
             Status = $"「{e.Name}」已經有別名「{alias}」。";
-            return;
+            return false;
         }
         if (owner is not null)
         {
             Status = $"別名「{alias}」已經屬於「{owner.Name}」。同一個別名只能屬於一個元素。";
-            return;
+            return false;
         }
         e.Aliases.Add(alias);
-        NewAlias = "";
         Status = $"已把「{alias}」加為「{e.Name}」的別名。";
+        return true;
+    }
+
+    // ---- 載入案件比對與未對應的編號（ADR-0006 第 3 點） ----
+
+    /// <summary>可以比對的案件。</summary>
+    public ObservableCollection<CaseSummary> CaseChoices { get; } = [];
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(LoadCaseCompareCommand))]
+    public partial CaseSummary? SelectedCompareCase { get; set; }
+
+    /// <summary>目前比對的案件名稱；沒有比對時為 null。</summary>
+    [ObservableProperty]
+    public partial string? CompareCaseName { get; private set; }
+
+    /// <summary>案件中出現、但 Layout 中還沒有任何元素以它為別名的站點、搬送機、對接設備編號，依出現次數排序。</summary>
+    public ObservableCollection<UnmappedIdViewModel> Unmapped { get; } = [];
+
+    public void RefreshCaseChoices()
+    {
+        var selected = SelectedCompareCase?.Folder;
+        CaseChoices.Clear();
+        foreach (var c in _cases?.List() ?? []) CaseChoices.Add(c);
+        SelectedCompareCase = CaseChoices.FirstOrDefault(c => c.Folder == selected);
+    }
+
+    bool CanLoadCaseCompare() => SelectedCompareCase is not null;
+
+    /// <summary>讀出案件中出現的編號與次數（不修改案件），與目前的別名比對。</summary>
+    [RelayCommand(CanExecute = nameof(CanLoadCaseCompare))]
+    void LoadCaseCompare()
+    {
+        var summary = SelectedCompareCase!;
+        try
+        {
+            using var c = Case.Open(summary.Folder);
+            _caseIds = c.GetIdentifierCounts();
+            CompareCaseName = summary.Name;
+            RefreshUnmapped();
+            Status = $"已載入案件「{summary.Name}」比對：{Unmapped.Count} 個編號還沒對應。";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or Microsoft.Data.Sqlite.SqliteException)
+        {
+            Status = "無法載入案件：" + ex.Message;
+        }
+    }
+
+    void RefreshUnmapped()
+    {
+        var aliases = Elements.SelectMany(e => e.Aliases).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var list = _caseIds.Where(x => !aliases.Contains(x.Value))
+            .GroupBy(x => x.Value, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new UnmappedIdViewModel(g.First().Kind, g.First().Value, g.Max(x => x.Count)))
+            .OrderByDescending(x => x.Count).ThenBy(x => x.Value, StringComparer.Ordinal)
+            .ToList();
+        if (list.SequenceEqual(Unmapped)) return;
+        Unmapped.Clear();
+        foreach (var x in list) Unmapped.Add(x);
+    }
+
+    /// <summary>把未對應的編號拖到元素上：加為該元素的別名（與手動加入別名相同的檢查）。</summary>
+    public bool AssignUnmapped(UnmappedIdViewModel id, LayoutElementViewModel target)
+    {
+        SelectedElement = target;
+        return TryAddAlias(target, id.Value);
+    }
+
+    // ---- 解析規則（ADR-0005 第 8 點） ----
+
+    public ObservableCollection<ParseRuleViewModel> ParseRules { get; } = [];
+
+    void AddParseRule(ParseRuleViewModel rule)
+    {
+        rule.PropertyChanged += (_, _) => IsDirty = true;
+        ParseRules.Add(rule);
+    }
+
+    [RelayCommand]
+    void NewParseRule()
+    {
+        AddParseRule(new ParseRuleViewModel($"規則 {ParseRules.Count + 1}", "", "", ""));
+        IsDirty = true;
+    }
+
+    [RelayCommand]
+    void RemoveParseRule(ParseRuleViewModel? rule)
+    {
+        if (rule is not null && ParseRules.Remove(rule)) IsDirty = true;
+    }
+
+    /// <summary>還原成初始規則（依 docs/log-format-notes.md 的樣本格式）。</summary>
+    [RelayCommand]
+    void ResetParseRules()
+    {
+        ParseRules.Clear();
+        foreach (var r in PlantConfig.DefaultParseRules) AddParseRule(ParseRuleViewModel.From(r));
+        IsDirty = true;
     }
 
     [RelayCommand]

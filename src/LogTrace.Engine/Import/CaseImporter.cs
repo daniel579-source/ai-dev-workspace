@@ -149,12 +149,12 @@ internal static class CaseImporter
 
     /// <param name="useNewFor">衝突的檔案中，使用者選擇「改用新檔」的相對路徑；其餘衝突保留舊檔。</param>
     public static ImportResult Apply(PreparedImport prepared, IReadOnlySet<string> useNewFor, string caseFolder, PlantConfig plant,
-        IEventStore store, CancellationToken ct)
+        TimeCorrection correction, IEventStore store, CancellationToken ct)
     {
         var placed = new List<string>();
         try
         {
-            return ApplyCore(prepared, useNewFor, caseFolder, plant, store, placed, ct);
+            return ApplyCore(prepared, useNewFor, caseFolder, plant, correction, store, placed, ct);
         }
         catch
         {
@@ -169,7 +169,7 @@ internal static class CaseImporter
     }
 
     static ImportResult ApplyCore(PreparedImport prepared, IReadOnlySet<string> useNewFor, string caseFolder, PlantConfig plant,
-        IEventStore store, List<string> placed, CancellationToken ct)
+        TimeCorrection correction, IEventStore store, List<string> placed, CancellationToken ct)
     {
         if (prepared.Applied) throw new InvalidOperationException("這次匯入已經套用過。");
         var rawFolder = Path.Combine(caseFolder, Cases.Case.RawFolderName);
@@ -225,7 +225,7 @@ internal static class CaseImporter
         }
 
         // 重新解析：參與查詢的檔案，以及這次新放進來的版本（記錄編碼與事件數）
-        var events = Reparse(files, f => f.Active || f.ImportId == record.Id, rawFolder, plant, ct);
+        var events = Reparse(files, f => f.Active || f.ImportId == record.Id, rawFolder, plant, correction, ct);
 
         audit.Insert(0, AuditEntry.Now("匯入", record.SourcePath,
             $"{record.SourceKind}；{prepared.Items.Count} 個檔案：新增 {added}、相同略過 {prepared.Items.Count(i => i.Kind == ImportItemKind.Identical)}、" +
@@ -242,7 +242,8 @@ internal static class CaseImporter
     /// 依廠別設定解析 files 中符合 include 的檔案（更新其編碼、事件數、無法解析），參與查詢的檔案依 ADR-0004 排序並編事件序號。
     /// files 會被就地更新。
     /// </summary>
-    static List<LogEvent> Reparse(List<StoredFile> files, Func<StoredFile, bool> include, string rawFolder, PlantConfig plant, CancellationToken ct)
+    static List<LogEvent> Reparse(List<StoredFile> files, Func<StoredFile, bool> include, string rawFolder, PlantConfig plant,
+        TimeCorrection correction, CancellationToken ct)
     {
         var parsed = new List<(StoredFile File, IReadOnlyList<ParsedEvent> Events)>();
         for (int i = 0; i < files.Count; i++)
@@ -256,18 +257,18 @@ internal static class CaseImporter
             files[i] = f = f with { Encoding = result.Encoding, EventCount = result.Events.Count, Unparsable = result.Unparsable };
             if (f.Active) parsed.Add((f, result.Events));
         }
-        return Sequence(parsed, plant);
+        return Sequence(parsed, plant, correction);
     }
 
     /// <summary>
-    /// 以新的廠別設定重建案件的事件（套用新版，ADR-0006 第 8 點）：重新解碼、排序、編事件序號，重新抽出解析欄位與效果。
-    /// 原始檔複本不變；穩定識別碼不變，事件序號可能改變。
+    /// 以廠別設定與時間偏移量重建案件的事件（套用新版廠別設定，ADR-0006 第 8 點；修改偏移量，ADR-0003 第 5 點）：
+    /// 重新解碼、排序、編事件序號，重新抽出解析欄位與效果。原始檔複本不變；穩定識別碼不變，事件序號可能改變。
     /// </summary>
     public static (List<StoredFile> Files, List<LogEvent> Events, List<EventField> Fields, List<EventEffect> Effects) Rebuild(
-        string caseFolder, PlantConfig plant, IEventStore store, CancellationToken ct)
+        string caseFolder, PlantConfig plant, TimeCorrection correction, IEventStore store, CancellationToken ct)
     {
         var files = store.GetFiles().ToList();
-        var events = Reparse(files, f => f.Active, Path.Combine(caseFolder, Cases.Case.RawFolderName), plant, ct);
+        var events = Reparse(files, f => f.Active, Path.Combine(caseFolder, Cases.Case.RawFolderName), plant, correction, ct);
         var (fields, effects) = new FieldExtractor(plant.ParseRules).ExtractAllWithEffects(events);
         return (files, events, fields, effects);
     }
@@ -338,8 +339,10 @@ internal static class CaseImporter
     /// 同一 Logger 的封存檔與現行檔視為一條連續的紀錄：「時間倒退」與「時間為沿用」都跨檔案判斷。
     /// 時間無效的事件沿用前一筆有效事件的時間；前面沒有有效事件時（檔案開頭的前置內容），
     /// 改用後面第一筆有效事件的時間，依行號排在它之前；整條紀錄都沒有有效時間時，用日期資料夾的 00:00。
+    /// 時間偏移量（ADR-0003 第 5 點）：排序與顯示使用校正後的時間（加上該模組的偏移量），偏移量不為 0 時標示「已校正」。
+    /// 「時間倒退」以 LOG 記錄的時間判斷（同一條紀錄的偏移量相同，結果不變）；「同時間戳記」以校正後的時間判斷。
     /// </summary>
-    static List<LogEvent> Sequence(List<(StoredFile File, IReadOnlyList<ParsedEvent> Events)> parsed, PlantConfig plant)
+    static List<LogEvent> Sequence(List<(StoredFile File, IReadOnlyList<ParsedEvent> Events)> parsed, PlantConfig plant, TimeCorrection correction)
     {
         var rows = new List<(DateTime Time, int ModuleRank, StoredFile File, ParsedEvent Event, EventFlags Flags)>();
         foreach (var stream in parsed.GroupBy(p => (p.File.DayFolder, p.File.Module, p.File.Logger)))
@@ -349,6 +352,7 @@ internal static class CaseImporter
             DateTime lastValid = all.Where(x => (x.Event.Flags & EventFlags.TimeInvalid) == 0).Select(x => (DateTime?)x.Event.Timestamp).FirstOrDefault()
                 ?? DayStart(stream.Key.DayFolder);
             bool sawValid = false;
+            var offset = correction.For(stream.Key.Module);
             foreach (var (file, e) in all)
             {
                 var flags = e.Flags;
@@ -361,7 +365,8 @@ internal static class CaseImporter
                 }
                 else time = lastValid;
                 if (!plant.IsKnownLogger(file.Logger)) flags |= EventFlags.UnknownKind;
-                rows.Add((time, plant.ModuleRank(file.Module), file, e, flags));
+                if (offset != TimeSpan.Zero) flags |= EventFlags.Corrected;
+                rows.Add((time + offset, plant.ModuleRank(file.Module), file, e, flags));
             }
         }
 

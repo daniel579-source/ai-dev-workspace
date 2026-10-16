@@ -18,6 +18,8 @@ public sealed record FlagInfo(EventFlags Flag, string Glyph, string Name, string
             "不在已知 LOG 種類中的 Logger，或檔案開頭沒有時間戳記的內容。內容照樣保存，沒有丟棄。"),
         new(EventFlags.EncodingError, "\uFFFD", "編碼錯誤",
             "有無法解碼的位元組，以替代字元顯示；原始位元組保留在原始檔中。"),
+        new(EventFlags.Corrected, "±", "已校正",
+            "這個模組有時間偏移量：顯示的時間＝LOG 記錄的時間＋偏移量，排序也依校正後的時間。原始時間在詳細資訊中。"),
     ];
 
     public static IReadOnlyList<FlagInfo> Of(EventFlags flags) =>

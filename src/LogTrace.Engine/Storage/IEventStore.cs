@@ -33,7 +33,11 @@ public sealed record AuditEntry(DateTimeOffset Time, string User, string Action,
 }
 
 /// <summary>案件的中繼資料。Plant 是建立案件時所選廠別設定的匯入相關部分（ADR-0002 第 7 點）。</summary>
-public sealed record CaseInfo(string Name, LogTrace.Engine.Plants.PlantConfig Plant, DateTimeOffset CreatedAt);
+public sealed record CaseInfo(string Name, LogTrace.Engine.Plants.PlantConfig Plant, DateTimeOffset CreatedAt)
+{
+    /// <summary>案件的時間偏移量（ADR-0003 第 5 點）。</summary>
+    public TimeCorrection Correction { get; init; } = TimeCorrection.None;
+}
 
 /// <summary>
 /// 儲存層介面（ADR-0001：儲存層要可以替換；ADR-0011：目前實作為 SQLite）。
@@ -52,9 +56,12 @@ public interface IEventStore : IDisposable
     /// <summary>廠別設定檔的快照與來源路徑；沒有快照（內建預設或之前建立的案件）時為 null。</summary>
     (string? Json, string? SourcePath) LoadPlantSnapshot();
 
-    /// <summary>以新的廠別設定重建的內容取代案件的事件等，並更新案件資訊、快照與稽核紀錄（單一交易）。</summary>
+    /// <summary>
+    /// 以重建的內容取代案件的事件等，並更新案件資訊與稽核紀錄（單一交易）。
+    /// snapshotJson 不為 null 時（套用新版廠別設定）一併更新快照與來源路徑。
+    /// </summary>
     void Rebuild(IReadOnlyList<StoredFile> files, IReadOnlyList<LogEvent> events, IReadOnlyList<Parsing.EventField> fields,
-        IReadOnlyList<Parsing.EventEffect> effects, CaseInfo info, string snapshotJson, string? sourcePath, AuditEntry audit);
+        IReadOnlyList<Parsing.EventEffect> effects, CaseInfo info, string? snapshotJson, string? sourcePath, AuditEntry audit);
 
     /// <summary>
     /// 以單一交易寫入一次匯入：匯入紀錄、案件中所有的檔案版本（取代原本的清單）、重新排序後的全部事件、稽核紀錄。

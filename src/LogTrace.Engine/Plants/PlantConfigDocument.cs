@@ -112,6 +112,9 @@ public sealed class PlantConfigDocument
     /// <summary>個人資料的遮罩規則（正規表示式，ADR-0009 第 1 點）。</summary>
     public List<string> MaskPatterns { get; set; } = [.. Search.TextMasker.DefaultPatterns];
 
+    /// <summary>廠別的時區（ADR-0003 第 1 點），預設台北。</summary>
+    public string TimeZone { get; set; } = PlantConfig.DefaultTimeZone;
+
     public LayoutSection Layout { get; set; } = new();
 
     [JsonExtensionData]
@@ -122,5 +125,6 @@ public sealed class PlantConfigDocument
     {
         Name = Plant, Revision = Revision, ModuleOrder = [.. ModuleOrder], KnownLoggers = [.. KnownLoggers], Encodings = [.. Encodings],
         ParseRules = [.. ParseRules], PresenceSignal = PresenceSignal, MaskPatterns = [.. MaskPatterns],
+        TimeZone = string.IsNullOrWhiteSpace(TimeZone) ? PlantConfig.DefaultTimeZone : TimeZone.Trim(),
     };
 }

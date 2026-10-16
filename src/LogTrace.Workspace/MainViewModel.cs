@@ -108,6 +108,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(OpenCaseFolderCommand))]
     [NotifyCanExecuteChangedFor(nameof(ImportCommand))]
     [NotifyCanExecuteChangedFor(nameof(SearchCommand))]
+    [NotifyCanExecuteChangedFor(nameof(EditTimeCorrectionCommand))]
     public partial string? CurrentCaseFolder { get; private set; }
 
     // ---- 匯入 ----
@@ -132,6 +133,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(ChangeCasesRootCommand))]
     [NotifyCanExecuteChangedFor(nameof(SearchCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplyNewerPlantCommand), nameof(DismissNewerPlantCommand))]
+    [NotifyCanExecuteChangedFor(nameof(EditTimeCorrectionCommand))]
     public partial bool IsBusy { get; private set; }
 
     // ---- 事件清單與原始 LOG ----
@@ -166,6 +168,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public string SelectedDetail => SelectedEvent is not { Event: var e } row
         ? ""
         : $"來源：{EventRowViewModel.FormatSource(e.Source)}\n識別碼：{e.Id}\n原始時間：{e.RawTimestamp}"
+          + (_case?.Info.Correction.For(e.Module) is { } offset && offset != TimeSpan.Zero
+              ? $"\n已校正：{LogTrace.Engine.Events.TimeCorrection.Format(offset)}（校正前 {e.Timestamp - offset:yyyy-MM-dd HH:mm:ss.ffff}，校正後 {e.Timestamp:yyyy-MM-dd HH:mm:ss.ffff}）"
+              : "")
           + (row.Flags.Count == 0 ? "" : "\n旗標：" + string.Join("、", row.Flags.Select(f => $"{f.Glyph} {f.Name}")))
           + (_selectedFields.Count == 0 ? "" : "\n解析欄位：" + string.Join("、", _selectedFields.Select(f => $"{FieldKinds.Label(f.Kind)} {f.Value}")))
           + (row.MatchNote is { } note ? $"\n搜尋：{note}" : "")
@@ -472,6 +477,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SaveSettings(_settings.WithRecent(c.Folder));
         _dismissedRevision = 0;
         CheckNewerPlant();
+        UpdateTimeTexts();
         RefreshCases();
         SelectedCase = Cases.FirstOrDefault(i => string.Equals(i.Folder, c.Folder, StringComparison.OrdinalIgnoreCase));
     }
@@ -493,6 +499,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         CurrentCaseFolder = null;
         _newerPlant = null;
         NewerPlantNotice = null;
+        UpdateTimeTexts();
     }
 
     // ---- 匯入的命令 ----

@@ -85,4 +85,7 @@ sealed class WpfUserInteraction : IUserInteraction
 
     public void ShowLayoutEditor(LogTrace.Workspace.Layout.LayoutEditorViewModel editor) =>
         new LayoutEditorWindow(editor) { Owner = Owner }.Show();
+
+    public bool EditTimeCorrection(TimeCorrectionViewModel editor) =>
+        new TimeCorrectionDialog(editor) { Owner = Owner }.ShowDialog() == true;
 }

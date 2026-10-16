@@ -67,6 +67,28 @@ public sealed record PlantConfig
     public IReadOnlyList<string> MaskPatterns { get; init; } = Search.TextMasker.DefaultPatterns;
 
     /// <summary>沒有廠別設定檔時使用的內建預設值（不含 Layout）。</summary>
+    /// <summary>
+    /// 廠別的時區（ADR-0003 第 1 點），IANA 或 Windows 的時區識別碼，預設台北。
+    /// LOG 沒有時區，畫面一律以廠別當地時間顯示；這個欄位用來標明顯示的是哪個時區。
+    /// </summary>
+    public string TimeZone { get; init; } = DefaultTimeZone;
+
+    public const string DefaultTimeZone = "Asia/Taipei";
+
+    /// <summary>時區的文字，例如「Asia/Taipei（UTC+08:00）」；認不得的識別碼註明「無法辨識」。</summary>
+    public static string TimeZoneLabel(string id)
+    {
+        try
+        {
+            var offset = TimeZoneInfo.FindSystemTimeZoneById(id).BaseUtcOffset;
+            return $"{id}（UTC{(offset < TimeSpan.Zero ? "-" : "+")}{offset.Duration():hh\\:mm}）";
+        }
+        catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            return $"{id}（無法辨識的時區識別碼）";
+        }
+    }
+
     public static PlantConfig Default { get; } = new() { Name = "內建預設" };
 
     public int ModuleRank(string module)

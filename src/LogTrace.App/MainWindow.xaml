@@ -18,7 +18,18 @@
         </DataTemplate>
     </Window.Resources>
     <DockPanel>
-        <Menu DockPanel.Dock="Top" Background="Transparent">
+        <!-- 頂端：版面選單；右側固定顯示時區與時間校正（ADR-0003 第 1、5 點、ADR-0008 第 4 點） -->
+        <DockPanel DockPanel.Dock="Top">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="0,0,8,0">
+                <TextBlock Text="{Binding TimeZoneText}" VerticalAlignment="Center" Foreground="#333"
+                           ToolTip="LOG 沒有時區；畫面一律以廠別當地時間顯示（廠別設定的時區）" AutomationProperties.AutomationId="TimeZone" />
+                <TextBlock Text="{Binding CorrectionText}" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#B35C00" FontWeight="Bold"
+                           ToolTip="事件的時間已加上偏移量，排序也依校正後的時間；原始時間在詳細資訊中"
+                           AutomationProperties.AutomationId="CorrectionText" />
+                <Button Content="時間校正…" Command="{Binding EditTimeCorrectionCommand}" Padding="8,0" Margin="12,1,0,1"
+                        ToolTip="設定案件整體與個別模組的時間偏移量" AutomationProperties.AutomationId="EditTimeCorrection" />
+            </StackPanel>
+        <Menu Background="Transparent">
             <MenuItem Header="版面(_V)" AutomationProperties.AutomationId="LayoutMenu">
                 <MenuItem Header="回放（Layout 為主）" Click="PlaybackLayout_Click" AutomationProperties.AutomationId="LayoutPlayback" />
                 <MenuItem Header="搜尋（事件清單為主）" Click="SearchLayout_Click" AutomationProperties.AutomationId="LayoutSearch" />
@@ -26,6 +37,7 @@
                 <MenuItem Header="還原預設版面" Click="ResetLayout_Click" AutomationProperties.AutomationId="LayoutReset" />
             </MenuItem>
         </Menu>
+        </DockPanel>
 
         <!-- 建立案件與匯入 -->
         <Border DockPanel.Dock="Top" Padding="8" BorderBrush="#DDD" BorderThickness="0,0,0,1">

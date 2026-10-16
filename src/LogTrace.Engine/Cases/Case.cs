@@ -191,11 +191,47 @@ public sealed class Case : IDisposable
     /// 搜尋（ADR-0010）：傳回符合的事件序號，依時間排序（與事件清單相同）。
     /// 之前建立的案件第一次搜尋時，先補上搜尋用文字。
     /// </summary>
-    public IReadOnlyList<long> Search(Search.SearchQuery query, CancellationToken ct = default)
+    public IReadOnlyList<long> Search(Search.SearchQuery query, CancellationToken ct = default) =>
+        Search(query, LogTrace.Engine.Search.SearchPath.Auto, null, ct).Sequences;
+
+    /// <summary>搜尋，並傳回執行方式（索引或掃描的天數）；progress 回報完成的比例。正規表示式語法有誤時丟出 ArgumentException。</summary>
+    public Search.SearchOutcome Search(Search.SearchQuery query, Search.SearchPath path, IProgress<double>? progress, CancellationToken ct = default)
     {
         _store.EnsureSearchText();
-        return _store.Search(query, ct);
+        return _store.Search(query, Index, path, progress, ct);
     }
+
+    // ---- 全文索引（ADR-0011 第 1、2、4 點） ----
+
+    /// <summary>全文索引（index\，可重建）。</summary>
+    public SearchIndex Index => _index ??= new SearchIndex(Folder, Path.Combine(Folder, DatabaseFileName));
+
+    SearchIndex? _index;
+
+    /// <summary>
+    /// 建立尚未建好的全文索引分片（在背景執行；可以取消）。建立期間可以照常瀏覽與搜尋，尚未建好的日期以掃描搜尋。
+    /// 案件磁碟用量會超過原始 LOG 的 5 倍時，其餘日期不建索引。
+    /// </summary>
+    public IndexBuildResult BuildIndex(IProgress<IndexBuildProgress>? progress = null, CancellationToken ct = default)
+    {
+        _store.EnsureSearchText();
+        var days = _store.GetDays();
+        return Index.Build(days.Select(d => (d.Day, d.RawBytes)).ToList(), _store.GetContentVersion(), RawBytes(), progress, ct);
+    }
+
+    /// <summary>全文索引已建好的天數與總天數。</summary>
+    public (int Built, int Total) IndexState()
+    {
+        var days = _store.GetDays().Select(d => d.Day).ToList();
+        return (Index.CountBuilt(days, _store.GetContentVersion()), days.Count);
+    }
+
+    /// <summary>刪除全文索引（之後可以重新建立）；呼叫端要先停止建立中的索引。</summary>
+    public void DeleteIndex() => Index.Delete();
+
+    /// <summary>原始 LOG 的大小（raw\，含重複匯入的其他版本）。</summary>
+    public long RawBytes() =>
+        Directory.Exists(RawFolder) ? Directory.EnumerateFiles(RawFolder, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length) : 0;
 
     // ---- 廠別設定的快照與套用新版（ADR-0006 第 8 點） ----
 

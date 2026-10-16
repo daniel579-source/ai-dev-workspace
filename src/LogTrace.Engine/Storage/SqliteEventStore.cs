@@ -229,6 +229,16 @@ public sealed class SqliteEventStore : IEventStore
         InsertFields(fields);
         InsertEffects(effects);
         InsertSearchText(events.Select(e => (e.Sequence, e.Message)));
+
+        // 全文索引依日分片：記錄每個日期資料夾的事件序號範圍；內容版本改變，舊的分片不再使用
+        var dayOf = files.Where(f => f.Active).ToDictionary(f => f.RelativePath, f => f.DayFolder, StringComparer.Ordinal);
+        var days = events.GroupBy(e => dayOf[e.Source.RelativePath])
+            .Select(g => new SearchDay(g.Key, g.Min(e => e.Sequence), g.Max(e => e.Sequence),
+                files.Where(f => f.Active && f.DayFolder == g.Key).Sum(f => f.Size)))
+            .OrderBy(d => d.Day, StringComparer.Ordinal).ToList();
+        SetMeta("search_days", JsonSerializer.Serialize(days));
+        SetMeta("content_version", Guid.NewGuid().ToString("N"));
+        _days = days;
     }
 
     /// <summary>正規化的搜尋用文字（ADR-0011 第 2 點：匯入時產生）。</summary>
@@ -246,8 +256,13 @@ public sealed class SqliteEventStore : IEventStore
         }
     }
 
+    bool _searchTextComplete;
+
     public int EnsureSearchText()
     {
+        // 檢查要掃過所有事件（一天約 1 秒）：每次開啟只檢查一次；之後寫入事件時一定同時寫入搜尋用文字
+        if (_searchTextComplete) return 0;
+        _searchTextComplete = true;
         using var count = _conn.CreateCommand();
         count.CommandText = "SELECT count(*) FROM events e WHERE NOT EXISTS (SELECT 1 FROM event_search s WHERE s.seq = e.seq)";
         if ((long)count.ExecuteScalar()! == 0) return 0;
@@ -264,41 +279,175 @@ public sealed class SqliteEventStore : IEventStore
         return missing.Count;
     }
 
-    public IReadOnlyList<long> Search(SearchQuery query, CancellationToken ct)
+    /// <summary>
+    /// 案件內容的版本：每次寫入事件（匯入、套用新版設定、修改偏移量）都會改變。全文索引的分片記錄建立時的版本。
+    /// </summary>
+    public string GetContentVersion()
     {
-        // 事件序號依時間排序，所以依序號範圍分片、平行掃描（ADR-0011 第 1 點：依日平行；這裡把一天也再分片）。
-        // 每片使用自己的唯讀連線；先以搜尋用文字篩選，再取符合的事件比對其他條件。結果依事件序號排序。
-        long max;
-        using (var cmd = _conn.CreateCommand())
-        {
-            cmd.CommandText = "SELECT coalesce(max(seq), 0) FROM events";
-            max = (long)cmd.ExecuteScalar()!;
-        }
-        int parts = Math.Max(1, Math.Min(Environment.ProcessorCount, (int)(max / 20_000) + 1));
-        long size = max / parts + 1;
-        var results = new System.Collections.Concurrent.ConcurrentBag<List<long>>();
-        Parallel.For(0, parts, new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = Environment.ProcessorCount }, part =>
-        {
-            using var conn = new SqliteConnection(new SqliteConnectionStringBuilder
-            {
-                DataSource = _path, Mode = SqliteOpenMode.ReadOnly, Pooling = false,
-            }.ToString());
-            conn.Open();
-            results.Add(SearchRange(conn, query, part * size + 1, Math.Min(max, (part + 1) * size), ct));
-        });
-        var all = results.SelectMany(x => x).ToList();
-        all.Sort();
-        return all;
+        if (TryGetMeta("content_version") is { } v) return v;
+        v = Guid.NewGuid().ToString("N"); // 之前建立的案件
+        SetMeta("content_version", v);
+        return v;
     }
 
-    static List<long> SearchRange(SqliteConnection conn, SearchQuery q, long firstSeq, long lastSeq, CancellationToken ct)
+    List<SearchDay>? _days;
+
+    /// <summary>每個日期資料夾的事件序號範圍與原始 LOG 大小（寫入事件時記錄；之前建立的案件第一次使用時補上）。</summary>
+    public IReadOnlyList<SearchDay> GetDays()
+    {
+        if (_days is not null) return _days;
+        if (TryGetMeta("search_days") is { } json) return _days = JsonSerializer.Deserialize<List<SearchDay>>(json) ?? [];
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT f.day_folder, min(e.seq), max(e.seq), (SELECT sum(size) FROM files g WHERE g.active AND g.day_folder = f.day_folder)
+            FROM events e JOIN files f ON f.file_id = e.file_id GROUP BY f.day_folder ORDER BY f.day_folder
+            """;
+        var list = new List<SearchDay>();
+        using (var r = cmd.ExecuteReader())
+            while (r.Read()) list.Add(new(r.GetString(0), r.GetInt64(1), r.GetInt64(2), r.IsDBNull(3) ? 0 : r.GetInt64(3)));
+        SetMeta("search_days", JsonSerializer.Serialize(list));
+        return _days = list;
+    }
+
+    /// <summary>以索引搜尋一天時，候選事件數的上限；估計超過時，這一天改用掃描（ADR-0011 第 6 點：常見詞用索引反而慢）。</summary>
+    public const long IndexCandidateLimit = 50_000;
+
+    /// <summary>掃描時每一片的事件數下限（一天也再分片，平行掃描）。</summary>
+    const long MinScanChunk = 20_000;
+
+    public SearchOutcome Search(SearchQuery query, SearchIndex? index, SearchPath path, IProgress<double>? progress, CancellationToken ct)
+    {
+        if (query.Validate() is { } error) throw new ArgumentException(error, nameof(query));
+
+        // 1. 有精確的篩選條件（解析欄位）：先用參照表縮小範圍，再比對其他條件
+        if (query.FieldKinds.Count > 0 && query.FieldValues.Count > 0)
+        {
+            var found = Verify(query, FindSequences(query.FieldKinds, query.FieldValues), null, ct);
+            progress?.Report(1);
+            return new(found, 0, 0, true);
+        }
+
+        // 2. 依日決定：已建好索引、而且有罕見的 3 字以上關鍵字的日期用索引；其餘依事件序號分片掃描
+        var days = GetDays();
+        var version = GetContentVersion();
+        var (allTerms, anyTerms) = path == SearchPath.Auto && index is not null && !query.Regex ? IndexTerms(query) : ([], []);
+        long total = days.Sum(d => d.LastSequence - d.FirstSequence + 1);
+        long chunk = Math.Max(MinScanChunk, total / (Environment.ProcessorCount * 2) + 1);
+        var units = new List<Func<CancellationToken, List<long>>>();
+        int indexed = 0, scanned = 0;
+        foreach (var day in days)
+        {
+            var terms = allTerms.Count + anyTerms.Count > 0 && index!.IsBuilt(day.Day, version) ? ChooseTerms(index, day.Day, allTerms, anyTerms) : null;
+            if (terms is not null)
+            {
+                indexed++;
+                units.Add(token => Verify(query, index!.Candidates(day.Day, terms, token), day.Day, token));
+                continue;
+            }
+            scanned++;
+            for (long lo = day.FirstSequence; lo <= day.LastSequence; lo += chunk)
+            {
+                long a = lo, b = Math.Min(day.LastSequence, lo + chunk - 1);
+                units.Add(token =>
+                {
+                    using var conn = OpenReadOnly();
+                    return SearchRange(conn, query, a, b, day.Day, token);
+                });
+            }
+        }
+
+        var results = new List<long>[units.Count];
+        int done = 0;
+        try
+        {
+            Parallel.For(0, units.Count, new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = Environment.ProcessorCount }, i =>
+            {
+                results[i] = units[i](ct);
+                progress?.Report((double)Interlocked.Increment(ref done) / units.Count);
+            });
+        }
+        catch (AggregateException) when (ct.IsCancellationRequested)
+        {
+            // 取消後仍在比對中的那一筆可能先逾時；以取消為準
+            throw new OperationCanceledException(ct);
+        }
+        catch (AggregateException ex) when (ex.InnerExceptions.All(e => e is OperationCanceledException))
+        {
+            throw new OperationCanceledException(ct);
+        }
+        catch (AggregateException ex) when (ex.InnerExceptions.Any(e => e is System.Text.RegularExpressions.RegexMatchTimeoutException))
+        {
+            throw new ArgumentException(
+                $"正規表示式太複雜：比對一筆事件超過 {SearchQuery.RegexTimeout.TotalSeconds:N0} 秒。請改寫得更精確，或改用一般關鍵字。", nameof(query));
+        }
+        var all = results.SelectMany(x => x).ToList();
+        all.Sort();
+        return new(all, indexed, scanned, false);
+    }
+
+    /// <summary>可以用索引的關鍵字（正規化後 3 字以上）：「全部包含」中的每一個；「任一包含」全部都可以用時才用。</summary>
+    static (List<string> All, List<string> Any) IndexTerms(SearchQuery q)
+    {
+        var all = q.AllTerms.Select(t => TextNormalizer.Normalize(t)).Where(t => SearchIndex.Trigrams(t) is not null).ToList();
+        var anyNorm = q.AnyTerms.Select(t => TextNormalizer.Normalize(t)).ToList();
+        var any = anyNorm.Count > 0 && anyNorm.All(t => SearchIndex.Trigrams(t) is not null) ? anyNorm : [];
+        return (all, any);
+    }
+
+    /// <summary>
+    /// 這一天用哪些關鍵字從索引取候選（彼此為「任一」關係）：「全部包含」中估計最少的一個；
+    /// 或「任一包含」的全部（估計合計）。估計超過上限時傳回 null（改用掃描）。
+    /// </summary>
+    static IReadOnlyList<string>? ChooseTerms(SearchIndex index, string day, List<string> all, List<string> any)
+    {
+        (long Estimate, IReadOnlyList<string> Terms)? best = null;
+        foreach (var t in all)
+            if (index.Estimate(day, t) is { } e && (best is null || e < best.Value.Estimate)) best = (e, [t]);
+        if (any.Count > 0)
+        {
+            long sum = any.Sum(t => index.Estimate(day, t) ?? long.MaxValue / any.Count);
+            if (best is null || sum < best.Value.Estimate) best = (sum, any);
+        }
+        return best is { } b && b.Estimate <= IndexCandidateLimit ? b.Terms : null;
+    }
+
+    SqliteConnection OpenReadOnly()
+    {
+        var conn = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = _path, Mode = SqliteOpenMode.ReadOnly, Pooling = false,
+        }.ToString());
+        conn.Open();
+        return conn;
+    }
+
+    /// <summary>以所有條件確認候選事件（索引或參照表找出的），傳回符合的事件序號。</summary>
+    List<long> Verify(SearchQuery q, IReadOnlyList<long> candidates, string? day, CancellationToken ct)
+    {
+        var list = new List<long>();
+        if (candidates.Count == 0) return list;
+        using var conn = OpenReadOnly();
+        const int batch = 500;
+        for (int i = 0; i < candidates.Count; i += batch)
+        {
+            ct.ThrowIfCancellationRequested();
+            list.AddRange(Query(conn, q, candidates.Skip(i).Take(batch).ToList(), null, null, day, ct));
+        }
+        return list;
+    }
+
+    static List<long> SearchRange(SqliteConnection conn, SearchQuery q, long firstSeq, long lastSeq, string? day, CancellationToken ct) =>
+        Query(conn, q, null, firstSeq, lastSeq, day, ct);
+
+    /// <summary>
+    /// 在事件序號範圍內、或指定的事件序號中，找出符合所有條件的事件。
+    /// 先以不分大小寫的搜尋用文字篩選；區分大小寫、「不包含」（區分大小寫時）與正規表示式在讀出原文後再判斷。
+    /// </summary>
+    static List<long> Query(SqliteConnection conn, SearchQuery q, IReadOnlyList<long>? seqs, long? firstSeq, long? lastSeq,
+        string? day, CancellationToken ct)
     {
         using var cmd = conn.CreateCommand();
-        var where = new List<string> { "s.seq BETWEEN $first AND $last" };
-        cmd.Parameters.AddWithValue("$first", firstSeq);
-        cmd.Parameters.AddWithValue("$last", lastSeq);
-        if (q.From is { } from) { where.Add("e.ts >= $from"); cmd.Parameters.AddWithValue("$from", from.Ticks); }
-        if (q.To is { } to) { where.Add("e.ts < $to"); cmd.Parameters.AddWithValue("$to", to.Ticks); }
+        var where = new List<string>();
         int n = 0;
         string P(object value)
         {
@@ -306,30 +455,41 @@ public sealed class SqliteEventStore : IEventStore
             cmd.Parameters.AddWithValue(name, value);
             return name;
         }
-        string In(IReadOnlyList<string> values) => string.Join(",", values.Select(v => P(v)));
+        string In(IEnumerable<object> values) => string.Join(",", values.Select(P));
         string Has(string term) => $"instr(s.norm, {P(TextNormalizer.Normalize(term))}) > 0";
 
-        // 先以不分大小寫的正規化文字篩選；區分大小寫時在下面再以原文確認（「不包含」也改在下面判斷）
-        foreach (var t in q.AllTerms) where.Add(Has(t));
-        if (q.AnyTerms.Count > 0) where.Add("(" + string.Join(" OR ", q.AnyTerms.Select(Has)) + ")");
-        if (!q.CaseSensitive && q.NoneTerms.Count > 0) where.Add("NOT (" + string.Join(" OR ", q.NoneTerms.Select(Has)) + ")");
+        if (seqs is not null) where.Add($"s.seq IN ({In(seqs.Cast<object>())})");
+        if (firstSeq is { } first) where.Add($"s.seq >= {P(first)}");
+        if (lastSeq is { } last) where.Add($"s.seq <= {P(last)}");
+        if (day is not null) where.Add($"f.day_folder = {P(day)}");
+        if (q.From is { } from) where.Add($"e.ts >= {P(from.Ticks)}");
+        if (q.To is { } to) where.Add($"e.ts < {P(to.Ticks)}");
+        if (!q.Regex)
+        {
+            foreach (var t in q.AllTerms) where.Add(Has(t));
+            if (q.AnyTerms.Count > 0) where.Add("(" + string.Join(" OR ", q.AnyTerms.Select(Has)) + ")");
+            if (!q.CaseSensitive && q.NoneTerms.Count > 0) where.Add("NOT (" + string.Join(" OR ", q.NoneTerms.Select(Has)) + ")");
+        }
         if (q.Modules.Count > 0) where.Add($"f.module IN ({In(q.Modules)})");
         if (q.Loggers.Count > 0) where.Add($"e.logger IN ({In(q.Loggers)})");
         if (q.Levels.Count > 0) where.Add($"e.level IN ({In(q.Levels)})");
         if (q.Flags != EventFlags.None) where.Add($"(e.flags & {P((int)q.Flags)}) != 0");
         if (q.FieldKinds.Count > 0 && q.FieldValues.Count > 0)
             where.Add($"e.seq IN (SELECT seq FROM event_fields WHERE kind IN ({In(q.FieldKinds)}) AND value IN ({In(q.FieldValues)}))");
+        if (where.Count == 0) where.Add("1");
 
+        bool checkText = q.Regex || q.CaseSensitive;
         cmd.CommandText = $"""
-            SELECT e.seq, e.message FROM event_search s CROSS JOIN events e ON e.seq = s.seq JOIN files f ON f.file_id = e.file_id
+            SELECT e.seq, {(checkText ? "e.message" : "NULL")} FROM event_search s CROSS JOIN events e ON e.seq = s.seq JOIN files f ON f.file_id = e.file_id
             WHERE {string.Join(" AND ", where)} ORDER BY s.seq
             """;
         var list = new List<long>();
         using var r = cmd.ExecuteReader();
+        int k = 0;
         while (r.Read())
         {
-            ct.ThrowIfCancellationRequested();
-            if (q.CaseSensitive && !q.MatchesText(r.GetString(1))) continue;
+            if ((++k & 255) == 0) ct.ThrowIfCancellationRequested();
+            if (checkText && !q.MatchesText(r.GetString(1))) continue;
             list.Add(r.GetInt64(0));
         }
         return list;

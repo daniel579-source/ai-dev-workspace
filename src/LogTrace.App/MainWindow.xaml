@@ -218,12 +218,21 @@
                                             <KeyBinding Key="Enter" Command="{Binding SearchCommand}" />
                                         </TextBox.InputBindings>
                                     </TextBox>
-                                    <CheckBox Content="區分大小寫（全形與半形仍視為相同）" IsChecked="{Binding SearchCaseSensitive}" Margin="0,0,0,6" />
+                                    <CheckBox Content="區分大小寫（全形與半形仍視為相同）" IsChecked="{Binding SearchCaseSensitive}" Margin="0,0,0,2" />
+                                    <CheckBox Content="正規表示式（進階）" IsChecked="{Binding SearchRegex}" Margin="0,0,0,6"
+                                              AutomationProperties.AutomationId="SearchRegex"
+                                              ToolTip="三個輸入框中的每個關鍵字都是 .NET 正規表示式，比對整筆事件內容；一律以掃描搜尋，可以取消" />
                                     <StackPanel Orientation="Horizontal">
                                         <Button Content="搜尋" Command="{Binding SearchCommand}" Padding="16,2" FontWeight="SemiBold"
                                                 AutomationProperties.AutomationId="Search" />
                                         <Button Content="清除" Command="{Binding ClearSearchCommand}" Padding="8,2" Margin="6,0,0,0" />
                                     </StackPanel>
+                                    <!-- 搜尋中：進度與取消（ADR-0010 第 2 點） -->
+                                    <DockPanel Margin="0,6,0,0" Visibility="{Binding IsSearching, Converter={StaticResource Visible}}">
+                                        <Button DockPanel.Dock="Right" Content="取消" Command="{Binding CancelSearchCommand}" Padding="8,0" Margin="6,0,0,0"
+                                                AutomationProperties.AutomationId="CancelSearch" />
+                                        <ProgressBar Value="{Binding SearchProgress, Mode=OneWay}" Maximum="1" Height="14" AutomationProperties.AutomationId="SearchProgress" />
+                                    </DockPanel>
                                     <TextBlock Text="最近的搜尋" Margin="0,8,0,0" />
                                     <ComboBox ItemsSource="{Binding RecentSearches}" SelectedItem="{Binding SelectedRecentSearch}" DisplayMemberPath="Label"
                                               AutomationProperties.AutomationId="RecentSearches" ToolTip="選擇後把條件填回，按「搜尋」才查詢" />
@@ -259,6 +268,13 @@
                                             <ItemsControl ItemsSource="{Binding LoggerChoices}" ItemTemplate="{StaticResource Choice}" />
                                         </StackPanel>
                                     </Expander>
+
+                                    <!-- 全文索引（ADR-0011）：背景建立，尚未建好的日期以掃描搜尋 -->
+                                    <TextBlock Text="{Binding IndexStatus}" TextWrapping="Wrap" Foreground="#555" Margin="0,12,0,2"
+                                               AutomationProperties.AutomationId="IndexStatus" />
+                                    <Button Content="重建全文索引" Command="{Binding RebuildIndexCommand}" HorizontalAlignment="Left" Padding="8,1"
+                                            ToolTip="刪除全文索引並重新建立（索引是可以重建的資料；搜尋結果不受影響）"
+                                            AutomationProperties.AutomationId="RebuildIndex" />
                                 </StackPanel>
                             </ScrollViewer>
                         </ad:LayoutAnchorable>

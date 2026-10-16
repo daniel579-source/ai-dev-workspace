@@ -27,8 +27,10 @@ dotnet test LogTrace.slnx --filter "Category!=UI"           # 只跑不開視窗
 dotnet run --project src/LogTrace.App                        # 設定、案件（Cases\）與廠別設定檔（Plants\）預設放在 %LOCALAPPDATA%\LogTrace
 dotnet run --project src/LogTrace.App -- --data-root D:/temp/lt  # 改用其他資料夾（不影響自己的設定與案件）
 
-# 一天份匯入的效能量測（資料量大，不在 repo；未設定環境變數時直接結束）
+# 效能量測（資料量大，不在 repo；未設定環境變數時直接結束）
+#   LOGTRACE_PERF_SOURCE：一天份匯入；LOGTRACE_PERF_SEARCH_SOURCE：全文索引與搜尋（一天或多天的資料夾）
 $env:LOGTRACE_PERF_SOURCE = "D:/_case/tv-data/logs/20300107"; $env:LOGTRACE_PERF_WORK = "D:/_case/tv-data/work"
+$env:LOGTRACE_PERF_SEARCH_SOURCE = "D:/_case/tv-data/logs"
 dotnet test tests/LogTrace.Engine.Tests -c Release --filter "Category=Perf" --logger "console;verbosity=detailed"
 
 # 發佈：self-contained 單一資料夾（ADR-0007），目標電腦不需要安裝 .NET

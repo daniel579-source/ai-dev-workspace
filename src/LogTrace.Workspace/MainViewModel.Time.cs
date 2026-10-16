@@ -105,6 +105,7 @@ public sealed partial class MainViewModel
         var editor = new TimeCorrectionViewModel(c.Info.Correction, Modules);
         if (!_ui.EditTimeCorrection(editor) || editor.Result is not { } correction || correction.Equals(c.Info.Correction)) return;
         var selected = SelectedEvent?.Event.Id;
+        StopIndexBuild(); // 案件內容將改變
         IsBusy = true;
         Status = "依新的時間偏移量重新排序中…";
         try

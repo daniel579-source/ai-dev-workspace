@@ -9,6 +9,7 @@ public sealed record SavedSearch
     public string AnyOf { get; init; } = "";
     public string NoneOf { get; init; } = "";
     public bool CaseSensitive { get; init; }
+    public bool Regex { get; init; }
     public string From { get; init; } = "";
     public string To { get; init; } = "";
     public IReadOnlyList<string> Modules { get; init; } = [];
@@ -29,6 +30,7 @@ public sealed record SavedSearch
             if (NoneOf.Trim().Length > 0) parts.Add($"不含：{NoneOf.Trim()}");
             if (FieldKind != FieldFilterKind.None && FieldValue.Length > 0) parts.Add($"{FieldFilterOption.Of(FieldKind).Label}：{FieldValue}");
             if (Modules.Count + Loggers.Count + Levels.Count > 0 || Flags != 0 || From.Length + To.Length > 0) parts.Add("＋篩選");
+            if (Regex) parts.Add("正規表示式");
             if (CaseSensitive) parts.Add("區分大小寫");
             return parts.Count == 0 ? "（全部事件）" : string.Join("　", parts);
         }

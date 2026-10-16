@@ -20,7 +20,7 @@ public sealed partial class SelectableItem(string name, string label) : Observab
 
 /// <summary>
 /// 搜尋（ADR-0010）：三個輸入框、篩選條件、兩種結果模式、符合筆數與醒目標示、最近的搜尋。
-/// 只做掃描路徑（依日平行）；按「搜尋」才查詢。
+/// 按「搜尋」才查詢；已建好全文索引的日期依規則用索引，其餘掃描（ADR-0011 第 6 點）。搜尋時顯示進度，可以取消。
 /// </summary>
 public sealed partial class MainViewModel
 {
@@ -40,6 +40,27 @@ public sealed partial class MainViewModel
 
     [ObservableProperty]
     public partial bool SearchCaseSensitive { get; set; }
+
+    /// <summary>正規表示式（進階選項，預設關閉）：三個輸入框中的每個關鍵字都是正規表示式。</summary>
+    [ObservableProperty]
+    public partial bool SearchRegex { get; set; }
+
+    CancellationTokenSource? _searchCts;
+
+    /// <summary>搜尋中（可以取消）。</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CancelSearchCommand))]
+    public partial bool IsSearching { get; private set; }
+
+    /// <summary>搜尋的進度（0～1）。</summary>
+    [ObservableProperty]
+    public partial double SearchProgress { get; private set; }
+
+    bool CanCancelSearch() => IsSearching;
+
+    /// <summary>取消搜尋；之前的結果維持不變。</summary>
+    [RelayCommand(CanExecute = nameof(CanCancelSearch))]
+    void CancelSearch() => _searchCts?.Cancel();
 
     /// <summary>時間區間（含起點、不含終點），格式 yyyy-MM-dd HH:mm:ss（可以省略時間或小數）；空白表示不限。</summary>
     [ObservableProperty]
@@ -96,8 +117,8 @@ public sealed partial class MainViewModel
     partial void OnSelectedRecentSearchChanged(SavedSearch? value)
     {
         if (value is null) return;
-        (SearchAllOf, SearchAnyOf, SearchNoneOf, SearchCaseSensitive, SearchFrom, SearchTo) =
-            (value.AllOf, value.AnyOf, value.NoneOf, value.CaseSensitive, value.From, value.To);
+        (SearchAllOf, SearchAnyOf, SearchNoneOf, SearchCaseSensitive, SearchRegex, SearchFrom, SearchTo) =
+            (value.AllOf, value.AnyOf, value.NoneOf, value.CaseSensitive, value.Regex, value.From, value.To);
         foreach (var m in ModuleChoices) m.IsSelected = value.Modules.Contains(m.Name);
         foreach (var l in LoggerChoices) l.IsSelected = value.Loggers.Contains(l.Name);
         foreach (var l in LevelChoices) l.IsSelected = value.Levels.Contains(l.Name);
@@ -176,7 +197,7 @@ public sealed partial class MainViewModel
         };
         var query = new SearchQuery
         {
-            AllOf = SearchAllOf, AnyOf = SearchAnyOf, NoneOf = SearchNoneOf, CaseSensitive = SearchCaseSensitive,
+            AllOf = SearchAllOf, AnyOf = SearchAnyOf, NoneOf = SearchNoneOf, CaseSensitive = SearchCaseSensitive, Regex = SearchRegex,
             From = from, To = to,
             Modules = ModuleChoices.Where(m => m.IsSelected).Select(m => m.Name).ToList(),
             Loggers = LoggerChoices.Where(m => m.IsSelected).Select(m => m.Name).ToList(),
@@ -191,14 +212,40 @@ public sealed partial class MainViewModel
             return;
         }
 
+        if (query.Validate() is { } error)
+        {
+            SearchStatus = error;
+            return;
+        }
+
         var c = _case!;
+        var previous = SearchStatus;
+        using var cts = _searchCts = new CancellationTokenSource();
         IsBusy = true;
+        IsSearching = true;
+        SearchProgress = 0;
         SearchStatus = "搜尋中…";
+        var progress = new Progress<double>(p => SearchProgress = p);
         try
         {
             var clock = Stopwatch.StartNew();
-            var seqs = await Task.Run(() => c.Search(query));
+            SearchOutcome outcome;
+            try
+            {
+                outcome = await Task.Run(() => c.Search(query, SearchPath.Auto, progress, cts.Token));
+            }
+            catch (OperationCanceledException)
+            {
+                SearchStatus = _lastQuery is null ? "已取消搜尋。" : $"已取消搜尋；以下仍是上一次的結果。{previous}";
+                return;
+            }
+            catch (ArgumentException ex)
+            {
+                SearchStatus = ex.Message;
+                return;
+            }
             clock.Stop();
+            var seqs = outcome.Sequences;
             _matches = seqs.ToHashSet();
             _lastQuery = query;
             MatchCount = _matches.Count;
@@ -210,11 +257,15 @@ public sealed partial class MainViewModel
             ShowSearchResult();
             Timeline.SetSearchMatches(_matches);
             FocusedElement = null;
-            SearchStatus = $"符合 {MatchCount:N0} 筆（共 {_allRows.Count:N0} 筆，{clock.Elapsed.TotalSeconds:N2} 秒）";
+            var how = outcome.ByFields ? "先以解析欄位縮小範圍"
+                : outcome.IndexedDays == 0 ? "掃描" : outcome.ScannedDays == 0 ? "全文索引" : $"全文索引 {outcome.IndexedDays} 天、掃描 {outcome.ScannedDays} 天";
+            SearchStatus = $"符合 {MatchCount:N0} 筆（共 {_allRows.Count:N0} 筆，{clock.Elapsed.TotalSeconds:N2} 秒，{how}）";
             Remember(query);
         }
         finally
         {
+            _searchCts = null;
+            IsSearching = false;
             IsBusy = false;
         }
     }
@@ -223,7 +274,7 @@ public sealed partial class MainViewModel
     {
         var saved = new SavedSearch
         {
-            AllOf = q.AllOf, AnyOf = q.AnyOf, NoneOf = q.NoneOf, CaseSensitive = q.CaseSensitive,
+            AllOf = q.AllOf, AnyOf = q.AnyOf, NoneOf = q.NoneOf, CaseSensitive = q.CaseSensitive, Regex = q.Regex,
             From = SearchFrom.Trim(), To = SearchTo.Trim(),
             Modules = q.Modules, Loggers = q.Loggers, Levels = q.Levels, Flags = (int)q.Flags,
             FieldKind = SelectedFilter.Kind,

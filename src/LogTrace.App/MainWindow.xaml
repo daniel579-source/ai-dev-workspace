@@ -9,30 +9,34 @@
         <local:NotConverter x:Key="Not" />
     </Window.Resources>
     <DockPanel>
-        <!-- 案件與匯入 -->
+        <!-- 建立案件與匯入 -->
         <Border DockPanel.Dock="Top" Padding="8" BorderBrush="#DDD" BorderThickness="0,0,0,1">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="200" />
+                    <ColumnDefinition Width="180" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="24" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="案件名稱" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <TextBlock Grid.Column="0" Text="新案件名稱" VerticalAlignment="Center" Margin="0,0,6,0" />
                 <TextBox Grid.Column="1" Text="{Binding NewCaseName, UpdateSourceTrigger=PropertyChanged}"
                          AutomationProperties.AutomationId="NewCaseName" VerticalContentAlignment="Center" />
                 <Button Grid.Column="2" Content="建立案件" Command="{Binding CreateCaseCommand}" Padding="10,2" Margin="6,0,0,0"
                         AutomationProperties.AutomationId="CreateCase" />
-                <TextBlock Grid.Column="4" Text="LOG 資料夾" VerticalAlignment="Center" Margin="0,0,6,0" />
-                <TextBox Grid.Column="5" Text="{Binding ImportFolder, UpdateSourceTrigger=PropertyChanged}"
-                         AutomationProperties.AutomationId="ImportFolder" VerticalContentAlignment="Center" />
-                <Button Grid.Column="6" Content="瀏覽…" Command="{Binding BrowseImportFolderCommand}" Padding="10,2" Margin="6,0,0,0"
+                <TextBlock Grid.Column="4" Text="匯入 LOG" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <TextBox Grid.Column="5" Text="{Binding ImportSource, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="資料夾、7z 或 zip（日期 → 模組的結構，可以包含多天）"
+                         AutomationProperties.AutomationId="ImportSource" VerticalContentAlignment="Center" />
+                <Button Grid.Column="6" Content="資料夾…" Command="{Binding BrowseImportFolderCommand}" Padding="10,2" Margin="6,0,0,0"
                         AutomationProperties.AutomationId="BrowseImportFolder" />
-                <Button Grid.Column="7" Content="匯入" Command="{Binding ImportCommand}" Padding="10,2" Margin="6,0,0,0"
+                <Button Grid.Column="7" Content="壓縮檔…" Command="{Binding BrowseImportArchiveCommand}" Padding="10,2" Margin="6,0,0,0"
+                        AutomationProperties.AutomationId="BrowseImportArchive" />
+                <Button Grid.Column="8" Content="匯入" Command="{Binding ImportCommand}" Padding="10,2" Margin="6,0,0,0"
                         AutomationProperties.AutomationId="Import" />
             </Grid>
         </Border>
@@ -49,6 +53,79 @@
 
         <ad:DockingManager>
             <ad:LayoutRoot>
+                <ad:LayoutPanel Orientation="Horizontal">
+                    <ad:LayoutAnchorablePane DockWidth="280">
+                        <ad:LayoutAnchorable ContentId="cases" Title="案件" CanClose="False">
+                            <DockPanel Margin="6">
+                                <!-- 存放位置（ADR-0011 第 3 點） -->
+                                <StackPanel DockPanel.Dock="Top">
+                                    <TextBlock Text="存放位置" Foreground="#555" />
+                                    <DockPanel Margin="0,2,0,0">
+                                        <Button DockPanel.Dock="Right" Content="變更…" Command="{Binding ChangeCasesRootCommand}" Padding="8,1" Margin="6,0,0,0"
+                                                AutomationProperties.AutomationId="ChangeCasesRoot" />
+                                        <TextBlock Text="{Binding CasesRoot}" TextTrimming="CharacterEllipsis" ToolTip="{Binding CasesRoot}"
+                                                   VerticalAlignment="Center" AutomationProperties.AutomationId="CasesRoot" />
+                                    </DockPanel>
+                                    <TextBlock Text="{Binding CasesRootWarning}" TextWrapping="Wrap" Foreground="#B00020" Margin="0,4,0,0"
+                                               AutomationProperties.AutomationId="CasesRootWarning">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding CasesRootWarning}" Value="{x:Null}">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                                <!-- 目前的案件 -->
+                                <Border DockPanel.Dock="Bottom" BorderBrush="#DDD" BorderThickness="0,1,0,0" Padding="0,6,0,0" Margin="0,6,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding CurrentCaseName, StringFormat=開啟中：{0}, TargetNullValue=沒有開啟的案件}"
+                                                   TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="CurrentCase" />
+                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                            <Button Content="關閉案件" Command="{Binding CloseCaseCommand}" Padding="8,1"
+                                                    ToolTip="關閉後就可以複製案件資料夾作為備份" AutomationProperties.AutomationId="CloseCase" />
+                                            <Button Content="在檔案總管開啟" Command="{Binding OpenCaseFolderCommand}" Padding="8,1" Margin="6,0,0,0"
+                                                    AutomationProperties.AutomationId="OpenCaseFolder" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,6,0,0">
+                                    <Button Content="開啟" Command="{Binding OpenSelectedCaseCommand}" Padding="10,1"
+                                            AutomationProperties.AutomationId="OpenSelectedCase" />
+                                    <Button Content="刪除案件…" Command="{Binding DeleteSelectedCaseCommand}" Padding="8,1" Margin="6,0,0,0"
+                                            AutomationProperties.AutomationId="DeleteSelectedCase" />
+                                </StackPanel>
+                                <!-- 案件清單：最近使用的在前 -->
+                                <ListBox ItemsSource="{Binding Cases}" SelectedItem="{Binding SelectedCase}" Margin="0,8,0,0"
+                                         AutomationProperties.AutomationId="CaseList" MouseDoubleClick="CaseList_MouseDoubleClick">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="0,1">
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding CreatedAt, StringFormat=建立 {0}}" Foreground="#777" FontSize="11" />
+                                                    <TextBlock Text="・最近使用" Foreground="#2A6CB0" FontSize="11">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsRecent}" Value="False">
+                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </DockPanel>
+                        </ad:LayoutAnchorable>
+                    </ad:LayoutAnchorablePane>
                 <ad:LayoutPanel Orientation="Vertical">
                     <ad:LayoutAnchorablePane>
                         <ad:LayoutAnchorable ContentId="events" Title="事件清單" CanClose="False">
@@ -150,6 +227,7 @@
                             </ad:LayoutAnchorable>
                         </ad:LayoutAnchorablePane>
                     </ad:LayoutPanel>
+                </ad:LayoutPanel>
                 </ad:LayoutPanel>
             </ad:LayoutRoot>
         </ad:DockingManager>

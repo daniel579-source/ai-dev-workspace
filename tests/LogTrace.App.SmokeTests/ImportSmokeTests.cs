@@ -32,8 +32,8 @@ public sealed class ImportSmokeTests : IDisposable
     [Fact]
     public void 啟動程式_建立案件_匯入_看到事件清單()
     {
-        var casesRoot = Path.Combine(_tmp.Path, "Cases");
-        using var app = FlaUI.Core.Application.Launch(new ProcessStartInfo(AppExe(), $"--cases-root \"{casesRoot}\""));
+        var dataRoot = Path.Combine(_tmp.Path, "AppData");
+        using var app = FlaUI.Core.Application.Launch(new ProcessStartInfo(AppExe(), $"--data-root \"{dataRoot}\""));
         using var automation = new UIA3Automation();
         try
         {
@@ -46,7 +46,7 @@ public sealed class ImportSmokeTests : IDisposable
 
             Find("NewCaseName").AsTextBox().Text = "冒煙測試";
             Find("CreateCase").AsButton().Invoke();
-            Find("ImportFolder").AsTextBox().Text = TempFolder.Fixture("one-day-plc");
+            Find("ImportSource").AsTextBox().Text = TempFolder.Fixture("one-day-plc");
             Find("Import").AsButton().Invoke();
 
             var list = Find("EventList");
@@ -54,7 +54,7 @@ public sealed class ImportSmokeTests : IDisposable
                 () => list.FindAllChildren(cf.ByControlType(ControlType.DataItem).Or(cf.ByControlType(ControlType.ListItem))).Length == 5,
                 TimeSpan.FromSeconds(30));
             Assert.True(rows.Result, "事件清單沒有出現 5 筆事件");
-            Assert.Contains("已匯入 1 個檔案、5 筆事件", Find("Status").Name);
+            Assert.Contains("案件共 5 筆事件", Find("Status").Name);
             Assert.Contains("PLCLOG.txt 第 5 行", Find("EventDetail").AsTextBox().Text);
         }
         finally
@@ -67,8 +67,8 @@ public sealed class ImportSmokeTests : IDisposable
     [Fact]
     public void 選取事件時_原始LOG面板跳到對應的行_切換分軌檢視後選取不變()
     {
-        var casesRoot = Path.Combine(_tmp.Path, "Cases");
-        using var app = FlaUI.Core.Application.Launch(new ProcessStartInfo(AppExe(), $"--cases-root \"{casesRoot}\""));
+        var dataRoot = Path.Combine(_tmp.Path, "AppData");
+        using var app = FlaUI.Core.Application.Launch(new ProcessStartInfo(AppExe(), $"--data-root \"{dataRoot}\""));
         using var automation = new UIA3Automation();
         try
         {
@@ -81,9 +81,9 @@ public sealed class ImportSmokeTests : IDisposable
 
             Find("NewCaseName").AsTextBox().Text = "冒煙測試二";
             Find("CreateCase").AsButton().Invoke();
-            Find("ImportFolder").AsTextBox().Text = TempFolder.Fixture("parsing-cases");
+            Find("ImportSource").AsTextBox().Text = TempFolder.Fixture("parsing-cases");
             Find("Import").AsButton().Invoke();
-            Assert.True(Retry.WhileFalse(() => Find("Status").Name.Contains("9 筆事件"), TimeSpan.FromSeconds(30)).Result);
+            Assert.True(Retry.WhileFalse(() => Find("Status").Name.Contains("案件共 9 筆事件"), TimeSpan.FromSeconds(30)).Result);
 
             // 圖例列出五種旗標
             Assert.NotNull(Find("FlagLegend").FindFirstDescendant(cf.ByName("編碼錯誤")));
@@ -104,6 +104,50 @@ public sealed class ImportSmokeTests : IDisposable
             Assert.True(list.FindAllChildren(cf.ByControlType(ControlType.DataItem).Or(cf.ByControlType(ControlType.ListItem)))[6]
                 .AsListBoxItem().IsSelected);
             Assert.Contains("PLCLOG.txt 第 5～6 行", Find("EventDetail").AsTextBox().Text);
+        }
+        finally
+        {
+            app.Close();
+            if (!app.HasExited) app.Kill();
+        }
+    }
+
+    [Fact]
+    public void 匯入7z_關閉案件後從案件清單重新開啟()
+    {
+        var dataRoot = Path.Combine(_tmp.Path, "AppData");
+        using var app = FlaUI.Core.Application.Launch(new ProcessStartInfo(AppExe(), $"--data-root \"{dataRoot}\""));
+        using var automation = new UIA3Automation();
+        try
+        {
+            var window = app.GetMainWindow(automation, TimeSpan.FromSeconds(30));
+            Assert.NotNull(window);
+            var cf = window.ConditionFactory;
+            AutomationElement Find(string id) =>
+                Retry.WhileNull(() => window.FindFirstDescendant(cf.ByAutomationId(id)), TimeSpan.FromSeconds(10)).Result
+                ?? throw new InvalidOperationException($"找不到 {id}");
+            AutomationElement[] Rows() =>
+                Find("EventList").FindAllChildren(cf.ByControlType(ControlType.DataItem).Or(cf.ByControlType(ControlType.ListItem)));
+
+            Assert.Equal(Path.Combine(dataRoot, "Cases"), Find("CasesRoot").Name);
+            Find("NewCaseName").AsTextBox().Text = "壓縮檔案件";
+            Find("CreateCase").AsButton().Invoke();
+            Find("ImportSource").AsTextBox().Text = TempFolder.Fixture("multi-day.7z");
+            Find("Import").AsButton().Invoke();
+            Assert.True(Retry.WhileFalse(() => Find("Status").Name.Contains("案件共 13 筆事件"), TimeSpan.FromSeconds(30)).Result, Find("Status").Name);
+
+            Find("CloseCase").AsButton().Invoke();
+            Assert.True(Retry.WhileFalse(() => Rows().Length == 0, TimeSpan.FromSeconds(10)).Result);
+
+            var item = Retry.WhileNull(() => Find("CaseList").FindFirstChild(cf.ByControlType(ControlType.ListItem)), TimeSpan.FromSeconds(10)).Result;
+            Assert.NotNull(item);
+            item.AsListBoxItem().Select();
+            Find("OpenSelectedCase").AsButton().Invoke();
+
+            // 清單是虛擬化的，只會產生看得到的列；以狀態列確認事件數
+            Assert.True(Retry.WhileFalse(() => Find("Status").Name.Contains("13 筆事件") && Rows().Length > 0, TimeSpan.FromSeconds(30)).Result,
+                Find("Status").Name);
+            Assert.Contains("壓縮檔案件", Find("CurrentCase").Name);
         }
         finally
         {

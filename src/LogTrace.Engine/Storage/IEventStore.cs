@@ -2,12 +2,35 @@ using LogTrace.Engine.Events;
 
 namespace LogTrace.Engine.Storage;
 
-/// <summary>匯入案件的一個原始檔（複本位於案件的 raw\ 下，路徑相對於 raw\）。</summary>
+/// <summary>
+/// 案件內的一個原始檔版本（ADR-0002 第 4、5 點）。同一個相對路徑可以有多個版本（重複匯入時內容不同），
+/// 舊版本永遠保留；同一時間只有一個版本參與查詢（Active）。
+/// </summary>
+/// <param name="RelativePath">從日期資料夾起算的路徑，例如 20300107/PLC-2030-01-07/PLCLOG.txt；也是穩定識別碼的一部分。</param>
+/// <param name="Version">版本，從 1 起算。</param>
+/// <param name="StoragePath">複本在案件 raw\ 下的路徑：第 1 版與相對路徑相同，之後的版本放在 _versions\&lt;版本&gt;\ 下。</param>
+/// <param name="StreamKey">同一 Logger 的輪替順序（見 SourceFile.StreamKey）。</param>
 /// <param name="Encoding">解碼使用的編碼（UTF-8 或 Big5）。</param>
 /// <param name="Unparsable">整個檔案不符合共通格式，沒有產生事件（ADR-0004 第 6 點），可以用原始文字的方式開啟。</param>
+/// <param name="SourcePath">匯入時的原始位置（資料夾中的檔案，或「壓縮檔路徑|壓縮檔內的路徑」）。</param>
 public sealed record StoredFile(
-    string Module, string DayFolder, string Logger, string RelativePath, long Size, string Sha256,
-    string Encoding, int EventCount, bool Unparsable);
+    string RelativePath, int Version, string StoragePath, bool Active,
+    string Module, string DayFolder, string Logger, string StreamKey,
+    long Size, string Sha256, string Encoding, int EventCount, bool Unparsable,
+    long ImportId, string SourcePath, DateTimeOffset ImportedAt);
+
+/// <summary>一次匯入（ADR-0002 第 4 點：記錄原始路徑與匯入時間；壓縮檔另存一份在案件的 sources\ 下）。</summary>
+/// <param name="ArchiveCopy">壓縮檔在案件 sources\ 下的檔名；來源是資料夾時為 null。</param>
+public sealed record ImportRecord(long Id, DateTimeOffset Time, string SourcePath, string SourceKind, string? ArchiveSha256, string? ArchiveCopy);
+
+/// <summary>稽核紀錄的一筆（ADR-0009 第 5 點）：操作人（作業系統帳號）、時間、操作種類、對象與內容。</summary>
+public sealed record AuditEntry(DateTimeOffset Time, string User, string Action, string Target, string Detail)
+{
+    public static string CurrentUser => $@"{Environment.UserDomainName}\{Environment.UserName}";
+
+    public static AuditEntry Now(string action, string target, string detail = "") =>
+        new(DateTimeOffset.Now, CurrentUser, action, target, detail);
+}
 
 /// <summary>案件的中繼資料。</summary>
 public sealed record CaseInfo(string Name, string PlantName, IReadOnlyList<string> ModuleOrder, IReadOnlyList<string> KnownLoggers, DateTimeOffset CreatedAt);
@@ -21,10 +44,21 @@ public interface IEventStore : IDisposable
     void SaveInfo(CaseInfo info);
     CaseInfo LoadInfo();
 
-    /// <summary>以單一交易寫入一次匯入的檔案與事件。</summary>
-    void SaveImport(IReadOnlyList<StoredFile> files, IReadOnlyList<LogEvent> events);
+    long NextImportId();
+
+    /// <summary>
+    /// 以單一交易寫入一次匯入：匯入紀錄、案件中所有的檔案版本（取代原本的清單）、重新排序後的全部事件、稽核紀錄。
+    /// 事件以 RelativePath 對應到該路徑目前參與查詢的版本。
+    /// </summary>
+    void SaveImport(ImportRecord import, IReadOnlyList<StoredFile> files, IReadOnlyList<LogEvent> events, IReadOnlyList<AuditEntry> audit);
+
+    void AddAudit(AuditEntry entry);
+    IReadOnlyList<AuditEntry> GetAudit();
 
     long GetEventCount();
     IReadOnlyList<LogEvent> GetEvents(long fromSequence, int maxCount);
+
+    /// <summary>所有檔案版本（含不參與查詢的舊版本）。</summary>
     IReadOnlyList<StoredFile> GetFiles();
+    IReadOnlyList<ImportRecord> GetImports();
 }

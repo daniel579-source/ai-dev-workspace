@@ -1,0 +1,4 @@
+2030-01-07 09:00:00.0000 | DEBUG | EXEDebug | SubmitCompleted,StationNo=A-01,CMD_NO=00010002  
+
+2030-01-07 09:00:05.0000 | DEBUG | EXEDebug | SubmitCompleted,StationNo=A-02,CMD_NO=00010003  
+

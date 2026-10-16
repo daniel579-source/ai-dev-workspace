@@ -3,11 +3,13 @@ using System.Text.RegularExpressions;
 namespace LogTrace.Engine.Import;
 
 /// <summary>匯入來源中的一個 LOG 檔。</summary>
-public sealed record SourceFile(string FullPath, string Module, string DayFolder, string Logger, string RelativePath, int StreamOrder);
+/// <param name="StreamKey">同一 Logger 的輪替順序：封存檔為檔名中的時間，現行檔為「~current」，依序數排序後封存在前。</param>
+public sealed record SourceFile(string FullPath, string Module, string DayFolder, string Logger, string RelativePath, string StreamKey);
 
 /// <summary>
 /// 辨識「日期 → `&lt;模組&gt;-&lt;日期&gt;`」結構（docs/log-format-notes.md 2.1、ADR-0002）。
-/// 來源可以是含日期資料夾的上層資料夾，或日期資料夾本身。輪替檔在 archives\ 下，封存在前、現行檔在後。
+/// 來源可以是日期資料夾本身，或往下三層內含有日期資料夾的資料夾（例如壓縮檔內多包一層資料夾）。
+/// 輪替檔在 archives\ 下，封存在前、現行檔在後。相對路徑一律從日期資料夾起算，與來源的形式無關。
 /// </summary>
 public static partial class LogFolderScanner
 {
@@ -20,13 +22,13 @@ public static partial class LogFolderScanner
     [GeneratedRegex(@"^(?<logger>.+)_(?<ts>\d{4}-\d{2}-\d{2} \d{2}_\d{2}_\d{2}\.\d{4})$")]
     private static partial Regex ArchiveFileName();
 
+    const int MaxSearchDepth = 3;
+
     public static IReadOnlyList<SourceFile> Scan(string sourceFolder)
     {
         var root = Path.GetFullPath(sourceFolder);
         if (!Directory.Exists(root)) throw new DirectoryNotFoundException($"找不到資料夾：{root}");
-        var dayDirs = DayFolderName().IsMatch(Path.GetFileName(root))
-            ? [root]
-            : Directory.GetDirectories(root).Where(d => DayFolderName().IsMatch(Path.GetFileName(d))).Order(StringComparer.Ordinal).ToArray();
+        var dayDirs = FindDayFolders(root, 0).OrderBy(Path.GetFileName, StringComparer.Ordinal).ToArray();
 
         var result = new List<SourceFile>();
         foreach (var dayDir in dayDirs)
@@ -58,15 +60,21 @@ public static partial class LogFolderScanner
 
                 foreach (var (logger, files) in streams.OrderBy(s => s.Key, StringComparer.Ordinal))
                 {
-                    int order = 0;
-                    foreach (var (_, path) in files.OrderBy(f => f.SortKey, StringComparer.Ordinal))
+                    foreach (var (key, path) in files.OrderBy(f => f.SortKey, StringComparer.Ordinal))
                     {
                         var rel = Path.GetRelativePath(Path.GetDirectoryName(dayDir)!, path).Replace('\\', '/');
-                        result.Add(new SourceFile(path, module, day, logger, rel, order++));
+                        result.Add(new SourceFile(path, module, day, logger, rel, key));
                     }
                 }
             }
         }
         return result;
+    }
+
+    static IEnumerable<string> FindDayFolders(string dir, int depth)
+    {
+        if (DayFolderName().IsMatch(Path.GetFileName(dir))) return [dir];
+        if (depth >= MaxSearchDepth) return [];
+        return Directory.GetDirectories(dir).SelectMany(d => FindDayFolders(d, depth + 1));
     }
 }

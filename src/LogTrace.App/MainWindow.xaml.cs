@@ -81,6 +81,11 @@ public partial class MainWindow : Window
         if (EventList.SelectedItem is { } selected) EventList.ScrollIntoView(selected);
     }
 
+    void CaseList_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (_vm?.OpenSelectedCaseCommand.CanExecute(null) == true) _vm.OpenSelectedCaseCommand.Execute(null);
+    }
+
     static GridViewColumn Text(string header, string path, double width) =>
         new() { Header = header, DisplayMemberBinding = new Binding(path), Width = width };
 }

@@ -9,3 +9,5 @@
 | `one-day-plc` | 單日、單一模組：同時間戳記、時間倒退、延續行 |
 | `two-modules` | 單日、兩個模組：跨模組的同時間戳記排序 |
 | `parsing-cases` | 解析狀況（ADR-0004）：PLC 為 Big5（含無法解碼的位元組、檔案開頭的前置內容、無效時間、輪替檔與跨檔案的時間倒退）；Server 為 UTF-8（stack trace 延續行、未知種類的 Logger、整個檔案無法解析的 `notes.txt`） |
+| `multi-day` | 兩天（`two-modules` 的 20300107 與 `parsing-cases` 的 20300108），外面多包一層 `logs\` 資料夾 |
+| `multi-day.zip`、`multi-day.7z` | 與 `multi-day` 資料夾內容相同的壓縮檔（以 7-Zip 建立），用來確認三種來源的匯入結果相同 |

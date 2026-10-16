@@ -3,9 +3,18 @@
   <!-- 案件引擎：無畫面的函式庫（規格 #14「模組」第 1 點） -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <!-- 7z.Libs 預設會複製所有 7-Zip 模組（含 unRAR 授權限制的 7z.dll）；改為只複製 x64 的 7za.dll 與授權檔 -->
+    <NG7zLibsCopyToOutput>false</NG7zLibsCopyToOutput>
+    <NG7zLibsResolvePublish>false</NG7zLibsResolvePublish>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="7z.Libs" Version="26.4.0" GeneratePathProperty="true" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.13" />
+    <PackageReference Include="Squid-Box.SevenZipSharp.Lite" Version="1.6.2.24" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="$(Pkg7z_Libs)\bin\x64\7za.dll" Link="7z\7za.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
+    <None Include="$(Pkg7z_Libs)\3rd-party-NOTICES.txt" Link="7z\7-Zip-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
   </ItemGroup>
 
 </Project>

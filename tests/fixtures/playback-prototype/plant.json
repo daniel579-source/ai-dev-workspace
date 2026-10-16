@@ -1,0 +1,228 @@
+{
+  "formatVersion": 1,
+  "plant": "範例廠（虛構）",
+  "revision": 1,
+  "layout": {
+    "units": "m",
+    "storageCodeRule": "RRCCCLL",
+    "elements": [
+      {
+        "id": "rk-1",
+        "type": "rack",
+        "name": "料架 R01",
+        "row": "01",
+        "colFrom": 1,
+        "colTo": 10,
+        "levels": 5,
+        "levelHeight": 2.5,
+        "x": 2,
+        "y": 1.2,
+        "w": 20,
+        "h": 1.5,
+        "rotation": 0
+      },
+      {
+        "id": "vh-1",
+        "type": "vehicle",
+        "name": "SRCA01",
+        "aliases": [
+          "SRCA01"
+        ],
+        "x": 3,
+        "y": 3.4,
+        "w": 3,
+        "h": 1.5,
+        "height": 2,
+        "rotation": 0
+      },
+      {
+        "id": "vh-2",
+        "type": "vehicle",
+        "name": "SSCA01",
+        "aliases": [
+          "SSCA01"
+        ],
+        "x": 8,
+        "y": 10.2,
+        "w": 3,
+        "h": 1.5,
+        "height": 2,
+        "rotation": 0
+      },
+      {
+        "id": "st-1",
+        "type": "station",
+        "name": "入庫口1",
+        "aliases": [
+          "A-01",
+          "1001"
+        ],
+        "x": 2,
+        "y": 6.6,
+        "w": 2.2,
+        "h": 2.2,
+        "height": 1.2,
+        "rotation": 0
+      },
+      {
+        "id": "st-2",
+        "type": "station",
+        "name": "輸送站2",
+        "aliases": [
+          "A-02",
+          "1002"
+        ],
+        "x": 6,
+        "y": 6.6,
+        "w": 2.2,
+        "h": 2.2,
+        "height": 1.2,
+        "rotation": 0
+      },
+      {
+        "id": "st-3",
+        "type": "station",
+        "name": "輸送站3",
+        "aliases": [
+          "A-03",
+          "1003"
+        ],
+        "x": 10,
+        "y": 6.6,
+        "w": 2.2,
+        "h": 2.2,
+        "height": 1.2,
+        "rotation": 0
+      },
+      {
+        "id": "st-4",
+        "type": "station",
+        "name": "出庫站4",
+        "aliases": [
+          "A-04",
+          "1004"
+        ],
+        "x": 14,
+        "y": 6.6,
+        "w": 2.2,
+        "h": 2.2,
+        "height": 1.2,
+        "rotation": 0
+      },
+      {
+        "id": "eq-1",
+        "type": "dock",
+        "name": "EQ901",
+        "aliases": [
+          "EQ901"
+        ],
+        "x": 19,
+        "y": 6.6,
+        "w": 2.2,
+        "h": 2.2,
+        "height": 1.5,
+        "rotation": 0
+      },
+      {
+        "id": "cv-1",
+        "type": "conveyor",
+        "from": "st-1",
+        "to": "st-2"
+      },
+      {
+        "id": "cv-2",
+        "type": "conveyor",
+        "from": "st-2",
+        "to": "st-3"
+      },
+      {
+        "id": "cv-3",
+        "type": "conveyor",
+        "from": "st-4",
+        "to": "eq-1"
+      }
+    ]
+  },
+  "presenceSignal": "在席",
+  "parseRules": [
+    {
+      "name": "命令編號（8 位數字，前導 000）",
+      "pattern": "(?<![0-9])(?<command>000[0-9]{5})(?![0-9])"
+    },
+    {
+      "name": "站點與設備（[A-nn] 或 [A-nn-設備]）",
+      "module": "PLC",
+      "pattern": "^\\[(?<station>[A-Z]-[0-9]{2})(?:-(?<vehicle>[A-Z]{4}[0-9]{2}))?\\]"
+    },
+    {
+      "name": "站點狀態變化（訊號 = ON／OFF）",
+      "module": "PLC",
+      "effect": "signal",
+      "pattern": "^\\[(?<station>[A-Z]-[0-9]{2})\\]\\[Station_Status_Change\\] => (?<signal>.+?) = (?<signalValue>ON|OFF)\\s*$"
+    },
+    {
+      "name": "設備（4 個英文字母＋2 位數字）",
+      "pattern": "(?<![A-Za-z0-9])(?<vehicle>[A-Z]{4}[0-9]{2})(?![0-9])"
+    },
+    {
+      "name": "站點模式（虛構）",
+      "module": "PLC",
+      "effect": "stationMode",
+      "pattern": "^\\[(?<station>[A-Z]-[0-9]{2})\\] 站點模式代號 -> (?<stationMode>[0-9]+)"
+    },
+    {
+      "name": "讀到棧板（虛構）",
+      "module": "PLC",
+      "effect": "palletRead",
+      "pattern": "^\\[(?<station>[A-Z]-[0-9]{2})\\] 讀到棧板條碼 (?<pallet>PLT-[A-Z]+-[0-9]+) 桶(?: (?<bin>D-[0-9]+-[0-9]+))+"
+    },
+    {
+      "name": "建立命令（虛構）",
+      "logger": "EXEDebug",
+      "effect": "commandCreated",
+      "pattern": "建立任務 (?<command>[0-9]{8}) 類型=(?<commandType>[A-Z]) 棧板=(?<pallet>\\S+) 來源=(?<source>\\S+) 目的地=(?<destination>\\S+)"
+    },
+    {
+      "name": "派送一段（虛構）",
+      "logger": "WCSDebug",
+      "effect": "segmentDispatched",
+      "pattern": "派送 (?<command>[0-9]{8}) 第(?<segment>[0-9]+)段 → (?<vehicle>[A-Z]{4}[0-9]{2}) 目的地 (?<destination>\\S+)"
+    },
+    {
+      "name": "一段抵達（虛構）",
+      "logger": "WCSDebug",
+      "effect": "segmentArrived",
+      "pattern": "(?<command>[0-9]{8}) 第(?<segment>[0-9]+)段 抵達 (?<destination>[^（\\s]+)（(?<vehicle>[A-Z]{4}[0-9]{2})）"
+    },
+    {
+      "name": "命令完成（虛構）",
+      "logger": "EXEDebug",
+      "effect": "commandCompleted",
+      "pattern": "完成回報 (?<command>[0-9]{8})"
+    },
+    {
+      "name": "連線與模式（虛構）",
+      "logger": "WCSDebug",
+      "effect": "connection",
+      "pattern": "(?<vehicle>[A-Z]{4}[0-9]{2}) 連線狀態 (?<online>ON-LINE|OFF-LINE)，(?<mode>自動|手動)模式"
+    },
+    {
+      "name": "切換模式（虛構）",
+      "logger": "WCSDebug",
+      "effect": "connection",
+      "pattern": "(?<vehicle>[A-Z]{4}[0-9]{2}) 切換為(?<mode>自動|手動)模式"
+    },
+    {
+      "name": "警報發生（虛構）",
+      "logger": "WCSDebug",
+      "effect": "alarmRaised",
+      "pattern": "警報發生 (?:(?<vehicle>[A-Z]{4}[0-9]{2})|(?<station>[A-Z]-[0-9]{2})) (?<alarmCode>E[0-9]+)"
+    },
+    {
+      "name": "警報復歸（虛構）",
+      "logger": "WCSDebug",
+      "effect": "alarmCleared",
+      "pattern": "警報復歸 (?:(?<vehicle>[A-Z]{4}[0-9]{2})|(?<station>[A-Z]-[0-9]{2})) (?<alarmCode>E[0-9]+)"
+    }
+  ]
+}

@@ -171,6 +171,7 @@ public sealed class ParsedFieldsViewModelTests : IDisposable
         editor.NewParseRuleCommand.Execute(null);
         editor.ParseRules[^1].Pattern = "(?<dock>EQ[0-9]{3})";
         editor.ParseRules[^1].Logger = "EXEDebug";
+        Assert.Equal("signal", editor.ParseRules[2].Effect); // 初始規則的效果也要保留
         editor.SaveCommand.Execute(null);
         var saved = PlantConfigFile.Load(editor.FilePath!).ParseRules[^1];
         Assert.Equal(new ParseRule($"規則 {PlantConfig.DefaultParseRules.Count + 1}", null, "EXEDebug", "(?<dock>EQ[0-9]{3})"), saved);

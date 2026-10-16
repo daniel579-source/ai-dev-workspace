@@ -50,6 +50,9 @@ public sealed class SqliteEventStore : IEventStore
                 seq INTEGER NOT NULL, kind TEXT NOT NULL, value TEXT NOT NULL COLLATE NOCASE);
             CREATE INDEX IF NOT EXISTS event_fields_kind_value ON event_fields(kind, value);
             CREATE INDEX IF NOT EXISTS event_fields_seq ON event_fields(seq);
+            CREATE TABLE IF NOT EXISTS event_effects(
+                seq INTEGER NOT NULL, effect TEXT NOT NULL, params TEXT NOT NULL);
+            CREATE INDEX IF NOT EXISTS event_effects_seq ON event_effects(seq);
             CREATE TABLE IF NOT EXISTS audit(
                 audit_id INTEGER PRIMARY KEY, time TEXT NOT NULL, user TEXT NOT NULL,
                 action TEXT NOT NULL, target TEXT NOT NULL, detail TEXT NOT NULL);
@@ -67,6 +70,7 @@ public sealed class SqliteEventStore : IEventStore
         SetMeta("known_loggers", JsonSerializer.Serialize(info.Plant.KnownLoggers));
         SetMeta("encodings", JsonSerializer.Serialize(info.Plant.Encodings));
         SetMeta("parse_rules", JsonSerializer.Serialize(info.Plant.ParseRules));
+        SetMeta("presence_signal", info.Plant.PresenceSignal);
         SetMeta("created_at", Iso(info.CreatedAt));
         tx.Commit();
     }
@@ -85,6 +89,7 @@ public sealed class SqliteEventStore : IEventStore
             Encodings = TryGetMeta("encodings") is { } enc ? JsonSerializer.Deserialize<EncodingRule[]>(enc) ?? [] : [],
             // parse_rules 為 #23 加入；之前建立的案件使用初始規則
             ParseRules = TryGetMeta("parse_rules") is { } pr ? JsonSerializer.Deserialize<ParseRule[]>(pr) ?? [] : PlantConfig.DefaultParseRules,
+            PresenceSignal = TryGetMeta("presence_signal") ?? PlantConfig.Default.PresenceSignal,
         };
         return new(GetMeta("name"), plant, ParseIso(GetMeta("created_at")));
     }
@@ -97,7 +102,7 @@ public sealed class SqliteEventStore : IEventStore
     }
 
     public void SaveImport(ImportRecord import, IReadOnlyList<StoredFile> files, IReadOnlyList<LogEvent> events,
-        IReadOnlyList<EventField> fields, IReadOnlyList<AuditEntry> audit)
+        IReadOnlyList<EventField> fields, IReadOnlyList<EventEffect> effects, IReadOnlyList<AuditEntry> audit)
     {
         using var tx = _conn.BeginTransaction();
         using (var cmd = _conn.CreateCommand())
@@ -111,7 +116,7 @@ public sealed class SqliteEventStore : IEventStore
             cmd.Parameters.AddWithValue("$c", (object?)import.ArchiveCopy ?? DBNull.Value);
             cmd.ExecuteNonQuery();
         }
-        Exec("DELETE FROM events; DELETE FROM files; DELETE FROM event_fields;");
+        Exec("DELETE FROM events; DELETE FROM files; DELETE FROM event_fields; DELETE FROM event_effects;");
 
         var activeIds = new Dictionary<string, long>(StringComparer.Ordinal);
         using (var cmd = _conn.CreateCommand())
@@ -168,15 +173,17 @@ public sealed class SqliteEventStore : IEventStore
             }
         }
         InsertFields(fields);
+        InsertEffects(effects);
         foreach (var a in audit) InsertAudit(a);
         tx.Commit();
     }
 
-    public void ReplaceFields(IReadOnlyList<EventField> fields, CaseInfo info, AuditEntry audit)
+    public void ReplaceFields(IReadOnlyList<EventField> fields, IReadOnlyList<EventEffect> effects, CaseInfo info, AuditEntry audit)
     {
         using var tx = _conn.BeginTransaction();
-        Exec("DELETE FROM event_fields;");
+        Exec("DELETE FROM event_fields; DELETE FROM event_effects;");
         InsertFields(fields);
+        InsertEffects(effects);
         SetMeta("parse_rules", JsonSerializer.Serialize(info.Plant.ParseRules));
         InsertAudit(audit);
         tx.Commit();
@@ -195,6 +202,36 @@ public sealed class SqliteEventStore : IEventStore
             (s.Value, k.Value, v.Value) = (f.Sequence, f.Kind, f.Value);
             cmd.ExecuteNonQuery();
         }
+    }
+
+    void InsertEffects(IReadOnlyList<EventEffect> effects)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "INSERT INTO event_effects VALUES($s,$e,$p)";
+        var s = cmd.Parameters.Add(new SqliteParameter { ParameterName = "$s" });
+        var e = cmd.Parameters.Add(new SqliteParameter { ParameterName = "$e" });
+        var p = cmd.Parameters.Add(new SqliteParameter { ParameterName = "$p" });
+        cmd.Prepare();
+        foreach (var x in effects)
+        {
+            (s.Value, e.Value, p.Value) = (x.Sequence, x.Effect, JsonSerializer.Serialize(x.Params));
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    public IReadOnlyList<EventEffect> GetEffects()
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT seq, effect, params FROM event_effects ORDER BY seq, rowid";
+        using var r = cmd.ExecuteReader();
+        var list = new List<EventEffect>();
+        while (r.Read())
+        {
+            var p = JsonSerializer.Deserialize<Dictionary<string, string[]>>(r.GetString(2)) ?? [];
+            list.Add(new EventEffect(r.GetInt64(0), r.GetString(1),
+                p.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value, StringComparer.Ordinal)));
+        }
+        return list;
     }
 
     public IReadOnlyList<EventField> GetFields(long sequence)

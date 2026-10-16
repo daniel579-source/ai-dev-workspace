@@ -1,0 +1,46 @@
+2030-01-11 10:00:01.3000 | DEBUG | PLCLOG | [A-09] 心跳（A-09 尚未對應到 Layout）  
+
+2030-01-11 10:00:02.0000 | DEBUG | PLCLOG | [A-01] 站點模式代號 -> 1  
+
+2030-01-11 10:00:05.0000 | DEBUG | PLCLOG | [A-01][Station_Status_Change] => 在席 = ON  
+
+2030-01-11 10:00:06.0000 | DEBUG | PLCLOG | [A-01] 讀到棧板條碼 PLT-EX-0001 桶 D-0001-1 D-0001-2 D-0001-3 D-0001-4  
+
+2030-01-11 10:00:10.0000 | DEBUG | PLCLOG | [A-01][Station_Status_Change] => 取物可 = ON  
+
+2030-01-11 10:00:11.0000 | DEBUG | PLCLOG | [A-01][Station_Status_Change] => 在席 = OFF  
+
+2030-01-11 10:00:30.3000 | DEBUG | PLCLOG | [A-09] 心跳（A-09 尚未對應到 Layout）  
+
+2030-01-11 10:00:41.0000 | DEBUG | PLCLOG | [A-03][Station_Status_Change] => 在席 = ON  
+
+2030-01-11 10:00:46.0000 | DEBUG | PLCLOG | [A-03][Station_Status_Change] => 在席 = OFF  
+
+2030-01-11 10:00:59.3000 | DEBUG | PLCLOG | [A-09] 心跳（A-09 尚未對應到 Layout）  
+
+2030-01-11 10:01:28.3000 | DEBUG | PLCLOG | [A-09] 心跳（A-09 尚未對應到 Layout）  
+
+2030-01-11 10:01:57.3000 | DEBUG | PLCLOG | [A-09] 心跳（A-09 尚未對應到 Layout）  
+
+2030-01-11 10:02:05.0000 | DEBUG | PLCLOG | [A-04][Station_Status_Change] => 在席 = OFF  
+
+2030-01-11 10:02:26.3000 | DEBUG | PLCLOG | [A-09] 心跳（A-09 尚未對應到 Layout）  
+
+2030-01-11 10:02:55.3000 | DEBUG | PLCLOG | [A-09] 心跳（A-09 尚未對應到 Layout）  
+
+2030-01-11 10:03:24.3000 | DEBUG | PLCLOG | [A-09] 心跳（A-09 尚未對應到 Layout）  
+
+2030-01-11 10:03:53.3000 | DEBUG | PLCLOG | [A-09] 心跳（A-09 尚未對應到 Layout）  
+
+2030-01-11 10:04:22.3000 | DEBUG | PLCLOG | [A-09] 心跳（A-09 尚未對應到 Layout）  
+
+2030-01-11 10:04:51.3000 | DEBUG | PLCLOG | [A-09] 心跳（A-09 尚未對應到 Layout）  
+
+2030-01-11 10:05:00.0000 | DEBUG | PLCLOG | [A-01][Station_Status_Change] => 在席 = ON  
+
+2030-01-11 10:05:02.0000 | DEBUG | PLCLOG | [A-01] 讀到棧板條碼 PLT-EX-0003 桶 D-0003-1 D-0003-2 D-0003-3  
+
+2030-01-11 10:05:06.0000 | DEBUG | PLCLOG | [A-01][Station_Status_Change] => 在席 = OFF  
+
+2030-01-11 10:05:20.3000 | DEBUG | PLCLOG | [A-09] 心跳（A-09 尚未對應到 Layout）  
+

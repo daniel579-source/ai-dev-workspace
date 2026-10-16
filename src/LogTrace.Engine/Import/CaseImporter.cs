@@ -242,8 +242,8 @@ internal static class CaseImporter
         audit.Insert(0, AuditEntry.Now("匯入", record.SourcePath,
             $"{record.SourceKind}；{prepared.Items.Count} 個檔案：新增 {added}、相同略過 {prepared.Items.Count(i => i.Kind == ImportItemKind.Identical)}、" +
             $"自動改用較完整的新檔 {extended}、衝突改用新檔 {usedNew}、衝突保留舊檔 {keptOld}；事件 {events.Count} 筆"));
-        var fields = new FieldExtractor(plant.ParseRules).ExtractAll(events);
-        store.SaveImport(record, files, events, fields, audit);
+        var (fields, effects) = new FieldExtractor(plant.ParseRules).ExtractAllWithEffects(events);
+        store.SaveImport(record, files, events, fields, effects, audit);
         prepared.Applied = true;
 
         return new ImportResult(prepared.Items.Count, added, prepared.Items.Count(i => i.Kind == ImportItemKind.Identical), extended,

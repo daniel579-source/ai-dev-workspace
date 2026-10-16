@@ -51,10 +51,13 @@ public interface IEventStore : IDisposable
     /// 事件以 RelativePath 對應到該路徑目前參與查詢的版本。
     /// </summary>
     void SaveImport(ImportRecord import, IReadOnlyList<StoredFile> files, IReadOnlyList<LogEvent> events,
-        IReadOnlyList<Parsing.EventField> fields, IReadOnlyList<AuditEntry> audit);
+        IReadOnlyList<Parsing.EventField> fields, IReadOnlyList<Parsing.EventEffect> effects, IReadOnlyList<AuditEntry> audit);
 
-    /// <summary>以新的解析規則重新抽出的欄位取代所有解析欄位，並更新案件保存的規則（單一交易）。</summary>
-    void ReplaceFields(IReadOnlyList<Parsing.EventField> fields, CaseInfo info, AuditEntry audit);
+    /// <summary>以新的解析規則重新抽出的欄位與效果取代原本的，並更新案件保存的規則（單一交易）。</summary>
+    void ReplaceFields(IReadOnlyList<Parsing.EventField> fields, IReadOnlyList<Parsing.EventEffect> effects, CaseInfo info, AuditEntry audit);
+
+    /// <summary>所有效果，依事件序號（世界模型的輸入，ADR-0005）。</summary>
+    IReadOnlyList<Parsing.EventEffect> GetEffects();
 
     /// <summary>一筆事件的解析欄位。</summary>
     IReadOnlyList<Parsing.EventField> GetFields(long sequence);

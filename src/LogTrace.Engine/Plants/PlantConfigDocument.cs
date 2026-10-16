@@ -106,6 +106,9 @@ public sealed class PlantConfigDocument
     /// <summary>解析欄位的抽取規則（ADR-0005 第 8 點）；新的設定從初始規則開始。</summary>
     public List<ParseRule> ParseRules { get; set; } = [.. PlantConfig.DefaultParseRules];
 
+    /// <summary>代表「在席」的訊號名稱（在席指示燈）。</summary>
+    public string PresenceSignal { get; set; } = PlantConfig.Default.PresenceSignal;
+
     public LayoutSection Layout { get; set; } = new();
 
     [JsonExtensionData]
@@ -115,6 +118,6 @@ public sealed class PlantConfigDocument
     public PlantConfig ToPlantConfig() => new()
     {
         Name = Plant, Revision = Revision, ModuleOrder = [.. ModuleOrder], KnownLoggers = [.. KnownLoggers], Encodings = [.. Encodings],
-        ParseRules = [.. ParseRules],
+        ParseRules = [.. ParseRules], PresenceSignal = PresenceSignal,
     };
 }

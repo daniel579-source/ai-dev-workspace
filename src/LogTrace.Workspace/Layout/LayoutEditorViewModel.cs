@@ -162,6 +162,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         foreach (var r in doc.Encodings) AddRule(EncodingRuleViewModel.From(r));
         ParseRules.Clear();
         foreach (var r in doc.ParseRules) AddParseRule(ParseRuleViewModel.From(r));
+        PresenceSignal = doc.PresenceSignal;
         Revision = doc.Revision;
         RevisionInfo = doc.Revision == 0 ? "尚未存檔"
             : doc.RevisedAt is { } at ? $"修訂 {doc.Revision}（{doc.RevisedBy}，{at:yyyy-MM-dd HH:mm}）"
@@ -232,6 +233,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         _document.KnownLoggers = Lines(KnownLoggersText);
         _document.Encodings = EncodingRules.Select(r => r.ToModel()).ToList();
         _document.ParseRules = ParseRules.Select(r => r.ToModel()).ToList();
+        _document.PresenceSignal = PresenceSignal.Trim();
         try
         {
             PlantConfigFile.Save(_document, path);
@@ -529,6 +531,14 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     // ---- 解析規則（ADR-0005 第 8 點） ----
 
     public ObservableCollection<ParseRuleViewModel> ParseRules { get; } = [];
+
+    public IReadOnlyList<string> EffectChoices => ParseRuleViewModel.EffectChoices;
+
+    /// <summary>代表「在席」的訊號名稱：效果為 signal 的規則抽到這個訊號時，決定站點的在席燈（ADR-0005 第 3 點）。</summary>
+    [ObservableProperty]
+    public partial string PresenceSignal { get; set; } = "";
+
+    partial void OnPresenceSignalChanged(string value) => IsDirty = true;
 
     void AddParseRule(ParseRuleViewModel rule)
     {

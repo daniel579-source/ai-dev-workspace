@@ -1,7 +1,7 @@
 <Project>
   <!-- 各測試專案共用：把虛構 LOG 複製到輸出資料夾的 fixtures\ 下 -->
   <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)fixtures\**\*.txt;$(MSBuildThisFileDirectory)fixtures\*.zip;$(MSBuildThisFileDirectory)fixtures\*.7z"
+    <None Include="$(MSBuildThisFileDirectory)fixtures\**\*.txt;$(MSBuildThisFileDirectory)fixtures\**\*.json;$(MSBuildThisFileDirectory)fixtures\*.zip;$(MSBuildThisFileDirectory)fixtures\*.7z"
           LinkBase="fixtures" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="$(MSBuildThisFileDirectory)TestSupport\*.cs" LinkBase="TestSupport" />
   </ItemGroup>

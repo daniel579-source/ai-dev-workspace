@@ -46,6 +46,16 @@ public interface IEventStore : IDisposable
 
     long NextImportId();
 
+    /// <summary>保存建立案件時所用廠別設定檔的完整快照（含 Layout）與來源路徑（ADR-0006 第 8 點）。</summary>
+    void SavePlantSnapshot(string json, string? sourcePath);
+
+    /// <summary>廠別設定檔的快照與來源路徑；沒有快照（內建預設或之前建立的案件）時為 null。</summary>
+    (string? Json, string? SourcePath) LoadPlantSnapshot();
+
+    /// <summary>以新的廠別設定重建的內容取代案件的事件等，並更新案件資訊、快照與稽核紀錄（單一交易）。</summary>
+    void Rebuild(IReadOnlyList<StoredFile> files, IReadOnlyList<LogEvent> events, IReadOnlyList<Parsing.EventField> fields,
+        IReadOnlyList<Parsing.EventEffect> effects, CaseInfo info, string snapshotJson, string? sourcePath, AuditEntry audit);
+
     /// <summary>
     /// 以單一交易寫入一次匯入：匯入紀錄、案件中所有的檔案版本（取代原本的清單）、重新排序後的全部事件、稽核紀錄。
     /// 事件以 RelativePath 對應到該路徑目前參與查詢的版本。

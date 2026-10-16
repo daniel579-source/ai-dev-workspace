@@ -128,6 +128,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(CloseCaseCommand))]
     [NotifyCanExecuteChangedFor(nameof(ChangeCasesRootCommand))]
     [NotifyCanExecuteChangedFor(nameof(SearchCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyNewerPlantCommand), nameof(DismissNewerPlantCommand))]
     public partial bool IsBusy { get; private set; }
 
     // ---- 事件清單與原始 LOG ----
@@ -187,9 +188,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Playback.SetMoment(value?.Sequence ?? 0);
     }
 
-    /// <summary>從廠別設定存放位置找出案件所屬廠別的設定檔（Layout 快照在 #27 加入）；找不到時為 null。</summary>
+    /// <summary>
+    /// 案件所用的廠別設定（含 Layout）：案件保存的快照（ADR-0006 第 8 點）。
+    /// 快照功能加入前建立的案件沒有快照，改從存放位置依廠別名稱找同一修訂的設定檔；找不到時為 null。
+    /// </summary>
     PlantConfigDocument? FindPlantDocument(Case c)
     {
+        if (c.PlantSnapshot is { } snapshot) return snapshot;
         if (c.Info.Plant.Revision == 0) return null;
         foreach (var path in new PlantConfigLibrary(_plantsRoot).List())
         {
@@ -308,6 +313,62 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         foreach (var path in new PlantConfigLibrary(_plantsRoot).List())
             Plants.Add(new PlantChoiceViewModel(Path.GetFileNameWithoutExtension(path), path));
         SelectedPlant = Plants.FirstOrDefault(p => string.Equals(p.Path, selected, StringComparison.OrdinalIgnoreCase)) ?? Plants[0];
+        CheckNewerPlant();
+    }
+
+    // ---- 廠別設定的新版（ADR-0006 第 8 點） ----
+
+    (PlantConfigDocument Document, string Path)? _newerPlant;
+    int _dismissedRevision;
+
+    /// <summary>目前案件的廠別設定有新版時的提示；沒有新版或選擇不套用時為 null。</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ApplyNewerPlantCommand), nameof(DismissNewerPlantCommand))]
+    public partial string? NewerPlantNotice { get; private set; }
+
+    /// <summary>檢查目前案件的廠別設定是否有新版（開啟案件、回到主畫面時）。</summary>
+    void CheckNewerPlant()
+    {
+        _newerPlant = _case?.FindNewerPlant(new PlantConfigLibrary(_plantsRoot));
+        NewerPlantNotice = _newerPlant is { } n && n.Document.Revision > _dismissedRevision
+            ? $"廠別「{n.Document.Plant}」的設定有新版（修訂 {_case!.Info.Plant.Revision} → {n.Document.Revision}）。要套用到這個案件嗎？套用後會依新的設定重新解析事件。"
+            : null;
+    }
+
+    bool CanAnswerNewerPlant() => NewerPlantNotice is not null && !IsBusy;
+
+    /// <summary>套用新版：以新的設定重建事件、解析欄位與世界模型（稽核紀錄記下修訂號）。</summary>
+    [RelayCommand(CanExecute = nameof(CanAnswerNewerPlant))]
+    async Task ApplyNewerPlantAsync()
+    {
+        if (_newerPlant is not { } newer || _case is not { } c) return;
+        IsBusy = true;
+        Status = "套用新版的廠別設定中…";
+        try
+        {
+            await Task.Run(() => c.ApplyPlant(newer.Document, newer.Path));
+            _masker = new TextMasker(c.Info.Plant.MaskPatterns);
+            CurrentCasePlant = $"{c.Info.Plant.Name}（修訂 {c.Info.Plant.Revision}）";
+            await LoadEventsAsync(c);
+            Status = $"已套用廠別設定修訂 {c.Info.Plant.Revision}：{Events.Count:N0} 筆事件。";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidDataException)
+        {
+            Status = "套用失敗：" + ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+            CheckNewerPlant();
+        }
+    }
+
+    /// <summary>不套用：維持案件的快照；同一個修訂不再提示（有更新的修訂時再提示）。</summary>
+    [RelayCommand(CanExecute = nameof(CanAnswerNewerPlant))]
+    void DismissNewerPlant()
+    {
+        _dismissedRevision = _newerPlant?.Document.Revision ?? 0;
+        NewerPlantNotice = null;
     }
 
     bool CanCreateCase() => !IsBusy && !string.IsNullOrWhiteSpace(NewCaseName) && SelectedPlant is not null;
@@ -318,9 +379,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
-            var plant = SelectedPlant!.Path is { } path ? PlantConfigFile.Load(path).ToPlantConfig() : PlantConfig.Default;
+            var path = SelectedPlant!.Path;
+            var doc = path is null ? null : PlantConfigFile.Load(path);
+            var plant = doc?.ToPlantConfig() ?? PlantConfig.Default;
             CloseCurrent();
-            var c = _library.Create(NewCaseName, plant);
+            var c = _library.Create(NewCaseName, plant, doc, path); // 保存廠別設定的快照（ADR-0006 第 8 點）
             SetCurrent(c);
             Status = $"已建立案件「{c.Info.Name}」（廠別：{plant.Name}）。請選擇要匯入的 LOG（資料夾、7z 或 zip）。";
         }
@@ -404,6 +467,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         CurrentCasePlant = c.Info.Plant.Revision == 0 ? c.Info.Plant.Name : $"{c.Info.Plant.Name}（修訂 {c.Info.Plant.Revision}）";
         CurrentCaseFolder = c.Folder;
         SaveSettings(_settings.WithRecent(c.Folder));
+        _dismissedRevision = 0;
+        CheckNewerPlant();
         RefreshCases();
         SelectedCase = Cases.FirstOrDefault(i => string.Equals(i.Folder, c.Folder, StringComparison.OrdinalIgnoreCase));
     }
@@ -422,6 +487,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         CurrentCaseName = null;
         CurrentCasePlant = null;
         CurrentCaseFolder = null;
+        _newerPlant = null;
+        NewerPlantNotice = null;
     }
 
     // ---- 匯入的命令 ----

@@ -66,6 +66,12 @@ public sealed class SqliteEventStore : IEventStore
     public void SaveInfo(CaseInfo info)
     {
         using var tx = _conn.BeginTransaction();
+        WriteInfo(info);
+        tx.Commit();
+    }
+
+    void WriteInfo(CaseInfo info)
+    {
         SetMeta("schema_version", SchemaVersion.ToString(CultureInfo.InvariantCulture));
         SetMeta("name", info.Name);
         SetMeta("plant", info.Plant.Name);
@@ -77,6 +83,28 @@ public sealed class SqliteEventStore : IEventStore
         SetMeta("presence_signal", info.Plant.PresenceSignal);
         SetMeta("mask_patterns", JsonSerializer.Serialize(info.Plant.MaskPatterns));
         SetMeta("created_at", Iso(info.CreatedAt));
+    }
+
+    public void SavePlantSnapshot(string json, string? sourcePath)
+    {
+        using var tx = _conn.BeginTransaction();
+        SetMeta("plant_snapshot", json);
+        SetMeta("plant_source", sourcePath ?? "");
+        tx.Commit();
+    }
+
+    public (string? Json, string? SourcePath) LoadPlantSnapshot() =>
+        (TryGetMeta("plant_snapshot"), TryGetMeta("plant_source") is { Length: > 0 } p ? p : null);
+
+    public void Rebuild(IReadOnlyList<StoredFile> files, IReadOnlyList<LogEvent> events, IReadOnlyList<EventField> fields,
+        IReadOnlyList<EventEffect> effects, CaseInfo info, string snapshotJson, string? sourcePath, AuditEntry audit)
+    {
+        using var tx = _conn.BeginTransaction();
+        WriteContent(files, events, fields, effects);
+        WriteInfo(info);
+        SetMeta("plant_snapshot", snapshotJson);
+        SetMeta("plant_source", sourcePath ?? "");
+        InsertAudit(audit);
         tx.Commit();
     }
 
@@ -122,6 +150,14 @@ public sealed class SqliteEventStore : IEventStore
             cmd.Parameters.AddWithValue("$c", (object?)import.ArchiveCopy ?? DBNull.Value);
             cmd.ExecuteNonQuery();
         }
+        WriteContent(files, events, fields, effects);
+        foreach (var a in audit) InsertAudit(a);
+        tx.Commit();
+    }
+
+    /// <summary>以新的內容取代案件中所有的檔案版本、事件、解析欄位、效果與搜尋用文字（在呼叫端的交易中）。</summary>
+    void WriteContent(IReadOnlyList<StoredFile> files, IReadOnlyList<LogEvent> events, IReadOnlyList<EventField> fields, IReadOnlyList<EventEffect> effects)
+    {
         Exec("DELETE FROM events; DELETE FROM files; DELETE FROM event_fields; DELETE FROM event_effects; DELETE FROM event_search;");
 
         var activeIds = new Dictionary<string, long>(StringComparer.Ordinal);
@@ -181,8 +217,6 @@ public sealed class SqliteEventStore : IEventStore
         InsertFields(fields);
         InsertEffects(effects);
         InsertSearchText(events.Select(e => (e.Sequence, e.Message)));
-        foreach (var a in audit) InsertAudit(a);
-        tx.Commit();
     }
 
     /// <summary>正規化的搜尋用文字（ADR-0011 第 2 點：匯入時產生）。</summary>

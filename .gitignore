@@ -1,3 +1,9 @@
 ai-dev-workspace.zip
 log/
 .claude/
+bin/
+obj/
+publish/
+.vs/
+*.user
+TestResults/

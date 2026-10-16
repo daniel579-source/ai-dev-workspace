@@ -1,0 +1,87 @@
+<Window x:Class="LogTrace.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ad="https://github.com/Dirkster99/AvalonDock"
+        Title="LogTrace" Width="1280" Height="800"
+        AutomationProperties.AutomationId="MainWindow">
+    <DockPanel>
+        <!-- 案件與匯入 -->
+        <Border DockPanel.Dock="Top" Padding="8" BorderBrush="#DDD" BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="200" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="24" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="案件名稱" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <TextBox Grid.Column="1" Text="{Binding NewCaseName, UpdateSourceTrigger=PropertyChanged}"
+                         AutomationProperties.AutomationId="NewCaseName" VerticalContentAlignment="Center" />
+                <Button Grid.Column="2" Content="建立案件" Command="{Binding CreateCaseCommand}" Padding="10,2" Margin="6,0,0,0"
+                        AutomationProperties.AutomationId="CreateCase" />
+                <TextBlock Grid.Column="4" Text="LOG 資料夾" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <TextBox Grid.Column="5" Text="{Binding ImportFolder, UpdateSourceTrigger=PropertyChanged}"
+                         AutomationProperties.AutomationId="ImportFolder" VerticalContentAlignment="Center" />
+                <Button Grid.Column="6" Content="瀏覽…" Command="{Binding BrowseImportFolderCommand}" Padding="10,2" Margin="6,0,0,0"
+                        AutomationProperties.AutomationId="BrowseImportFolder" />
+                <Button Grid.Column="7" Content="匯入" Command="{Binding ImportCommand}" Padding="10,2" Margin="6,0,0,0"
+                        AutomationProperties.AutomationId="Import" />
+            </Grid>
+        </Border>
+
+        <StatusBar DockPanel.Dock="Bottom">
+            <StatusBarItem>
+                <TextBlock Text="{Binding CurrentCaseName, StringFormat=案件：{0}, TargetNullValue=尚未開啟案件}" />
+            </StatusBarItem>
+            <Separator />
+            <StatusBarItem>
+                <TextBlock Text="{Binding Status}" AutomationProperties.AutomationId="Status" />
+            </StatusBarItem>
+        </StatusBar>
+
+        <ad:DockingManager>
+            <ad:LayoutRoot>
+                <ad:LayoutPanel Orientation="Vertical">
+                    <ad:LayoutAnchorablePane>
+                        <ad:LayoutAnchorable ContentId="events" Title="事件清單" CanClose="False">
+                            <!-- ADR-0007 技術驗證：ListView＋GridView、固定列高 -->
+                            <ListView ItemsSource="{Binding Events}" SelectedItem="{Binding SelectedEvent}"
+                                      AutomationProperties.AutomationId="EventList"
+                                      VirtualizingPanel.IsVirtualizing="True"
+                                      VirtualizingPanel.VirtualizationMode="Recycling"
+                                      VirtualizingPanel.ScrollUnit="Item">
+                                <ListView.ItemContainerStyle>
+                                    <Style TargetType="ListViewItem">
+                                        <Setter Property="Height" Value="22" />
+                                    </Style>
+                                </ListView.ItemContainerStyle>
+                                <ListView.View>
+                                    <GridView>
+                                        <GridViewColumn Header="序號" DisplayMemberBinding="{Binding Sequence}" Width="70" />
+                                        <GridViewColumn Header="時間" DisplayMemberBinding="{Binding Time}" Width="180" />
+                                        <GridViewColumn Header="模組" DisplayMemberBinding="{Binding Module}" Width="60" />
+                                        <GridViewColumn Header="Logger" DisplayMemberBinding="{Binding Logger}" Width="120" />
+                                        <GridViewColumn Header="等級" DisplayMemberBinding="{Binding Level}" Width="60" />
+                                        <GridViewColumn Header="訊息" DisplayMemberBinding="{Binding Message}" Width="520" />
+                                        <GridViewColumn Header="來源" DisplayMemberBinding="{Binding Source}" Width="320" />
+                                    </GridView>
+                                </ListView.View>
+                            </ListView>
+                        </ad:LayoutAnchorable>
+                    </ad:LayoutAnchorablePane>
+                    <ad:LayoutAnchorablePane DockHeight="180">
+                        <ad:LayoutAnchorable ContentId="detail" Title="詳細資訊" CanClose="False">
+                            <TextBox Text="{Binding SelectedDetail, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Auto" FontFamily="Consolas, Microsoft JhengHei UI" BorderThickness="0"
+                                     AutomationProperties.AutomationId="EventDetail" />
+                        </ad:LayoutAnchorable>
+                    </ad:LayoutAnchorablePane>
+                </ad:LayoutPanel>
+            </ad:LayoutRoot>
+        </ad:DockingManager>
+    </DockPanel>
+</Window>

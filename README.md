@@ -14,7 +14,28 @@
 
 ## 目前開發階段
 
-> **需求分析與架構評估階段**：目前只有文件，尚未撰寫任何應用程式程式碼，也尚未確定任何技術選型。
+> **技術驗證與第一階段實作**：規格見 issue #14，實作 ticket 為 #15～#29。技術驗證（#15）的程式與結果在 `validation/`。
+
+## 建置與執行
+
+需要 .NET 10 SDK。
+
+```powershell
+dotnet build LogTrace.slnx
+dotnet test LogTrace.slnx                                   # 含 FlaUI 冒煙測試，會開啟視窗
+dotnet test LogTrace.slnx --filter "Category!=UI"           # 只跑不開視窗的測試
+dotnet run --project src/LogTrace.App                        # 案件預設放在 %LOCALAPPDATA%\LogTrace\Cases
+
+# 發佈：self-contained 單一資料夾（ADR-0007），目標電腦不需要安裝 .NET
+dotnet publish src/LogTrace.App -c Release -r win-x64 --self-contained -o publish/LogTrace
+```
+
+| 專案 | 內容 |
+|---|---|
+| `src/LogTrace.Engine` | 案件引擎：無畫面的函式庫（匯入、解析、排序與事件序號、儲存） |
+| `src/LogTrace.Workspace` | 回放工作區 ViewModel：不依賴 WPF 控制項 |
+| `src/LogTrace.App` | WPF 畫面（AvalonDock） |
+| `tests/` | 引擎測試、ViewModel 測試、FlaUI 冒煙測試；測試用 LOG 在 `tests/fixtures`（虛構） |
 
 ## 文件導覽
 
@@ -35,19 +56,13 @@
 
 已知的資料特性：LOG 來源是設備或電腦產生的檔案，預估每天約 100 MB 至 10 GB。
 
-## 尚未決定的技術選型
+## 技術選型
 
-已定案的決策見 `docs/architecture.md` 第 10 章的決策索引：
+已定案的決策見 `docs/architecture.md` 第 10 章的決策索引（ADR-0001～ADR-0011），例如：
 
 - **部署形態**：單機桌面程式（免安裝、離線、Windows 10／11 64 位元），見 ADR-0001。
-- **LOG 匯入與保存**：以案件為單位在本機手動匯入，原始檔複製進案件；支援多廠別，見 ADR-0002。
-
-以下項目**尚未決定**，評估內容見 `docs/architecture.md`：
-
-- 用戶端技術（桌面程式的語言與 UI 框架）
-- 資料儲存與索引方式（資料庫、全文搜尋引擎、檔案式索引等）
-- 認證與權限機制
-- 保存政策與備份方式
+- **用戶端**：C# + .NET 10 + WPF + AvalonDock，self-contained 單一資料夾發佈，見 ADR-0007（待技術驗證）。
+- **儲存與索引**：SQLite 為主的混合方案，見 ADR-0011（待實測）。
 
 ## 如何參與需求確認
 

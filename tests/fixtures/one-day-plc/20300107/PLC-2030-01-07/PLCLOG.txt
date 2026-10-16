@@ -1,0 +1,12 @@
+2030-01-07 08:00:00.0100 | DEBUG | PLCLOG | [A-01][Station_Status_Change] => 在席 = ON  
+
+2030-01-07 08:00:00.0100 | DEBUG | PLCLOG | [A-01-CRNA01][Station_Status_Change] => 命令編號 = 00010001  
+
+2030-01-07 08:00:00.0050 | DEBUG | PLCLOG | [A-02][Station_Status_Change] => 在席 = OFF  
+
+2030-01-07 08:00:01.2000 | INFO | PLCLOG | [A-01][Unload] => 卸貨完成 CMD_NO=00010001  
+詳細：虛構延續行一
+詳細：虛構延續行二
+
+2030-01-07 08:00:02.0000 | DEBUG | PLCLOG | [A-03][Station_Status_Change] => 在席 = ON  
+

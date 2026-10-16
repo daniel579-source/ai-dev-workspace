@@ -51,6 +51,11 @@ public sealed class LayoutEditorSmokeTests : IDisposable
             editor.AsWindow().Close();
             Assert.True(Retry.WhileFalse(() => FindEditor() is null, TimeSpan.FromSeconds(10)).Result);
 
+            // 回到主畫面後，建立案件的「廠別」清單出現剛存檔的廠別設定
+            var plants = In(main, "PlantChoice").AsComboBox();
+            Assert.True(Retry.WhileFalse(() => plants.Items.Any(i => i.Text == "冒煙測試廠"), TimeSpan.FromSeconds(10)).Result);
+            plants.Collapse();
+
             editor = OpenEditor();
             var config = Retry.WhileNull(() => In(editor, "ConfigList").FindFirstChild(cf.ByControlType(ControlType.ListItem)), TimeSpan.FromSeconds(10)).Result;
             Assert.NotNull(config);

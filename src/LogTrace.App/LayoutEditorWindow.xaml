@@ -199,8 +199,10 @@
                 </Canvas>
             </ScrollViewer>
 
-            <!-- 右：屬性 -->
-            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+            <!-- 右：元素屬性與 LOG 設定 -->
+            <TabControl Grid.Column="2" Margin="0,4,4,4">
+            <TabItem Header="元素屬性" AutomationProperties.AutomationId="ElementTab">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="10" DataContext="{Binding SelectedElement}">
                     <TextBlock Text="點選畫布上的元素即可編輯屬性；拖曳移動，拖右下角的橘色方塊調整大小。" TextWrapping="Wrap" Foreground="#777">
                         <TextBlock.Style>
@@ -386,6 +388,61 @@
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>
+            </TabItem>
+            <TabItem Header="LOG 設定" AutomationProperties.AutomationId="LogSettingsTab">
+                <!-- ADR-0002 第 7 點：建立案件時選擇廠別，匯入時使用這些設定 -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="10">
+                        <TextBlock Text="模組順序（一行一個）" FontWeight="SemiBold" />
+                        <TextBlock Text="同一時間戳記的事件，依這個順序排列（不代表因果）。" Foreground="#777" TextWrapping="Wrap" />
+                        <TextBox Text="{Binding ModuleOrderText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" VerticalContentAlignment="Top" Height="70"
+                                 VerticalScrollBarVisibility="Auto" Margin="0,4,0,0" AutomationProperties.AutomationId="ModuleOrder" />
+
+                        <TextBlock Text="已知 LOG 種類（Logger 名稱，一行一個）" FontWeight="SemiBold" Margin="0,12,0,0" />
+                        <TextBlock Text="不在清單中的 Logger 標示「未知種類」；清單空白時不標示。" Foreground="#777" TextWrapping="Wrap" />
+                        <TextBox Text="{Binding KnownLoggersText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" VerticalContentAlignment="Top" Height="150"
+                                 VerticalScrollBarVisibility="Auto" Margin="0,4,0,0" AutomationProperties.AutomationId="KnownLoggers" />
+
+                        <TextBlock Text="編碼" FontWeight="SemiBold" Margin="0,12,0,0" />
+                        <TextBlock Text="沒有指定的檔案自動判斷（有效的 UTF-8 就當 UTF-8，否則當 Big5）。模組空白表示所有模組。" Foreground="#777" TextWrapping="Wrap" />
+                        <Grid Margin="0,4,0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="70" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="72" />
+                                <ColumnDefinition Width="26" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="模組" Foreground="#555" />
+                            <TextBlock Grid.Column="1" Text="Logger" Foreground="#555" />
+                            <TextBlock Grid.Column="2" Text="編碼" Foreground="#555" />
+                        </Grid>
+                        <ItemsControl ItemsSource="{Binding EncodingRules}" AutomationProperties.AutomationId="EncodingRules">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="70" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="72" />
+                                            <ColumnDefinition Width="26" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Grid.Column="0" Text="{Binding Module, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,2,0" />
+                                        <TextBox Grid.Column="1" Text="{Binding Logger, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,2,0" />
+                                        <ComboBox Grid.Column="2" ItemsSource="{Binding DataContext.EncodingChoices, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                  SelectedItem="{Binding Encoding}" />
+                                        <Button Grid.Column="3" Content="×" Margin="2,0,0,0" ToolTip="移除"
+                                                Command="{Binding DataContext.RemoveEncodingRuleCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Content="＋ 新增編碼設定" HorizontalAlignment="Left" Padding="8,1" Margin="0,4,0,0"
+                                Command="{Binding AddEncodingRuleCommand}" AutomationProperties.AutomationId="AddEncodingRule" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            </TabControl>
         </Grid>
     </DockPanel>
 </Window>

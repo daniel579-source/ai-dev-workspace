@@ -10,6 +10,7 @@ public sealed class CaseListItemViewModel(CaseSummary summary, int? recentRank)
     public CaseSummary Summary { get; } = summary;
     public string Folder => Summary.Folder;
     public string Name => Summary.Name;
+    public string PlantName => Summary.PlantName;
     public string CreatedAt => Summary.CreatedAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
     public int? RecentRank { get; } = recentRank;
     public bool IsRecent => RecentRank is not null;

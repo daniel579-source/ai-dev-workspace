@@ -100,11 +100,17 @@ public sealed class PlantConfigDocument
     public List<string> ModuleOrder { get; set; } = [.. PlantConfig.Default.ModuleOrder];
     public List<string> KnownLoggers { get; set; } = [.. PlantConfig.Default.KnownLoggers];
 
+    /// <summary>依模組與 Logger 指定編碼（UTF-8 或 Big5）；沒有指定的檔案自動判斷。</summary>
+    public List<EncodingRule> Encodings { get; set; } = [];
+
     public LayoutSection Layout { get; set; } = new();
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extra { get; set; }
 
     /// <summary>匯入與排序使用的部分。</summary>
-    public PlantConfig ToPlantConfig() => new() { Name = Plant, ModuleOrder = ModuleOrder, KnownLoggers = KnownLoggers };
+    public PlantConfig ToPlantConfig() => new()
+    {
+        Name = Plant, Revision = Revision, ModuleOrder = [.. ModuleOrder], KnownLoggers = [.. KnownLoggers], Encodings = [.. Encodings],
+    };
 }

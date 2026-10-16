@@ -231,7 +231,9 @@ internal static class CaseImporter
             ct.ThrowIfCancellationRequested();
             var f = files[i];
             if (!f.Active && f.ImportId != record.Id) continue;
-            var result = LogRecordParser.Parse(File.ReadAllBytes(Path.Combine(rawFolder, f.StoragePath)));
+            // 廠別設定有指定編碼時以指定為準，否則自動判斷（O-002）
+            var bytes = File.ReadAllBytes(Path.Combine(rawFolder, f.StoragePath));
+            var result = LogRecordParser.Parse(bytes, plant.EncodingFor(f.Module, f.Logger) ?? LogEncoding.Detect(bytes));
             files[i] = f = f with { Encoding = result.Encoding, EventCount = result.Events.Count, Unparsable = result.Unparsable };
             if (f.Active) parsed.Add((f, result.Events));
         }

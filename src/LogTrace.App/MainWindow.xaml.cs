@@ -81,6 +81,9 @@ public partial class MainWindow : Window
         if (EventList.SelectedItem is { } selected) EventList.ScrollIntoView(selected);
     }
 
+    /// <summary>回到主畫面時（例如關閉 Layout 編輯器後）重新列出廠別設定。</summary>
+    void Window_Activated(object? sender, EventArgs e) => _vm?.RefreshPlants();
+
     void CaseList_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (_vm?.OpenSelectedCaseCommand.CanExecute(null) == true) _vm.OpenSelectedCaseCommand.Execute(null);

@@ -123,6 +123,21 @@ public static class PlantConfigFile
         if (string.IsNullOrWhiteSpace(doc.Plant))
             issues.Add(new("請輸入廠別名稱。", []));
 
+        if (doc.ModuleOrder.Any(string.IsNullOrWhiteSpace) || doc.ModuleOrder.Distinct(StringComparer.OrdinalIgnoreCase).Count() != doc.ModuleOrder.Count)
+            issues.Add(new("模組順序中有空白或重複的模組。", []));
+        if (doc.KnownLoggers.Any(string.IsNullOrWhiteSpace))
+            issues.Add(new("已知 LOG 種類中有空白的名稱。", []));
+        foreach (var rule in doc.Encodings)
+        {
+            if (string.IsNullOrWhiteSpace(rule.Logger))
+                issues.Add(new("編碼設定中有沒有填 Logger 的規則。", []));
+            else if (rule.Encoding is not (Parsing.LogEncoding.Utf8Name or Parsing.LogEncoding.Big5Name))
+                issues.Add(new($"「{rule.Logger}」的編碼「{rule.Encoding}」不支援；只能是 UTF-8 或 Big5。", []));
+        }
+        foreach (var g in doc.Encodings.Where(r => !string.IsNullOrWhiteSpace(r.Logger))
+                     .GroupBy(r => ((r.Module ?? "").ToUpperInvariant(), r.Logger.ToUpperInvariant())).Where(g => g.Count() > 1))
+            issues.Add(new($"「{(g.First().Module is { } m ? m + " / " : "")}{g.First().Logger}」的編碼設定重複。", []));
+
         foreach (var g in elements.GroupBy(e => e.Id, StringComparer.Ordinal).Where(g => g.Count() > 1))
             issues.Add(new($"元素 id「{g.Key}」重複。", [g.Key]));
 

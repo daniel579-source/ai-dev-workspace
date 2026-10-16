@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ad="https://github.com/Dirkster99/AvalonDock"
         xmlns:local="clr-namespace:LogTrace.App"
-        Title="LogTrace" Width="1280" Height="800"
+        Title="LogTrace" Width="1360" Height="800" Activated="Window_Activated"
         AutomationProperties.AutomationId="MainWindow">
     <Window.Resources>
         <local:NotConverter x:Key="Not" />
@@ -16,6 +16,8 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="180" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="200" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="24" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
@@ -27,19 +29,23 @@
                 <TextBlock Grid.Column="0" Text="新案件名稱" VerticalAlignment="Center" Margin="0,0,6,0" />
                 <TextBox Grid.Column="1" Text="{Binding NewCaseName, UpdateSourceTrigger=PropertyChanged}"
                          AutomationProperties.AutomationId="NewCaseName" VerticalContentAlignment="Center" />
-                <Button Grid.Column="2" Content="建立案件" Command="{Binding CreateCaseCommand}" Padding="10,2" Margin="6,0,0,0"
+                <TextBlock Grid.Column="2" Text="廠別" VerticalAlignment="Center" Margin="10,0,6,0" />
+                <ComboBox Grid.Column="3" ItemsSource="{Binding Plants}" SelectedItem="{Binding SelectedPlant}" DisplayMemberPath="Name"
+                          ToolTip="匯入時使用這個廠別的模組順序、已知 LOG 種類與編碼設定；廠別設定在「Layout 編輯器」中建立"
+                          AutomationProperties.AutomationId="PlantChoice" />
+                <Button Grid.Column="4" Content="建立案件" Command="{Binding CreateCaseCommand}" Padding="10,2" Margin="6,0,0,0"
                         AutomationProperties.AutomationId="CreateCase" />
-                <TextBlock Grid.Column="4" Text="匯入 LOG" VerticalAlignment="Center" Margin="0,0,6,0" />
-                <TextBox Grid.Column="5" Text="{Binding ImportSource, UpdateSourceTrigger=PropertyChanged}"
+                <TextBlock Grid.Column="6" Text="匯入 LOG" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <TextBox Grid.Column="7" Text="{Binding ImportSource, UpdateSourceTrigger=PropertyChanged}"
                          ToolTip="資料夾、7z 或 zip（日期 → 模組的結構，可以包含多天）"
                          AutomationProperties.AutomationId="ImportSource" VerticalContentAlignment="Center" />
-                <Button Grid.Column="6" Content="資料夾…" Command="{Binding BrowseImportFolderCommand}" Padding="10,2" Margin="6,0,0,0"
+                <Button Grid.Column="8" Content="資料夾…" Command="{Binding BrowseImportFolderCommand}" Padding="10,2" Margin="6,0,0,0"
                         AutomationProperties.AutomationId="BrowseImportFolder" />
-                <Button Grid.Column="7" Content="壓縮檔…" Command="{Binding BrowseImportArchiveCommand}" Padding="10,2" Margin="6,0,0,0"
+                <Button Grid.Column="9" Content="壓縮檔…" Command="{Binding BrowseImportArchiveCommand}" Padding="10,2" Margin="6,0,0,0"
                         AutomationProperties.AutomationId="BrowseImportArchive" />
-                <Button Grid.Column="8" Content="匯入" Command="{Binding ImportCommand}" Padding="10,2" Margin="6,0,0,0"
+                <Button Grid.Column="10" Content="匯入" Command="{Binding ImportCommand}" Padding="10,2" Margin="6,0,0,0"
                         AutomationProperties.AutomationId="Import" />
-                <Button Grid.Column="9" Content="Layout 編輯器…" Command="{Binding OpenLayoutEditorCommand}" Padding="10,2" Margin="24,0,0,0"
+                <Button Grid.Column="11" Content="Layout 編輯器…" Command="{Binding OpenLayoutEditorCommand}" Padding="10,2" Margin="24,0,0,0"
                         ToolTip="編輯廠別設定檔與倉儲的 Layout" AutomationProperties.AutomationId="OpenLayoutEditor" />
             </Grid>
         </Border>
@@ -87,6 +93,8 @@
                                     <StackPanel>
                                         <TextBlock Text="{Binding CurrentCaseName, StringFormat=開啟中：{0}, TargetNullValue=沒有開啟的案件}"
                                                    TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="CurrentCase" />
+                                        <TextBlock Text="{Binding CurrentCasePlant, StringFormat=廠別：{0}, TargetNullValue=''}" Foreground="#555"
+                                                   TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="CurrentCasePlant" />
                                         <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                                             <Button Content="關閉案件" Command="{Binding CloseCaseCommand}" Padding="8,1"
                                                     ToolTip="關閉後就可以複製案件資料夾作為備份" AutomationProperties.AutomationId="CloseCase" />
@@ -109,6 +117,7 @@
                                             <StackPanel Margin="0,1">
                                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
                                                 <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding PlantName}" Foreground="#777" FontSize="11" Margin="0,0,6,0" />
                                                     <TextBlock Text="{Binding CreatedAt, StringFormat=建立 {0}}" Foreground="#777" FontSize="11" />
                                                     <TextBlock Text="・最近使用" Foreground="#2A6CB0" FontSize="11">
                                                         <TextBlock.Style>

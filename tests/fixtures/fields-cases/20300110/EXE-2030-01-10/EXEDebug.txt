@@ -1,0 +1,4 @@
+2030-01-10 08:00:04.0000 | DEBUG | EXEDebug | SubmitCompleted,StationNo=A-02,RMC_ID=SRCA02,CMD_NO=00030002  
+
+2030-01-10 08:00:05.0000 | DEBUG | EXEDebug | 交給對接設備 EQ901 桶號 B001、B002  
+

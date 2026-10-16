@@ -99,3 +99,12 @@ public sealed class NotConverter : IValueConverter
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value is false;
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => value is false;
 }
+
+/// <summary>true 時隱藏、false 時顯示。</summary>
+public sealed class CollapsedWhenTrueConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is true ? Visibility.Collapsed : Visibility.Visible;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
+}

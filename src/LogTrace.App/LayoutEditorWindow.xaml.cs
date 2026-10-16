@@ -69,6 +69,52 @@ public partial class LayoutEditorWindow : Window
         return null;
     }
 
+    /// <summary>回到編輯器時重新列出可以比對的案件。</summary>
+    void Window_Activated(object? sender, EventArgs e) => _vm.RefreshCaseChoices();
+
+    // ---- 把未對應的編號拖到元素上（ADR-0006 第 3 點） ----
+
+    Point? _unmappedDragStart;
+    UnmappedIdViewModel? _unmappedDragItem;
+
+    // 按下時就記住點到的編號：開始移動後 ListBox 會攔截滑鼠，移動事件的來源變成 ListBox 本身
+    void Unmapped_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _unmappedDragStart = e.GetPosition(null);
+        _unmappedDragItem = DataContextOf(e.OriginalSource as DependencyObject) as UnmappedIdViewModel;
+    }
+
+    void Unmapped_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || _unmappedDragStart is not { } start) return;
+        var p = e.GetPosition(null);
+        if (Math.Abs(p.X - start.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(p.Y - start.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+        if (_unmappedDragItem is not { } id) return;
+        _unmappedDragStart = null;
+        _unmappedDragItem = null;
+        DragDrop.DoDragDrop(UnmappedList, new DataObject(typeof(UnmappedIdViewModel), id), DragDropEffects.Copy);
+    }
+
+    /// <summary>滑鼠點到的可能是文字中的 Run（不是 FrameworkElement），往上找到帶資料的元素。</summary>
+    static object? DataContextOf(DependencyObject? d)
+    {
+        while (d is not null)
+        {
+            if (d is FrameworkElement fe) return fe.DataContext;
+            if (d is FrameworkContentElement fce) return fce.DataContext;
+            d = System.Windows.Media.VisualTreeHelper.GetParent(d);
+        }
+        return null;
+    }
+
+    void Canvas_Drop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetData(typeof(UnmappedIdViewModel)) is not UnmappedIdViewModel id) return;
+        var hit = LayoutCanvas.InputHitTest(e.GetPosition(LayoutCanvas)) as FrameworkElement;
+        if (FindElement(hit) is { } element) _vm.AssignUnmapped(id, element);
+    }
+
     void ConfigList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (ConfigList.SelectedItem is string path) _vm.OpenConfigCommand.Execute(path);

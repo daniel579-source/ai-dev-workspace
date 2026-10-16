@@ -103,6 +103,9 @@ public sealed class PlantConfigDocument
     /// <summary>依模組與 Logger 指定編碼（UTF-8 或 Big5）；沒有指定的檔案自動判斷。</summary>
     public List<EncodingRule> Encodings { get; set; } = [];
 
+    /// <summary>解析欄位的抽取規則（ADR-0005 第 8 點）；新的設定從初始規則開始。</summary>
+    public List<ParseRule> ParseRules { get; set; } = [.. PlantConfig.DefaultParseRules];
+
     public LayoutSection Layout { get; set; } = new();
 
     [JsonExtensionData]
@@ -112,5 +115,6 @@ public sealed class PlantConfigDocument
     public PlantConfig ToPlantConfig() => new()
     {
         Name = Plant, Revision = Revision, ModuleOrder = [.. ModuleOrder], KnownLoggers = [.. KnownLoggers], Encodings = [.. Encodings],
+        ParseRules = [.. ParseRules],
     };
 }

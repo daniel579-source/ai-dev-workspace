@@ -7,6 +7,8 @@
         AutomationProperties.AutomationId="MainWindow">
     <Window.Resources>
         <local:NotConverter x:Key="Not" />
+        <BooleanToVisibilityConverter x:Key="Visible" />
+        <local:CollapsedWhenTrueConverter x:Key="Collapsed" />
     </Window.Resources>
     <DockPanel>
         <!-- 建立案件與匯入 -->
@@ -167,6 +169,31 @@
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
                                     </DockPanel>
+                                </Border>
+                                <!-- 依解析欄位篩選（#23）：Layout 元素比對所有別名，或命令、棧板、桶編號 -->
+                                <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="#DDD" BorderThickness="0,0,0,1">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="篩選" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                        <ComboBox ItemsSource="{Binding FilterOptions}" SelectedItem="{Binding SelectedFilter}" DisplayMemberPath="Label" Width="110"
+                                                  AutomationProperties.AutomationId="FilterKind" />
+                                        <ComboBox ItemsSource="{Binding ElementChoices}" SelectedItem="{Binding SelectedFilterElement}" DisplayMemberPath="Display"
+                                                  Width="280" Margin="6,0,0,0" AutomationProperties.AutomationId="FilterElement"
+                                                  Visibility="{Binding IsElementFilter, Converter={StaticResource Visible}}"
+                                                  ToolTip="案件所屬廠別的 Layout 中有別名的元素；比對元素的所有別名" />
+                                        <TextBox Text="{Binding FilterValue, UpdateSourceTrigger=PropertyChanged}" Width="180" Margin="6,0,0,0"
+                                                 VerticalContentAlignment="Center" AutomationProperties.AutomationId="FilterValue"
+                                                 Visibility="{Binding IsElementFilter, Converter={StaticResource Collapsed}}">
+                                            <TextBox.InputBindings>
+                                                <KeyBinding Key="Enter" Command="{Binding ApplyFilterCommand}" />
+                                            </TextBox.InputBindings>
+                                        </TextBox>
+                                        <Button Content="篩選" Command="{Binding ApplyFilterCommand}" Padding="10,1" Margin="6,0,0,0"
+                                                AutomationProperties.AutomationId="ApplyFilter" />
+                                        <Button Content="顯示全部" Command="{Binding ClearFilterCommand}" Padding="8,1" Margin="6,0,0,0"
+                                                AutomationProperties.AutomationId="ClearFilter" />
+                                        <TextBlock Text="{Binding FilterStatus}" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#2A6CB0"
+                                                   AutomationProperties.AutomationId="FilterStatus" />
+                                    </StackPanel>
                                 </Border>
                                 <!-- ADR-0007 技術驗證：ListView＋GridView、固定列高。View 由 MainWindow.xaml.cs 依混合／分軌切換 -->
                                 <ListView x:Name="EventList" ItemsSource="{Binding Events}" SelectedItem="{Binding SelectedEvent}"

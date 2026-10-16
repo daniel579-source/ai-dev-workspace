@@ -1,7 +1,6 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.Unicode;
 using LogTrace.Engine.Storage;
 
 namespace LogTrace.Engine.Plants;
@@ -38,7 +37,8 @@ public static class PlantConfigFile
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         WriteIndented = true,
-        Encoder = JavaScriptEncoder.Create(UnicodeRanges.All), // 中文直接寫出，方便閱讀與比對
+        // 中文與正規表示式中的 <、> 直接寫出，方便閱讀與比對（設定檔不會嵌入 HTML）
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false), new PropsConverter() },
     };
 
@@ -137,6 +137,12 @@ public static class PlantConfigFile
         foreach (var g in doc.Encodings.Where(r => !string.IsNullOrWhiteSpace(r.Logger))
                      .GroupBy(r => ((r.Module ?? "").ToUpperInvariant(), r.Logger.ToUpperInvariant())).Where(g => g.Count() > 1))
             issues.Add(new($"「{(g.First().Module is { } m ? m + " / " : "")}{g.First().Logger}」的編碼設定重複。", []));
+
+        foreach (var rule in doc.ParseRules)
+        {
+            if (string.IsNullOrWhiteSpace(rule.Name)) issues.Add(new("有沒有名稱的解析規則。", []));
+            if (Parsing.FieldExtractor.Check(rule) is { } problem) issues.Add(new(problem, []));
+        }
 
         foreach (var g in elements.GroupBy(e => e.Id, StringComparer.Ordinal).Where(g => g.Count() > 1))
             issues.Add(new($"元素 id「{g.Key}」重複。", [g.Key]));

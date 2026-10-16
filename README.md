@@ -24,7 +24,7 @@
 dotnet build LogTrace.slnx
 dotnet test LogTrace.slnx                                   # 含 FlaUI 冒煙測試，會開啟視窗
 dotnet test LogTrace.slnx --filter "Category!=UI"           # 只跑不開視窗的測試
-dotnet run --project src/LogTrace.App                        # 設定與案件預設放在 %LOCALAPPDATA%\LogTrace
+dotnet run --project src/LogTrace.App                        # 設定、案件（Cases\）與廠別設定檔（Plants\）預設放在 %LOCALAPPDATA%\LogTrace
 dotnet run --project src/LogTrace.App -- --data-root D:/temp/lt  # 改用其他資料夾（不影響自己的設定與案件）
 
 # 一天份匯入的效能量測（資料量大，不在 repo；未設定環境變數時直接結束）
@@ -37,8 +37,8 @@ dotnet publish src/LogTrace.App -c Release -r win-x64 --self-contained -o publis
 
 | 專案 | 內容 |
 |---|---|
-| `src/LogTrace.Engine` | 案件引擎：無畫面的函式庫（案件管理、匯入資料夾／7z／zip、解析、排序與事件序號、儲存）。7z 使用 7-Zip 的 `7za.dll`（LGPL，隨程式放在 `7z\`） |
-| `src/LogTrace.Workspace` | 回放工作區 ViewModel：不依賴 WPF 控制項 |
+| `src/LogTrace.Engine` | 案件引擎：無畫面的函式庫（案件管理、匯入資料夾／7z／zip、解析、排序與事件序號、儲存、廠別設定檔的讀寫與檢查）。7z 使用 7-Zip 的 `7za.dll`（LGPL，隨程式放在 `7z\`） |
+| `src/LogTrace.Workspace` | ViewModel（主畫面、Layout 編輯器）：不依賴 WPF 控制項 |
 | `src/LogTrace.App` | WPF 畫面（AvalonDock） |
 | `tests/` | 引擎測試、ViewModel 測試、FlaUI 冒煙測試；測試用 LOG 在 `tests/fixtures`（虛構） |
 

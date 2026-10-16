@@ -65,4 +65,24 @@ sealed class WpfUserInteraction : IUserInteraction
 
     public void OpenFolder(string folder) =>
         Process.Start(new ProcessStartInfo("explorer.exe", $"\"{folder}\"") { UseShellExecute = false });
+
+    const string PlantConfigFilter = "廠別設定檔 (*.json)|*.json";
+
+    public string? PickPlantConfigFile(string initialFolder)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog { Title = "開啟廠別設定檔", Filter = PlantConfigFilter, InitialDirectory = initialFolder };
+        return dlg.ShowDialog(Owner) == true ? dlg.FileName : null;
+    }
+
+    public string? PickPlantConfigSavePath(string initialFolder, string suggestedFileName)
+    {
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "另存廠別設定檔", Filter = PlantConfigFilter, InitialDirectory = initialFolder, FileName = suggestedFileName,
+        };
+        return dlg.ShowDialog(Owner) == true ? dlg.FileName : null;
+    }
+
+    public void ShowLayoutEditor(LogTrace.Workspace.Layout.LayoutEditorViewModel editor) =>
+        new LayoutEditorWindow(editor) { Owner = Owner }.Show();
 }

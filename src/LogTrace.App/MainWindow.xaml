@@ -5,7 +5,7 @@
         xmlns:local="clr-namespace:LogTrace.App"
         xmlns:vm="clr-namespace:LogTrace.Workspace;assembly=LogTrace.Workspace"
         xmlns:pb="clr-namespace:LogTrace.Workspace.Playback;assembly=LogTrace.Workspace"
-        Title="LogTrace" Width="1480" Height="860" Activated="Window_Activated" PreviewKeyDown="Window_PreviewKeyDown"
+        Title="LogTrace" Width="1480" Height="860" Activated="Window_Activated" Loaded="Window_Loaded" Closing="Window_Closing" PreviewKeyDown="Window_PreviewKeyDown"
         AutomationProperties.AutomationId="MainWindow">
     <Window.Resources>
         <local:NotConverter x:Key="Not" />
@@ -18,6 +18,15 @@
         </DataTemplate>
     </Window.Resources>
     <DockPanel>
+        <Menu DockPanel.Dock="Top" Background="Transparent">
+            <MenuItem Header="版面(_V)" AutomationProperties.AutomationId="LayoutMenu">
+                <MenuItem Header="回放（Layout 為主）" Click="PlaybackLayout_Click" AutomationProperties.AutomationId="LayoutPlayback" />
+                <MenuItem Header="搜尋（事件清單為主）" Click="SearchLayout_Click" AutomationProperties.AutomationId="LayoutSearch" />
+                <Separator />
+                <MenuItem Header="還原預設版面" Click="ResetLayout_Click" AutomationProperties.AutomationId="LayoutReset" />
+            </MenuItem>
+        </Menu>
+
         <!-- 建立案件與匯入 -->
         <Border DockPanel.Dock="Top" Padding="8" BorderBrush="#DDD" BorderThickness="0,0,0,1">
             <Grid>
@@ -90,10 +99,10 @@
             </StatusBarItem>
         </StatusBar>
 
-        <ad:DockingManager>
+        <!-- 面板只在這裡宣告一次；排列方式（回放、搜尋兩種預設版面，或使用者保存的版面）由 DockLayouts 建立（ADR-0008 第 7 點） -->
+        <ad:DockingManager x:Name="Dock">
             <ad:LayoutRoot>
-                <ad:LayoutPanel Orientation="Horizontal">
-                    <ad:LayoutAnchorablePaneGroup DockWidth="1*">
+                <ad:LayoutPanel>
                     <ad:LayoutAnchorablePane>
                         <ad:LayoutAnchorable ContentId="cases" Title="案件" CanClose="False">
                             <DockPanel Margin="6">
@@ -241,11 +250,6 @@
                                 </StackPanel>
                             </ScrollViewer>
                         </ad:LayoutAnchorable>
-                    </ad:LayoutAnchorablePane>
-                    </ad:LayoutAnchorablePaneGroup>
-                <ad:LayoutPanel Orientation="Vertical" DockWidth="4*">
-                <ad:LayoutPanel Orientation="Horizontal" DockHeight="5*">
-                    <ad:LayoutAnchorablePane>
                         <ad:LayoutAnchorable ContentId="events" Title="事件清單" CanClose="False">
                             <DockPanel>
                                 <!-- 檢視切換與旗標圖例（ADR-0008 第 5 點） -->
@@ -319,8 +323,6 @@
                                 </ListView>
                             </DockPanel>
                         </ad:LayoutAnchorable>
-                    </ad:LayoutAnchorablePane>
-                    <ad:LayoutAnchorablePane DockWidth="620">
                         <ad:LayoutAnchorable ContentId="playback" Title="Layout 回放" CanClose="False">
                             <!-- ADR-0008 第 6 點：依目前時刻（事件清單選取的事件）顯示世界狀態（ADR-0005） -->
                             <DockPanel DataContext="{Binding Playback}">
@@ -467,9 +469,6 @@
                                 </ScrollViewer>
                             </DockPanel>
                         </ad:LayoutAnchorable>
-                    </ad:LayoutAnchorablePane>
-                </ad:LayoutPanel>
-                    <ad:LayoutAnchorablePane DockHeight="1.4*">
                         <ad:LayoutAnchorable ContentId="timeline" Title="時間軸" CanClose="False">
                             <!-- ADR-0008 第 1～3 點：方向鍵、播放、時間軸總覽與細部 -->
                             <DockPanel Margin="4,2">
@@ -505,9 +504,6 @@
                                                       ToolTip="總覽：點擊或拖曳跳到該時刻" AutomationProperties.AutomationId="OverviewTimeline" />
                             </DockPanel>
                         </ad:LayoutAnchorable>
-                    </ad:LayoutAnchorablePane>
-                    <ad:LayoutPanel Orientation="Horizontal" DockHeight="3*">
-                        <ad:LayoutAnchorablePane DockWidth="420">
                             <ad:LayoutAnchorable ContentId="detail" Title="詳細資訊" CanClose="False">
                                 <DockPanel>
                                     <Button DockPanel.Dock="Top" HorizontalAlignment="Left" Margin="4,2" Padding="6,0" Command="{Binding ToggleRevealCommand}"
@@ -529,8 +525,6 @@
                                                  AutomationProperties.AutomationId="EventDetail" />
                                 </DockPanel>
                             </ad:LayoutAnchorable>
-                        </ad:LayoutAnchorablePane>
-                        <ad:LayoutAnchorablePane DockWidth="420">
                             <ad:LayoutAnchorable ContentId="elementstate" Title="元素狀態" CanClose="False">
                                 <!-- 選取元素的目前狀態，每一列附上造成它的事件；料架顯示側視圖 -->
                                 <DockPanel DataContext="{Binding Playback}">
@@ -689,8 +683,6 @@
                                     </ListView>
                                 </DockPanel>
                             </ad:LayoutAnchorable>
-                        </ad:LayoutAnchorablePane>
-                        <ad:LayoutAnchorablePane>
                             <ad:LayoutAnchorable ContentId="rawlog" Title="原始 LOG" CanClose="False">
                                 <!-- ADR-0008 第 6 點：依原始行序顯示選取事件所在的檔案，標出該事件的行 -->
                                 <DockPanel>
@@ -721,11 +713,10 @@
                                     </ListBox>
                                 </DockPanel>
                             </ad:LayoutAnchorable>
-                        </ad:LayoutAnchorablePane>
-                    </ad:LayoutPanel>
-                </ad:LayoutPanel>
+                    </ad:LayoutAnchorablePane>
                 </ad:LayoutPanel>
             </ad:LayoutRoot>
+
         </ad:DockingManager>
     </DockPanel>
 </Window>

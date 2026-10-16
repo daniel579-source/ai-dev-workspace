@@ -23,7 +23,7 @@ public partial class App : Application
 
         var settings = new SettingsStore(System.IO.Path.Combine(dataRoot, "settings.json"));
         _vm = new MainViewModel(settings, new WpfUserInteraction(), System.IO.Path.Combine(dataRoot, "Cases"));
-        var window = new MainWindow { DataContext = _vm };
+        var window = new MainWindow { DataContext = _vm, LayoutFile = System.IO.Path.Combine(dataRoot, "layout.xml") };
         window.Show();
     }
 

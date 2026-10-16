@@ -18,6 +18,8 @@
 
   <ItemGroup>
     <PackageReference Include="Dirkster.AvalonDock" Version="5.0.1" />
+    <!-- 版面儲存與還原（ADR-0007：AvalonDock 5 的序列化在獨立套件） -->
+    <PackageReference Include="Dirkster.AvalonDock.Serializer.Xml" Version="5.0.1" />
   </ItemGroup>
 
 </Project>

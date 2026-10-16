@@ -31,4 +31,7 @@ public interface IUserInteraction
 
     /// <summary>開啟 Layout 編輯器視窗。</summary>
     void ShowLayoutEditor(Layout.LayoutEditorViewModel editor);
+
+    /// <summary>設定時間偏移量的對話框；按下確定且輸入正確（editor.TryAccept）時傳回 true。</summary>
+    bool EditTimeCorrection(TimeCorrectionViewModel editor);
 }

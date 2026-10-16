@@ -39,4 +39,9 @@ sealed class FakeUserInteraction : IUserInteraction
     public string? PickPlantConfigFile(string initialFolder) => PlantConfigFileResult;
     public string? PickPlantConfigSavePath(string initialFolder, string suggestedFileName) => PlantConfigSavePathResult;
     public void ShowLayoutEditor(LogTrace.Workspace.Layout.LayoutEditorViewModel editor) => ShownEditor = editor;
+
+    /// <summary>填寫時間偏移量對話框；回傳 false 表示取消。預設取消。</summary>
+    public Func<TimeCorrectionViewModel, bool> TimeCorrection { get; set; } = _ => false;
+
+    public bool EditTimeCorrection(TimeCorrectionViewModel editor) => TimeCorrection(editor) && editor.TryAccept();
 }

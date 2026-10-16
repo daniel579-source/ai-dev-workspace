@@ -57,7 +57,7 @@ public sealed class FlagsAndViewsTests : IDisposable
         Assert.Null(Row("20300108/Server-2030-01-08/WCSCMD.txt", 3).FlagToolTip);
 
         Assert.Equal(
-            [EventFlags.SameTimestamp, EventFlags.TimeBackward, EventFlags.TimeInvalid, EventFlags.UnknownKind, EventFlags.EncodingError],
+            [EventFlags.SameTimestamp, EventFlags.TimeBackward, EventFlags.TimeInvalid, EventFlags.UnknownKind, EventFlags.EncodingError, EventFlags.Corrected],
             _vm.FlagLegend.Select(f => f.Flag));
         Assert.All(_vm.Events.SelectMany(r => r.Flags), f => Assert.Contains(f, _vm.FlagLegend));
     }

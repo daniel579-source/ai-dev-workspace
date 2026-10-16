@@ -10,6 +10,8 @@ public enum EventFlags
     TimeInvalid = 4,
     UnknownKind = 8,
     EncodingError = 16,
+    /// <summary>事件的模組有時間偏移量（ADR-0003 第 5 點）：顯示的時間已校正，原始時間另外保留。</summary>
+    Corrected = 32,
 }
 
 /// <summary>

@@ -90,7 +90,7 @@ public sealed class Case : IDisposable
     public ImportResult ApplyImport(PreparedImport prepared, IReadOnlySet<string>? useNewFor = null, CancellationToken ct = default)
     {
         _activeFiles = null;
-        return CaseImporter.Apply(prepared, useNewFor ?? new HashSet<string>(), Folder, Plant, _store, ct);
+        return CaseImporter.Apply(prepared, useNewFor ?? new HashSet<string>(), Folder, Plant, Info.Correction, _store, ct);
     }
 
     /// <summary>準備並套用匯入；內容衝突的檔案一律保留舊檔。</summary>
@@ -242,12 +242,28 @@ public sealed class Case : IDisposable
         var plant = document.ToPlantConfig();
         foreach (var rule in plant.ParseRules)
             if (FieldExtractor.Check(rule) is { } problem) throw new ArgumentException(problem, nameof(document));
-        var (files, events, fields, effects) = CaseImporter.Rebuild(Folder, plant, _store, ct);
+        var (files, events, fields, effects) = CaseImporter.Rebuild(Folder, plant, Info.Correction, _store, ct);
         var info = Info with { Plant = plant };
         _store.Rebuild(files, events, fields, effects, info, PlantConfigFile.Serialize(document), sourcePath,
             AuditEntry.Now("套用新版廠別設定", plant.Name, $"修訂 {Info.Plant.Revision} → {plant.Revision}；事件 {events.Count} 筆"));
         Info = info;
         _activeFiles = null;
+    }
+
+    /// <summary>
+    /// 設定時間偏移量（ADR-0003 第 5 點）：以新的偏移量重新排序並編事件序號，寫入稽核紀錄（舊值、新值、時間、修改人）。
+    /// 原始檔複本與原始時間字串不變；改回 0 即完全恢復。偏移量相同時不做任何事，回傳 false。
+    /// </summary>
+    public bool SetTimeCorrection(TimeCorrection correction, CancellationToken ct = default)
+    {
+        if (correction.Equals(Info.Correction)) return false;
+        var (files, events, fields, effects) = CaseImporter.Rebuild(Folder, Plant, correction, _store, ct);
+        var info = Info with { Correction = correction };
+        _store.Rebuild(files, events, fields, effects, info, null, null,
+            AuditEntry.Now("設定時間偏移量", Info.Name, $"{Info.Correction.Describe()} → {correction.Describe()}；事件 {events.Count} 筆"));
+        Info = info;
+        _activeFiles = null;
+        return true;
     }
 
     /// <summary>所有效果，依事件序號（世界模型的輸入，ADR-0005）。</summary>

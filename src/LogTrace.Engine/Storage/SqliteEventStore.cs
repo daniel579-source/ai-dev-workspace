@@ -82,7 +82,11 @@ public sealed class SqliteEventStore : IEventStore
         SetMeta("parse_rules", JsonSerializer.Serialize(info.Plant.ParseRules));
         SetMeta("presence_signal", info.Plant.PresenceSignal);
         SetMeta("mask_patterns", JsonSerializer.Serialize(info.Plant.MaskPatterns));
+        SetMeta("time_zone", info.Plant.TimeZone);
         SetMeta("created_at", Iso(info.CreatedAt));
+        // 時間偏移量（ADR-0003 第 5 點）：以 tick 保存，避免小數誤差
+        SetMeta("time_correction", JsonSerializer.Serialize(new CorrectionJson(
+            info.Correction.CaseOffset.Ticks, info.Correction.ModuleOffsets.ToDictionary(m => m.Key, m => m.Value.Ticks))));
     }
 
     public void SavePlantSnapshot(string json, string? sourcePath)
@@ -97,13 +101,16 @@ public sealed class SqliteEventStore : IEventStore
         (TryGetMeta("plant_snapshot"), TryGetMeta("plant_source") is { Length: > 0 } p ? p : null);
 
     public void Rebuild(IReadOnlyList<StoredFile> files, IReadOnlyList<LogEvent> events, IReadOnlyList<EventField> fields,
-        IReadOnlyList<EventEffect> effects, CaseInfo info, string snapshotJson, string? sourcePath, AuditEntry audit)
+        IReadOnlyList<EventEffect> effects, CaseInfo info, string? snapshotJson, string? sourcePath, AuditEntry audit)
     {
         using var tx = _conn.BeginTransaction();
         WriteContent(files, events, fields, effects);
         WriteInfo(info);
-        SetMeta("plant_snapshot", snapshotJson);
-        SetMeta("plant_source", sourcePath ?? "");
+        if (snapshotJson is not null)
+        {
+            SetMeta("plant_snapshot", snapshotJson);
+            SetMeta("plant_source", sourcePath ?? "");
+        }
         InsertAudit(audit);
         tx.Commit();
     }
@@ -124,8 +131,13 @@ public sealed class SqliteEventStore : IEventStore
             ParseRules = TryGetMeta("parse_rules") is { } pr ? JsonSerializer.Deserialize<ParseRule[]>(pr) ?? [] : PlantConfig.DefaultParseRules,
             PresenceSignal = TryGetMeta("presence_signal") ?? PlantConfig.Default.PresenceSignal,
             MaskPatterns = TryGetMeta("mask_patterns") is { } mp ? JsonSerializer.Deserialize<string[]>(mp) ?? [] : TextMasker.DefaultPatterns,
+            // time_zone、time_correction 為 #19 加入；之前建立的案件為預設時區、沒有偏移量
+            TimeZone = TryGetMeta("time_zone") ?? PlantConfig.Default.TimeZone,
         };
-        return new(GetMeta("name"), plant, ParseIso(GetMeta("created_at")));
+        var correction = TryGetMeta("time_correction") is { } tc && JsonSerializer.Deserialize<CorrectionJson>(tc) is { } c
+            ? TimeCorrection.Create(TimeSpan.FromTicks(c.CaseTicks), c.ModuleTicks.Select(m => KeyValuePair.Create(m.Key, TimeSpan.FromTicks(m.Value))))
+            : TimeCorrection.None;
+        return new(GetMeta("name"), plant, ParseIso(GetMeta("created_at"))) { Correction = correction };
     }
 
     public long NextImportId()
@@ -565,3 +577,6 @@ public sealed class SqliteEventStore : IEventStore
         return cmd.ExecuteScalar() as string;
     }
 }
+
+/// <summary>時間偏移量在案件資料庫中的格式（tick）。</summary>
+sealed record CorrectionJson(long CaseTicks, Dictionary<string, long> ModuleTicks);

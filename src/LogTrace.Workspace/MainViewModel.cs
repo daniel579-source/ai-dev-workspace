@@ -120,6 +120,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     public partial string Status { get; private set; } = "請建立或開啟案件。";
 
+    /// <summary>由畫面回報的訊息（例如版面檔無法使用）。</summary>
+    public void ShowStatus(string message) => Status = message;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CreateCaseCommand))]
     [NotifyCanExecuteChangedFor(nameof(ImportCommand))]

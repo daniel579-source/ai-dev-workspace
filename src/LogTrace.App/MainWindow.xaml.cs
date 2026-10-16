@@ -1,6 +1,7 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Globalization;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -28,6 +29,10 @@ public partial class MainWindow : Window
         """);
 
     MainViewModel? _vm;
+    DockLayouts? _layouts;
+
+    /// <summary>使用者保存的版面檔（依使用者保存，不依案件，ADR-0008 第 7 點）；null 時不保存。</summary>
+    public string? LayoutFile { get; init; }
 
     readonly System.Windows.Threading.DispatcherTimer _playTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     DateTime _lastTick;
@@ -152,6 +157,43 @@ public partial class MainWindow : Window
             e.Handled = true;
         }
     }
+
+    /// <summary>啟動時還原上次的版面；沒有保存過時使用「回放」預設版面。</summary>
+    void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        _layouts = new DockLayouts(Dock);
+        string? saved = null;
+        try
+        {
+            if (LayoutFile is not null && File.Exists(LayoutFile)) saved = File.ReadAllText(LayoutFile);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+        if (saved is null) _layouts.ApplyPreset(DockLayouts.Playback);
+        else if (!_layouts.TryRestore(saved)) _vm?.ShowStatus("保存的版面無法使用（檔案損壞或來自其他版本的程式），已改用預設版面。");
+    }
+
+    /// <summary>關閉程式時保存目前的版面；保存失敗不阻擋關閉。</summary>
+    void Window_Closing(object? sender, CancelEventArgs e)
+    {
+        if (_layouts is null || LayoutFile is null) return;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(LayoutFile)!);
+            File.WriteAllText(LayoutFile, _layouts.Save());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    void PlaybackLayout_Click(object sender, RoutedEventArgs e) => _layouts?.ApplyPreset(DockLayouts.Playback);
+
+    void SearchLayout_Click(object sender, RoutedEventArgs e) => _layouts?.ApplyPreset(DockLayouts.Search);
+
+    /// <summary>還原預設：與初次啟動的版面（回放）相同。</summary>
+    void ResetLayout_Click(object sender, RoutedEventArgs e) => _layouts?.ApplyPreset(DockLayouts.Playback);
 
     /// <summary>回到主畫面時（例如關閉 Layout 編輯器後）重新列出廠別設定。</summary>
     void Window_Activated(object? sender, EventArgs e) => _vm?.RefreshPlants();

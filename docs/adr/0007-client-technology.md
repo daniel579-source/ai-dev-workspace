@@ -74,7 +74,7 @@
 
 狀態維持「待技術驗證」，第 1 項的體感與第 3 項完成後再更新。實作（#16 起）依下列結果進行：
 
-- AvalonDock 使用 5.0 版：版面序列化拆到 `Dirkster.AvalonDock.Serializer.Xml` 套件，API 與 4.x 不同。
+- AvalonDock 使用 5.0 版：版面序列化拆到 `Dirkster.AvalonDock.Serializer.Xml` 套件，API 與 4.x 不同。版面儲存已在實作中使用 `Dirkster.AvalonDock.Serializer.Xml` 5.0.1（2026-10-16 #28）。
 - 事件清單建議使用 ListView＋GridView、固定列高；DataGrid 每格的版面配置成本約為 ListView 的 1.7 倍。體感仍不順時，再考慮自行繪製的清單。
 - 時間軸等大量圖形先畫進點陣圖再一次送出，不要每個資料點一個幾何圖形。
 

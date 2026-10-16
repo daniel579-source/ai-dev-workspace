@@ -25,6 +25,13 @@ public sealed class ImportSmokeTests : IDisposable
         var cf = window.ConditionFactory;
         var tab = Retry.WhileNull(() => window.FindFirstDescendant(cf.ByAutomationId("title").And(cf.ByName(title))), TimeSpan.FromSeconds(10)).Result
             ?? throw new InvalidOperationException($"找不到分頁 {title}");
+        // 優先以 SelectionItem 選取所在的分頁（點標題文字不一定會切換）
+        for (var e = tab.Parent; e is not null; e = e.Parent)
+            if (e.Patterns.SelectionItem.PatternOrDefault is { } item)
+            {
+                item.Select();
+                return;
+            }
         tab.Click();
     }
 

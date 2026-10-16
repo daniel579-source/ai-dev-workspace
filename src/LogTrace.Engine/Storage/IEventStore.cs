@@ -81,6 +81,9 @@ public interface IEventStore : IDisposable
     /// <summary>指定種類的欄位值與出現的事件數（值不分大小寫）。</summary>
     IReadOnlyList<(string Kind, string Value, long Count)> GetFieldValueCounts(IReadOnlyList<string> kinds);
 
+    /// <summary>事件序號範圍內（含頭尾），指定種類的欄位值與出現的事件數。</summary>
+    IReadOnlyList<(string Kind, string Value, long Count)> GetFieldValueCounts(IReadOnlyList<string> kinds, long fromSequence, long toSequence);
+
     /// <summary>有任一指定種類的欄位、值為任一指定值（不分大小寫）的事件序號，依序號排列。</summary>
     IReadOnlyList<long> FindSequences(IReadOnlyList<string> kinds, IReadOnlyList<string> values);
 

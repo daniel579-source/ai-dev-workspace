@@ -144,6 +144,14 @@ public sealed class Case : IDisposable
     public IReadOnlyList<(string Kind, string Value, long Count)> GetIdentifierCounts() =>
         _store.GetFieldValueCounts(FieldKinds.Identifiers);
 
+    /// <summary>事件序號範圍內（含頭尾）出現的站點、搬送機、對接設備編號與事件數（回放畫面的「未對應」清單）。</summary>
+    public IReadOnlyList<(string Kind, string Value, long Count)> GetIdentifierCounts(long fromSequence, long toSequence) =>
+        _store.GetFieldValueCounts(FieldKinds.Identifiers, fromSequence, toSequence);
+
+    /// <summary>案件中出現的命令編號與事件數（命令清單）。</summary>
+    public IReadOnlyList<(string Command, long Count)> GetCommandCounts() =>
+        _store.GetFieldValueCounts([FieldKinds.Command]).Select(x => (x.Value, x.Count)).ToList();
+
     /// <summary>
     /// 依解析欄位篩選事件，傳回事件序號（依時間排序）。kinds 中任一種欄位的值等於 values 中任一值（不分大小寫）即符合；
     /// 例如篩選 Layout 元素時，kinds 為站點、搬送機、對接設備，values 為元素的所有別名。

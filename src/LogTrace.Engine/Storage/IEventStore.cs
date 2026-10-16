@@ -76,8 +76,18 @@ public interface IEventStore : IDisposable
     /// <summary>補上缺少的搜尋用文字（之前建立的案件）；傳回補上的筆數。</summary>
     int EnsureSearchText();
 
-    /// <summary>依條件搜尋事件（ADR-0010），傳回事件序號（依時間排序）。依日平行掃描。</summary>
-    IReadOnlyList<long> Search(Search.SearchQuery query, CancellationToken ct);
+    /// <summary>案件內容的版本：每次寫入事件都會改變（全文索引的分片以它判斷是否過期）。</summary>
+    string GetContentVersion();
+
+    /// <summary>每個日期資料夾的事件序號範圍與原始 LOG 大小。</summary>
+    IReadOnlyList<Search.SearchDay> GetDays();
+
+    /// <summary>
+    /// 依條件搜尋事件（ADR-0010、ADR-0011 第 6 點），傳回事件序號（依時間排序）與執行方式。
+    /// 已建好索引的日期依規則使用索引，其餘依事件序號分片平行掃描；progress 回報完成的比例（0～1）。
+    /// 正規表示式語法有誤時丟出 ArgumentException。
+    /// </summary>
+    Search.SearchOutcome Search(Search.SearchQuery query, SearchIndex? index, Search.SearchPath path, IProgress<double>? progress, CancellationToken ct);
 
     /// <summary>所有效果，依事件序號（世界模型的輸入，ADR-0005）。</summary>
     IReadOnlyList<Parsing.EventEffect> GetEffects();

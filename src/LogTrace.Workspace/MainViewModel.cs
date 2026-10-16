@@ -109,6 +109,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(ImportCommand))]
     [NotifyCanExecuteChangedFor(nameof(SearchCommand))]
     [NotifyCanExecuteChangedFor(nameof(EditTimeCorrectionCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RebuildIndexCommand))]
     public partial string? CurrentCaseFolder { get; private set; }
 
     // ---- 匯入 ----
@@ -134,6 +135,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(SearchCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplyNewerPlantCommand), nameof(DismissNewerPlantCommand))]
     [NotifyCanExecuteChangedFor(nameof(EditTimeCorrectionCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RebuildIndexCommand))]
     public partial bool IsBusy { get; private set; }
 
     // ---- 事件清單與原始 LOG ----
@@ -350,6 +352,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     async Task ApplyNewerPlantAsync()
     {
         if (_newerPlant is not { } newer || _case is not { } c) return;
+        StopIndexBuild(); // 案件內容將改變
         IsBusy = true;
         Status = "套用新版的廠別設定中…";
         try
@@ -492,6 +495,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Playback.Clear("請開啟案件。");
         ClearMoment();
         Modules.Clear();
+        StopIndexBuild();
+        IndexStatus = null;
         _case?.Dispose();
         _case = null;
         CurrentCaseName = null;
@@ -531,6 +536,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 useNew = chosen;
             }
             var p = prepared;
+            StopIndexBuild(); // 案件內容將改變
             var result = await Task.Run(() => c.ApplyImport(p, useNew));
             await LoadEventsAsync(c);
             Status = Summarize(result);
@@ -574,6 +580,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         await LoadPlaybackAsync(c, doc, rows);
         SelectedEvent = Events.FirstOrDefault();
         SearchCommand.NotifyCanExecuteChanged();
+        StartIndexBuild(c); // 全文索引在背景建立（ADR-0011 第 4 點）
     }
 
     /// <summary>建立世界模型（開啟案件時在記憶體中建立快照）並載入 Layout 回放。</summary>
@@ -631,5 +638,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (_ui.PickArchive("選擇要匯入的 LOG 壓縮檔（7z 或 zip）") is { } file) ImportSource = file;
     }
 
-    public void Dispose() => _case?.Dispose();
+    public void Dispose()
+    {
+        StopIndexBuild();
+        _case?.Dispose();
+    }
 }

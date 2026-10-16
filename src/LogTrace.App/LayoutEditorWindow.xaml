@@ -1,0 +1,391 @@
+<Window x:Class="LogTrace.App.LayoutEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:LogTrace.App"
+        Title="{Binding Title}" Width="1280" Height="820"
+        AutomationProperties.AutomationId="LayoutEditor">
+    <!-- ADR-0006 第 9 點：三欄式——左邊廠別設定、工具箱與元素清單，中間畫布，右邊屬性 -->
+    <Window.Resources>
+        <local:MetersToPixelsConverter x:Key="Px" />
+        <local:ElementTypeLabelConverter x:Key="TypeLabel" />
+        <local:FileNameConverter x:Key="FileName" />
+        <BooleanToVisibilityConverter x:Key="Visible" />
+        <Style x:Key="Field" TargetType="TextBlock">
+            <Setter Property="Width" Value="76" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="#555" />
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,1" />
+        </Style>
+    </Window.Resources>
+    <DockPanel>
+        <!-- 檔案 -->
+        <Border DockPanel.Dock="Top" Padding="8" BorderBrush="#DDD" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="新增設定" Command="{Binding NewCommand}" Padding="10,2" AutomationProperties.AutomationId="NewConfig" />
+                <Button Content="開啟其他檔案…" Command="{Binding OpenFileCommand}" Padding="10,2" Margin="6,0,0,0" AutomationProperties.AutomationId="OpenConfigFile" />
+                <Button Content="存檔" Command="{Binding SaveCommand}" Padding="14,2" Margin="16,0,0,0" FontWeight="SemiBold" AutomationProperties.AutomationId="SaveConfig" />
+                <Button Content="另存新檔…" Command="{Binding SaveAsCommand}" Padding="10,2" Margin="6,0,0,0" AutomationProperties.AutomationId="SaveConfigAs" />
+                <TextBlock Text="廠別" VerticalAlignment="Center" Margin="24,0,6,0" />
+                <TextBox Text="{Binding PlantName, UpdateSourceTrigger=PropertyChanged}" Width="160" AutomationProperties.AutomationId="PlantName" />
+                <TextBlock Text="儲位規則" VerticalAlignment="Center" Margin="16,0,6,0"
+                           ToolTip="R＝排、C＝列、L＝層，字數就是位數。例如 RRCCCLL 會把 0100802 拆成排 01、列 008、層 02。" />
+                <TextBox Text="{Binding StorageCodeRule, UpdateSourceTrigger=PropertyChanged}" Width="100" AutomationProperties.AutomationId="StorageCodeRule" />
+                <TextBlock Text="{Binding RevisionInfo}" VerticalAlignment="Center" Margin="16,0,0,0" Foreground="#777" AutomationProperties.AutomationId="RevisionInfo" />
+            </StackPanel>
+        </Border>
+
+        <StatusBar DockPanel.Dock="Bottom">
+            <StatusBarItem>
+                <TextBlock Text="{Binding Status}" TextWrapping="Wrap" AutomationProperties.AutomationId="EditorStatus" />
+            </StatusBarItem>
+        </StatusBar>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="230" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="300" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 左：廠別設定、工具箱、元素清單 -->
+            <DockPanel Grid.Column="0" Margin="8">
+                <TextBlock DockPanel.Dock="Top" Text="廠別設定" FontWeight="SemiBold" />
+                <ListBox x:Name="ConfigList" DockPanel.Dock="Top" ItemsSource="{Binding Configs}" Height="110" Margin="0,4,0,0"
+                         AutomationProperties.AutomationId="ConfigList" MouseDoubleClick="ConfigList_MouseDoubleClick">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={StaticResource FileName}}" ToolTip="{Binding}" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <Button DockPanel.Dock="Top" Content="開啟選取的設定" Command="{Binding OpenConfigCommand}" CommandParameter="{Binding SelectedItem, ElementName=ConfigList}"
+                        HorizontalAlignment="Left" Padding="8,1" Margin="0,4,0,0" AutomationProperties.AutomationId="OpenSelectedConfig" />
+
+                <TextBlock DockPanel.Dock="Top" Text="新增元素" FontWeight="SemiBold" Margin="0,12,0,4" />
+                <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding AddableTypes}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Content="{Binding Converter={StaticResource TypeLabel}}" Padding="8,2" Margin="0,0,4,4"
+                                    Command="{Binding DataContext.AddElementCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}" AutomationProperties.AutomationId="{Binding StringFormat=Add_{0}}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock DockPanel.Dock="Top" Text="元素清單" FontWeight="SemiBold" Margin="0,8,0,4" />
+                <ListBox ItemsSource="{Binding Elements}" SelectedItem="{Binding SelectedElement}" AutomationProperties.AutomationId="ElementList">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding TypeLabel}" Foreground="#777" Width="56" />
+                                <TextBlock Text="{Binding Name}" />
+                                <TextBlock Text="{Binding AliasesText, StringFormat=（{0}）, TargetNullValue=''}" Foreground="#2A6CB0" Margin="4,0,0,0" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <!-- 中：畫布（1 公尺 = 32 像素，格線 1 公尺，吸附 0.5 公尺） -->
+            <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#F8FAFC">
+                <Canvas x:Name="LayoutCanvas" Width="1920" Height="1280" Background="White" Margin="8"
+                        MouseLeftButtonDown="Canvas_MouseLeftButtonDown" MouseMove="Canvas_MouseMove" MouseLeftButtonUp="Canvas_MouseLeftButtonUp"
+                        AutomationProperties.AutomationId="LayoutCanvas">
+                    <Rectangle Width="1920" Height="1280" IsHitTestVisible="False">
+                        <Rectangle.Fill>
+                            <DrawingBrush TileMode="Tile" Viewport="0,0,32,32" ViewportUnits="Absolute">
+                                <DrawingBrush.Drawing>
+                                    <GeometryDrawing Geometry="M0,0 L32,0 M0,0 L0,32">
+                                        <GeometryDrawing.Pen>
+                                            <Pen Brush="#E2E8F0" Thickness="1" />
+                                        </GeometryDrawing.Pen>
+                                    </GeometryDrawing>
+                                </DrawingBrush.Drawing>
+                            </DrawingBrush>
+                        </Rectangle.Fill>
+                    </Rectangle>
+                    <ItemsControl ItemsSource="{Binding Elements}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <Canvas Width="1920" Height="1280" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemContainerStyle>
+                            <Style TargetType="ContentPresenter">
+                                <Setter Property="Canvas.Left" Value="{Binding X, Converter={StaticResource Px}}" />
+                                <Setter Property="Canvas.Top" Value="{Binding Y, Converter={StaticResource Px}}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsConveyor}" Value="True">
+                                        <Setter Property="Canvas.Left" Value="0" />
+                                        <Setter Property="Canvas.Top" Value="0" />
+                                        <Setter Property="Panel.ZIndex" Value="1" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Type}" Value="Area">
+                                        <Setter Property="Panel.ZIndex" Value="-1" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ItemsControl.ItemContainerStyle>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <!-- 輸送線：只表示方向 -->
+                                    <Line X1="{Binding LineX1, Converter={StaticResource Px}}" Y1="{Binding LineY1, Converter={StaticResource Px}}"
+                                          X2="{Binding LineX2, Converter={StaticResource Px}}" Y2="{Binding LineY2, Converter={StaticResource Px}}"
+                                          Stroke="#94A3B8" StrokeThickness="3" StrokeDashArray="3 2" Tag="{Binding}"
+                                          Visibility="{Binding IsConveyor, Converter={StaticResource Visible}}" />
+                                    <Border x:Name="Shape" Tag="{Binding}" Cursor="SizeAll"
+                                            Width="{Binding W, Converter={StaticResource Px}}" Height="{Binding H, Converter={StaticResource Px}}"
+                                            BorderBrush="#475569" BorderThickness="1" Background="#E2E8F0"
+                                            RenderTransformOrigin="0.5,0.5"
+                                            Visibility="{Binding HasGeometry, Converter={StaticResource Visible}}"
+                                            AutomationProperties.AutomationId="{Binding Id, StringFormat=Element_{0}}">
+                                        <Border.RenderTransform>
+                                            <RotateTransform Angle="{Binding Rotation}" />
+                                        </Border.RenderTransform>
+                                        <Grid>
+                                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False">
+                                                <TextBlock Text="{Binding Name}" FontSize="11" TextAlignment="Center" />
+                                                <TextBlock Text="{Binding AliasesText}" FontSize="10" Foreground="#2A6CB0" TextAlignment="Center" />
+                                            </StackPanel>
+                                            <!-- 拖右下角的方塊調整大小 -->
+                                            <Rectangle x:Name="ResizeHandle" Tag="resize" Width="8" Height="8" Fill="#F59E0B"
+                                                       HorizontalAlignment="Right" VerticalAlignment="Bottom" Cursor="SizeNWSE" Visibility="Collapsed" />
+                                        </Grid>
+                                    </Border>
+                                </Grid>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding Type}" Value="Station">
+                                        <Setter TargetName="Shape" Property="Background" Value="#DBEAFE" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Type}" Value="Rack">
+                                        <Setter TargetName="Shape" Property="Background" Value="#FEF3C7" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Type}" Value="Vehicle">
+                                        <Setter TargetName="Shape" Property="Background" Value="#DCFCE7" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Type}" Value="Dock">
+                                        <Setter TargetName="Shape" Property="Background" Value="#F3E8FF" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Type}" Value="Area">
+                                        <Setter TargetName="Shape" Property="Background" Value="#0F94A3B8" />
+                                        <Setter TargetName="Shape" Property="BorderBrush" Value="#94A3B8" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Type}" Value="Label">
+                                        <Setter TargetName="Shape" Property="Background" Value="Transparent" />
+                                        <Setter TargetName="Shape" Property="BorderBrush" Value="Transparent" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                        <Setter TargetName="Shape" Property="BorderBrush" Value="#2563EB" />
+                                        <Setter TargetName="Shape" Property="BorderThickness" Value="2" />
+                                        <Setter TargetName="ResizeHandle" Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding HasIssue}" Value="True">
+                                        <Setter TargetName="Shape" Property="BorderBrush" Value="#DC2626" />
+                                        <Setter TargetName="Shape" Property="BorderThickness" Value="3" />
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Canvas>
+            </ScrollViewer>
+
+            <!-- 右：屬性 -->
+            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="10" DataContext="{Binding SelectedElement}">
+                    <TextBlock Text="點選畫布上的元素即可編輯屬性；拖曳移動，拖右下角的橘色方塊調整大小。" TextWrapping="Wrap" Foreground="#777">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding}" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <StackPanel Visibility="{Binding DataContext.HasSelection, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Visible}}">
+                        <TextBlock FontWeight="SemiBold" Margin="0,0,0,6">
+                            <Run Text="{Binding TypeLabel, Mode=OneWay}" /><Run Text="　" /><Run Text="{Binding Id, Mode=OneWay}" Foreground="#777" />
+                        </TextBlock>
+                        <DockPanel>
+                            <TextBlock Text="名稱" Style="{StaticResource Field}" />
+                            <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="ElementName" />
+                        </DockPanel>
+
+                        <!-- 輸送線 -->
+                        <StackPanel Visibility="{Binding IsConveyor, Converter={StaticResource Visible}}">
+                            <DockPanel>
+                                <TextBlock Text="起點" Style="{StaticResource Field}" />
+                                <ComboBox ItemsSource="{Binding DataContext.ConveyorEndpoints, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          SelectedValuePath="Id" DisplayMemberPath="Name" SelectedValue="{Binding From}" />
+                            </DockPanel>
+                            <DockPanel>
+                                <TextBlock Text="終點" Style="{StaticResource Field}" />
+                                <ComboBox ItemsSource="{Binding DataContext.ConveyorEndpoints, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          SelectedValuePath="Id" DisplayMemberPath="Name" SelectedValue="{Binding To}" />
+                            </DockPanel>
+                            <TextBlock Text="輸送線只表示方向，不和 LOG 對應，也不從 LOG 推導狀態。" TextWrapping="Wrap" Foreground="#777" Margin="0,4,0,0" />
+                        </StackPanel>
+
+                        <!-- 位置、尺寸、旋轉 -->
+                        <StackPanel Visibility="{Binding HasGeometry, Converter={StaticResource Visible}}">
+                            <DockPanel>
+                                <TextBlock Text="x（m）" Style="{StaticResource Field}" />
+                                <TextBox Text="{Binding X}" />
+                            </DockPanel>
+                            <DockPanel>
+                                <TextBlock Text="y（m）" Style="{StaticResource Field}" />
+                                <TextBox Text="{Binding Y}" />
+                            </DockPanel>
+                            <DockPanel>
+                                <TextBlock Text="寬（m）" Style="{StaticResource Field}" />
+                                <TextBox Text="{Binding W}" />
+                            </DockPanel>
+                            <DockPanel>
+                                <TextBlock Text="深（m）" Style="{StaticResource Field}" />
+                                <TextBox Text="{Binding H}" />
+                            </DockPanel>
+                            <DockPanel>
+                                <TextBlock Text="旋轉" Style="{StaticResource Field}" />
+                                <ItemsControl ItemsSource="{x:Static local:LayoutEditorWindow.Rotations}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Content="{Binding}" ContentStringFormat="{}{0}°" Padding="6,1" Margin="0,0,4,0"
+                                                    Command="{Binding DataContext.SetRotationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </DockPanel>
+                            <DockPanel>
+                                <TextBlock Text="目前" Style="{StaticResource Field}" />
+                                <TextBlock Text="{Binding Rotation, StringFormat={}{0} 度}" VerticalAlignment="Center" />
+                            </DockPanel>
+                        </StackPanel>
+
+                        <!-- 高度：料架以層數 × 每層高度計算 -->
+                        <DockPanel>
+                            <DockPanel.Style>
+                                <Style TargetType="DockPanel">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsRack}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsConveyor}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DockPanel.Style>
+                            <TextBlock Text="高度（m）" Style="{StaticResource Field}" />
+                            <TextBox Text="{Binding Height}" />
+                        </DockPanel>
+
+                        <!-- 料架 -->
+                        <StackPanel Visibility="{Binding IsRack, Converter={StaticResource Visible}}">
+                            <DockPanel>
+                                <TextBlock Text="排" Style="{StaticResource Field}" />
+                                <TextBox Text="{Binding Row, UpdateSourceTrigger=PropertyChanged}" />
+                            </DockPanel>
+                            <DockPanel>
+                                <TextBlock Text="起始列" Style="{StaticResource Field}" />
+                                <TextBox Text="{Binding ColFrom}" />
+                            </DockPanel>
+                            <DockPanel>
+                                <TextBlock Text="結束列" Style="{StaticResource Field}" />
+                                <TextBox Text="{Binding ColTo}" />
+                            </DockPanel>
+                            <DockPanel>
+                                <TextBlock Text="層數" Style="{StaticResource Field}" />
+                                <TextBox Text="{Binding Levels}" />
+                            </DockPanel>
+                            <DockPanel>
+                                <TextBlock Text="每層高（m）" Style="{StaticResource Field}" />
+                                <TextBox Text="{Binding LevelHeight}" />
+                            </DockPanel>
+                            <DockPanel>
+                                <TextBlock Text="高度" Style="{StaticResource Field}" />
+                                <TextBlock Text="{Binding RackHeight, StringFormat={}{0:0.0} m（層數 × 每層高）}" VerticalAlignment="Center" />
+                            </DockPanel>
+                        </StackPanel>
+
+                        <!-- 別名 -->
+                        <StackPanel Visibility="{Binding CanHaveAliases, Converter={StaticResource Visible}}" Margin="0,10,0,0">
+                            <TextBlock Text="別名（LOG 中的編號，完全相同才算對應）" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <ItemsControl ItemsSource="{Binding Aliases}" Margin="0,4,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#E0E7FF" CornerRadius="3" Padding="6,1,2,1" Margin="0,0,4,4">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding}" VerticalAlignment="Center" />
+                                                <Button Content="×" Padding="4,0" Margin="4,0,0,0" BorderThickness="0" Background="Transparent" ToolTip="移除"
+                                                        Command="{Binding DataContext.RemoveAliasCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="加入" Padding="8,1" Margin="4,0,0,0"
+                                        Command="{Binding DataContext.AddAliasCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        AutomationProperties.AutomationId="AddAlias" />
+                                <TextBox Text="{Binding DataContext.NewAlias, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged}"
+                                         AutomationProperties.AutomationId="NewAlias">
+                                    <TextBox.InputBindings>
+                                        <KeyBinding Key="Enter" Command="{Binding DataContext.AddAliasCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                    </TextBox.InputBindings>
+                                </TextBox>
+                            </DockPanel>
+                        </StackPanel>
+
+                        <!-- 自訂屬性 -->
+                        <TextBlock Text="自訂屬性（文字）" FontWeight="SemiBold" Margin="0,12,0,4" />
+                        <ItemsControl ItemsSource="{Binding Props}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="0,0,0,2">
+                                        <Button DockPanel.Dock="Right" Content="×" Padding="6,0" Margin="4,0,0,0" ToolTip="移除"
+                                                Command="{Binding DataContext.RemovePropertyCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}" />
+                                        <TextBox DockPanel.Dock="Left" Width="90" Text="{Binding Key, UpdateSourceTrigger=PropertyChanged}" />
+                                        <TextBlock DockPanel.Dock="Left" Text="＝" VerticalAlignment="Center" Margin="2,0" />
+                                        <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" />
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Content="＋ 新增屬性" HorizontalAlignment="Left" Padding="8,1"
+                                Command="{Binding DataContext.AddPropertyCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+
+                        <Button Content="刪除這個元素" HorizontalAlignment="Left" Padding="8,1" Margin="0,16,0,0" Foreground="#B00020"
+                                Command="{Binding DataContext.DeleteSelectedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                AutomationProperties.AutomationId="DeleteElement" />
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </DockPanel>
+</Window>

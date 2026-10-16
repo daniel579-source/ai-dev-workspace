@@ -31,4 +31,12 @@ sealed class FakeUserInteraction : IUserInteraction
     }
 
     public void OpenFolder(string folder) => OpenedFolders.Add(folder);
+
+    public string? PlantConfigFileResult { get; set; }
+    public string? PlantConfigSavePathResult { get; set; }
+    public LogTrace.Workspace.Layout.LayoutEditorViewModel? ShownEditor { get; private set; }
+
+    public string? PickPlantConfigFile(string initialFolder) => PlantConfigFileResult;
+    public string? PickPlantConfigSavePath(string initialFolder, string suggestedFileName) => PlantConfigSavePathResult;
+    public void ShowLayoutEditor(LogTrace.Workspace.Layout.LayoutEditorViewModel editor) => ShownEditor = editor;
 }

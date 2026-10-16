@@ -22,4 +22,13 @@ public interface IUserInteraction
 
     /// <summary>在檔案總管開啟資料夾。</summary>
     void OpenFolder(string folder);
+
+    /// <summary>選擇要開啟的廠別設定檔（.json）；取消時傳回 null。</summary>
+    string? PickPlantConfigFile(string initialFolder);
+
+    /// <summary>選擇廠別設定檔的存檔位置；取消時傳回 null。</summary>
+    string? PickPlantConfigSavePath(string initialFolder, string suggestedFileName);
+
+    /// <summary>開啟 Layout 編輯器視窗。</summary>
+    void ShowLayoutEditor(Layout.LayoutEditorViewModel editor);
 }

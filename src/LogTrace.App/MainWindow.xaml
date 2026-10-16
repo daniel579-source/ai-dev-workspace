@@ -22,6 +22,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="新案件名稱" VerticalAlignment="Center" Margin="0,0,6,0" />
                 <TextBox Grid.Column="1" Text="{Binding NewCaseName, UpdateSourceTrigger=PropertyChanged}"
@@ -38,6 +39,8 @@
                         AutomationProperties.AutomationId="BrowseImportArchive" />
                 <Button Grid.Column="8" Content="匯入" Command="{Binding ImportCommand}" Padding="10,2" Margin="6,0,0,0"
                         AutomationProperties.AutomationId="Import" />
+                <Button Grid.Column="9" Content="Layout 編輯器…" Command="{Binding OpenLayoutEditorCommand}" Padding="10,2" Margin="24,0,0,0"
+                        ToolTip="編輯廠別設定檔與倉儲的 Layout" AutomationProperties.AutomationId="OpenLayoutEditor" />
             </Grid>
         </Border>
 

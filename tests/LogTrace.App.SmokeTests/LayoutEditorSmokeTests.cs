@@ -1,0 +1,77 @@
+using System.Diagnostics;
+using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Definitions;
+using FlaUI.Core.Tools;
+using FlaUI.UIA3;
+using LogTrace.Tests.Support;
+
+namespace LogTrace.App.SmokeTests;
+
+[Trait("Category", "UI")]
+public sealed class LayoutEditorSmokeTests : IDisposable
+{
+    readonly TempFolder _tmp = new();
+
+    public void Dispose() => _tmp.Dispose();
+
+    [Fact]
+    public void 開啟編輯器_新增元素_存檔_重新開啟仍在()
+    {
+        var dataRoot = Path.Combine(_tmp.Path, "AppData");
+        using var app = FlaUI.Core.Application.Launch(new ProcessStartInfo(ImportSmokeTests.AppExe(), $"--data-root \"{dataRoot}\""));
+        using var automation = new UIA3Automation();
+        try
+        {
+            var main = app.GetMainWindow(automation, TimeSpan.FromSeconds(30));
+            Assert.NotNull(main);
+            var cf = main.ConditionFactory;
+            var desktop = automation.GetDesktop();
+            AutomationElement In(AutomationElement root, string id) =>
+                Retry.WhileNull(() => root.FindFirstDescendant(cf.ByAutomationId(id)), TimeSpan.FromSeconds(10)).Result
+                ?? throw new InvalidOperationException($"找不到 {id}");
+            // 編輯器是主視窗擁有的視窗，在 UI Automation 中可能是主視窗的子項，也可能是桌面的子項
+            AutomationElement? FindEditor() =>
+                main.FindFirstChild(cf.ByAutomationId("LayoutEditor")) ?? desktop.FindFirstChild(cf.ByAutomationId("LayoutEditor"));
+            AutomationElement OpenEditor()
+            {
+                In(main, "OpenLayoutEditor").AsButton().Invoke();
+                return Retry.WhileNull(() => FindEditor(), TimeSpan.FromSeconds(10)).Result
+                    ?? throw new InvalidOperationException("找不到 Layout 編輯器視窗");
+            }
+
+            var editor = OpenEditor();
+            In(editor, "PlantName").AsTextBox().Text = "冒煙測試廠";
+            In(editor, "Add_Station").AsButton().Invoke();
+            In(editor, "NewAlias").AsTextBox().Text = "A-01";
+            In(editor, "AddAlias").AsButton().Invoke();
+            In(editor, "SaveConfig").AsButton().Invoke();
+            Assert.True(Retry.WhileFalse(() => In(editor, "EditorStatus").Name.Contains("修訂 1"), TimeSpan.FromSeconds(10)).Result,
+                In(editor, "EditorStatus").Name);
+            Assert.True(File.Exists(Path.Combine(dataRoot, "Plants", "冒煙測試廠.json")));
+            editor.AsWindow().Close();
+            Assert.True(Retry.WhileFalse(() => FindEditor() is null, TimeSpan.FromSeconds(10)).Result);
+
+            editor = OpenEditor();
+            var config = Retry.WhileNull(() => In(editor, "ConfigList").FindFirstChild(cf.ByControlType(ControlType.ListItem)), TimeSpan.FromSeconds(10)).Result;
+            Assert.NotNull(config);
+            config.AsListBoxItem().Select();
+            In(editor, "OpenSelectedConfig").AsButton().Invoke();
+
+            var item = Retry.WhileNull(() => In(editor, "ElementList").FindFirstChild(cf.ByControlType(ControlType.ListItem)), TimeSpan.FromSeconds(10)).Result;
+            Assert.NotNull(item);
+            var texts = string.Concat(item.FindAllDescendants().Select(e => e.Name));
+            Assert.Contains("新站點 1", texts);
+            Assert.Contains("A-01", texts);
+            Assert.Contains("冒煙測試廠", In(editor, "PlantName").AsTextBox().Text);
+            Assert.Contains("修訂 1", In(editor, "RevisionInfo").Name);
+            // 畫布上也有（元素清單與畫布各一個名稱）
+            Assert.True(editor.FindAllDescendants(cf.ByName("新站點 1")).Length >= 2);
+            editor.AsWindow().Close();
+        }
+        finally
+        {
+            app.Close();
+            if (!app.HasExited) app.Kill();
+        }
+    }
+}

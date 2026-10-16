@@ -14,7 +14,7 @@ public sealed class ImportSmokeTests : IDisposable
 
     public void Dispose() => _tmp.Dispose();
 
-    static string AppExe()
+    internal static string AppExe()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "LogTrace.slnx"))) dir = dir.Parent;

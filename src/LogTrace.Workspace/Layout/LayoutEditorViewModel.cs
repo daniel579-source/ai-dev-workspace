@@ -1,0 +1,416 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using LogTrace.Engine.Plants;
+
+namespace LogTrace.Workspace.Layout;
+
+/// <summary>
+/// Layout 編輯器（ADR-0006 第 9 點）：三欄式——左邊元素清單與工具箱、中間畫布、右邊屬性。
+/// 編輯廠別設定檔（JSON）；畫布上的拖曳、調整大小以公尺計，吸附到 0.5 公尺的格線。
+/// 「載入案件比對／未對應的編號」在後續 ticket 加入。
+/// </summary>
+public sealed partial class LayoutEditorViewModel : ObservableObject
+{
+    /// <summary>格線吸附的間距（公尺）。</summary>
+    public const double Snap = 0.5;
+
+    public static readonly IReadOnlyList<int> Rotations = [0, 90, 180, 270];
+
+    readonly PlantConfigLibrary _library;
+    readonly IUserInteraction _ui;
+    PlantConfigDocument _document = new();
+    (LayoutElementViewModel Element, double X, double Y, double W, double H)? _drag;
+
+    public LayoutEditorViewModel(PlantConfigLibrary library, IUserInteraction ui)
+    {
+        _library = library;
+        _ui = ui;
+        Elements.CollectionChanged += (_, _) => RefreshEndpoints();
+        RefreshConfigs();
+        Load(new PlantConfigDocument { Plant = "新廠別" }, null);
+        Status = "建立新的廠別設定，或從清單開啟既有的設定。";
+    }
+
+    public IReadOnlyList<LayoutElementType> AddableTypes => LayoutElementTypes.Addable;
+
+    /// <summary>存放位置下的廠別設定檔。</summary>
+    public ObservableCollection<string> Configs { get; } = [];
+
+    public ObservableCollection<LayoutElementViewModel> Elements { get; } = [];
+
+    /// <summary>輸送線兩端可以選的元素（站點與對接設備）。</summary>
+    public ObservableCollection<LayoutElementViewModel> ConveyorEndpoints { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Title))]
+    public partial string? FilePath { get; private set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Title))]
+    public partial string PlantName { get; set; } = "";
+
+    [ObservableProperty]
+    public partial string StorageCodeRule { get; set; } = "";
+
+    [ObservableProperty]
+    public partial int Revision { get; private set; }
+
+    [ObservableProperty]
+    public partial string? RevisionInfo { get; private set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Title))]
+    public partial bool IsDirty { get; private set; }
+
+    [ObservableProperty]
+    public partial string Status { get; private set; } = "";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelection))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteSelectedCommand), nameof(AddAliasCommand), nameof(AddPropertyCommand), nameof(SetRotationCommand))]
+    public partial LayoutElementViewModel? SelectedElement { get; set; }
+
+    public bool HasSelection => SelectedElement is not null;
+
+    /// <summary>屬性面板中輸入、準備加入的別名。</summary>
+    [ObservableProperty]
+    public partial string NewAlias { get; set; } = "";
+
+    public string Title => $"Layout 編輯器 - {(FilePath is null ? "（尚未存檔）" : Path.GetFileName(FilePath))}{(IsDirty ? " *" : "")}";
+
+    partial void OnSelectedElementChanged(LayoutElementViewModel? oldValue, LayoutElementViewModel? newValue)
+    {
+        if (oldValue is not null) oldValue.IsSelected = false;
+        if (newValue is not null) newValue.IsSelected = true;
+    }
+
+    partial void OnPlantNameChanged(string value) => IsDirty = true;
+    partial void OnStorageCodeRuleChanged(string value) => IsDirty = true;
+
+    // ---- 檔案 ----
+
+    void RefreshConfigs()
+    {
+        Configs.Clear();
+        foreach (var p in _library.List()) Configs.Add(p);
+    }
+
+    void Load(PlantConfigDocument doc, string? path)
+    {
+        foreach (var e in Elements) Detach(e);
+        _document = doc;
+        SelectedElement = null;
+        Elements.Clear();
+        foreach (var e in doc.Layout.Elements) Attach(new LayoutElementViewModel(e));
+        PlantName = doc.Plant;
+        StorageCodeRule = doc.Layout.StorageCodeRule ?? "";
+        Revision = doc.Revision;
+        RevisionInfo = doc.Revision == 0 ? "尚未存檔" : $"修訂 {doc.Revision}（{doc.RevisedBy}，{doc.RevisedAt:yyyy-MM-dd HH:mm}）";
+        FilePath = path;
+        RefreshEndpoints();
+        IsDirty = false;
+    }
+
+    /// <summary>有未存檔的修改時詢問是否放棄；可以繼續時傳回 true。</summary>
+    public bool ConfirmDiscard() =>
+        !IsDirty || _ui.Confirm("尚未存檔", $"「{PlantName}」有尚未存檔的修改，確定要放棄嗎？");
+
+    [RelayCommand]
+    void New()
+    {
+        if (!ConfirmDiscard()) return;
+        Load(new PlantConfigDocument { Plant = "新廠別" }, null);
+        Status = "已建立新的廠別設定（尚未存檔）。";
+    }
+
+    /// <summary>開啟存放位置下的設定檔。</summary>
+    [RelayCommand]
+    void OpenConfig(string? path)
+    {
+        if (path is null || !ConfirmDiscard()) return;
+        Open(path);
+    }
+
+    /// <summary>開啟其他位置的設定檔（例如同事分享的檔案）。</summary>
+    [RelayCommand]
+    void OpenFile()
+    {
+        if (!ConfirmDiscard()) return;
+        if (_ui.PickPlantConfigFile(_library.Root) is { } path) Open(path);
+    }
+
+    void Open(string path)
+    {
+        try
+        {
+            Load(PlantConfigFile.Load(path), path);
+            Status = $"已開啟 {Path.GetFileName(path)}。";
+        }
+        catch (Exception ex) when (ex is PlantConfigFormatException or IOException or UnauthorizedAccessException)
+        {
+            Status = "無法開啟：" + ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    void Save() => SaveTo(FilePath ?? _library.SuggestPath(PlantName));
+
+    [RelayCommand]
+    void SaveAs()
+    {
+        var suggested = FilePath is null ? _library.SuggestPath(PlantName) : Path.GetFileName(FilePath);
+        if (_ui.PickPlantConfigSavePath(_library.Root, Path.GetFileName(suggested)) is { } path) SaveTo(path);
+    }
+
+    void SaveTo(string path)
+    {
+        foreach (var e in Elements) e.HasIssue = false;
+        _document.Plant = PlantName.Trim();
+        _document.Layout.StorageCodeRule = string.IsNullOrWhiteSpace(StorageCodeRule) ? null : StorageCodeRule.Trim();
+        _document.Layout.Elements = Elements.Select(e => e.ToModel()).ToList();
+        try
+        {
+            PlantConfigFile.Save(_document, path);
+        }
+        catch (PlantConfigValidationException ex)
+        {
+            var ids = ex.Issues.SelectMany(i => i.ElementIds).ToHashSet();
+            foreach (var e in Elements.Where(e => ids.Contains(e.Id))) e.HasIssue = true;
+            SelectedElement = Elements.FirstOrDefault(e => e.HasIssue) ?? SelectedElement;
+            Status = "無法存檔：" + string.Join("；", ex.Issues.Select(i => i.Message));
+            return;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Status = "存檔失敗：" + ex.Message;
+            return;
+        }
+        Load(_document, path);
+        RefreshConfigs();
+        Status = $"已存檔：{Path.GetFileName(path)}，修訂 {Revision}。";
+    }
+
+    // ---- 元素 ----
+
+    void Attach(LayoutElementViewModel e)
+    {
+        e.PropertyChanged += OnElementChanged;
+        e.Aliases.CollectionChanged += OnElementCollectionChanged;
+        e.Props.CollectionChanged += OnElementCollectionChanged;
+        foreach (var p in e.Props) p.PropertyChanged += (_, _) => IsDirty = true;
+        Elements.Add(e);
+    }
+
+    void Detach(LayoutElementViewModel e)
+    {
+        e.PropertyChanged -= OnElementChanged;
+        e.Aliases.CollectionChanged -= OnElementCollectionChanged;
+        e.Props.CollectionChanged -= OnElementCollectionChanged;
+    }
+
+    void OnElementCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) => IsDirty = true;
+
+    void OnElementChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(LayoutElementViewModel.HasIssue) or nameof(LayoutElementViewModel.IsSelected)
+            or nameof(LayoutElementViewModel.AliasesText) or nameof(LayoutElementViewModel.LineX1) or nameof(LayoutElementViewModel.LineY1)
+            or nameof(LayoutElementViewModel.LineX2) or nameof(LayoutElementViewModel.LineY2)
+            or nameof(LayoutElementViewModel.CenterX) or nameof(LayoutElementViewModel.CenterY))
+            return;
+        IsDirty = true;
+        if (e.PropertyName is nameof(LayoutElementViewModel.X) or nameof(LayoutElementViewModel.Y) or nameof(LayoutElementViewModel.W)
+            or nameof(LayoutElementViewModel.H) or nameof(LayoutElementViewModel.From) or nameof(LayoutElementViewModel.To)
+            or nameof(LayoutElementViewModel.Name))
+            RefreshEndpoints();
+    }
+
+    /// <summary>更新輸送線兩端的位置，以及可以當作輸送線兩端的元素。</summary>
+    void RefreshEndpoints()
+    {
+        var byId = Elements.Where(e => e.HasGeometry).ToDictionary(e => e.Id);
+        foreach (var c in Elements.Where(e => e.IsConveyor))
+        {
+            if (c.From is { } f && byId.TryGetValue(f, out var a)) (c.LineX1, c.LineY1) = (a.CenterX, a.CenterY);
+            if (c.To is { } t && byId.TryGetValue(t, out var b)) (c.LineX2, c.LineY2) = (b.CenterX, b.CenterY);
+        }
+        var endpoints = Elements.Where(e => e.Type is LayoutElementType.Station or LayoutElementType.Dock).ToList();
+        if (!endpoints.SequenceEqual(ConveyorEndpoints))
+        {
+            ConveyorEndpoints.Clear();
+            foreach (var e in endpoints) ConveyorEndpoints.Add(e);
+        }
+    }
+
+    string NextId(LayoutElementType type)
+    {
+        var prefix = LayoutElementTypes.IdPrefix(type) + "-";
+        int n = 1;
+        while (Elements.Any(e => e.Id == prefix + n)) n++;
+        return prefix + n;
+    }
+
+    /// <summary>新增元素，放在現有元素的下方，並選取它。</summary>
+    [RelayCommand]
+    void AddElement(LayoutElementType type)
+    {
+        var id = NextId(type);
+        LayoutElement model;
+        if (type == LayoutElementType.Conveyor)
+        {
+            var ends = ConveyorEndpoints.ToList();
+            if (ends.Count < 2)
+            {
+                Status = "輸送線需要至少兩個站點或對接設備。";
+                return;
+            }
+            model = new LayoutElement { Id = id, Type = type, Name = $"輸送線 {id[(id.IndexOf('-') + 1)..]}", From = ends[0].Id, To = ends[1].Id };
+        }
+        else
+        {
+            var (w, h, height) = LayoutElementTypes.DefaultSize(type);
+            // 放在現有元素的下方，避免疊在一起
+            var top = SnapTo(Elements.Where(e => e.HasGeometry).Select(e => e.Y + e.H).DefaultIfEmpty(0).Max() + 1);
+            model = new LayoutElement
+            {
+                Id = id, Type = type, Name = $"新{LayoutElementTypes.Label(type)} {id[(id.IndexOf('-') + 1)..]}",
+                X = 1, Y = top, W = w, H = h, Rotation = 0, Height = height,
+                Aliases = LayoutElement.CanHaveAliases(type) ? [] : null,
+            };
+            if (type == LayoutElementType.Rack)
+                (model.Row, model.ColFrom, model.ColTo, model.Levels, model.LevelHeight) = ("01", 1, 10, 5, 2.5);
+        }
+        var vm = new LayoutElementViewModel(model);
+        Attach(vm);
+        SelectedElement = vm;
+        IsDirty = true;
+        Status = $"已新增{vm.TypeLabel}。";
+    }
+
+    bool CanEditSelection() => SelectedElement is not null;
+
+    /// <summary>刪除選取的元素；連到它的輸送線一起刪除。</summary>
+    [RelayCommand(CanExecute = nameof(CanEditSelection))]
+    void DeleteSelected()
+    {
+        var e = SelectedElement!;
+        var removed = Elements.Where(x => x == e || (x.IsConveyor && (x.From == e.Id || x.To == e.Id))).ToList();
+        SelectedElement = null;
+        foreach (var x in removed)
+        {
+            Detach(x);
+            Elements.Remove(x);
+        }
+        IsDirty = true;
+        Status = removed.Count > 1 ? $"已刪除「{e.Name}」與連到它的 {removed.Count - 1} 條輸送線。" : $"已刪除「{e.Name}」。";
+    }
+
+    public static double SnapTo(double value) => Math.Round(value / Snap, MidpointRounding.AwayFromZero) * Snap;
+
+    /// <summary>開始拖曳（移動或調整大小）：記下元素原本的位置與尺寸。</summary>
+    public void BeginDrag(LayoutElementViewModel element)
+    {
+        SelectedElement = element;
+        _drag = (element, element.X, element.Y, element.W, element.H);
+    }
+
+    /// <summary>移動：從開始拖曳的位置加上位移（公尺），吸附到格線，不超出畫布左上角。</summary>
+    public void DragMoveBy(double dx, double dy)
+    {
+        if (_drag is not { } d || !d.Element.HasGeometry) return;
+        d.Element.X = Math.Max(0, SnapTo(d.X + dx));
+        d.Element.Y = Math.Max(0, SnapTo(d.Y + dy));
+    }
+
+    /// <summary>
+    /// 調整大小：從開始拖曳的尺寸加上位移（公尺），吸附到格線，最小一格。
+    /// 元素旋轉 90 或 270 度時，畫面上的橫向對應元素的深（H）。
+    /// </summary>
+    public void DragResizeBy(double dx, double dy)
+    {
+        if (_drag is not { } d || !d.Element.HasGeometry) return;
+        if (d.Element.Rotation is 90 or 270) (dx, dy) = (dy, dx);
+        d.Element.W = Math.Max(Snap, SnapTo(d.W + dx));
+        d.Element.H = Math.Max(Snap, SnapTo(d.H + dy));
+    }
+
+    public void EndDrag() => _drag = null;
+
+    /// <summary>旋轉到指定角度（只允許 0、90、180、270）。</summary>
+    [RelayCommand(CanExecute = nameof(CanEditSelection))]
+    void SetRotation(int angle)
+    {
+        if (SelectedElement is not { HasGeometry: true } e) return;
+        if (!Rotations.Contains(angle))
+        {
+            Status = $"旋轉只能是 0、90、180、270 度。";
+            return;
+        }
+        e.Rotation = angle;
+    }
+
+    /// <summary>順時針轉 90 度。</summary>
+    [RelayCommand(CanExecute = nameof(CanEditSelection))]
+    void RotateClockwise()
+    {
+        if (SelectedElement is { HasGeometry: true } e) e.Rotation = (e.Rotation + 90) % 360;
+    }
+
+    // ---- 別名與自訂屬性 ----
+
+    /// <summary>目前擁有這個別名的元素（大小寫視為相同，ADR-0006 第 2 點）。</summary>
+    public LayoutElementViewModel? AliasOwner(string alias) =>
+        Elements.FirstOrDefault(e => e.Aliases.Any(a => string.Equals(a, alias.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>為選取的元素加上別名；別名已經屬於其他元素時擋下，並指出是哪一個。</summary>
+    [RelayCommand(CanExecute = nameof(CanEditSelection))]
+    void AddAlias()
+    {
+        var e = SelectedElement!;
+        var alias = NewAlias.Trim();
+        if (alias.Length == 0) return;
+        if (!e.CanHaveAliases)
+        {
+            Status = $"「{e.TypeLabel}」不能加別名；只有站點、搬送機、對接設備可以。";
+            return;
+        }
+        var owner = AliasOwner(alias);
+        if (owner == e)
+        {
+            Status = $"「{e.Name}」已經有別名「{alias}」。";
+            return;
+        }
+        if (owner is not null)
+        {
+            Status = $"別名「{alias}」已經屬於「{owner.Name}」。同一個別名只能屬於一個元素。";
+            return;
+        }
+        e.Aliases.Add(alias);
+        NewAlias = "";
+        Status = $"已把「{alias}」加為「{e.Name}」的別名。";
+    }
+
+    [RelayCommand]
+    void RemoveAlias(string? alias)
+    {
+        if (SelectedElement is { } e && alias is not null) e.Aliases.Remove(alias);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanEditSelection))]
+    void AddProperty()
+    {
+        var e = SelectedElement!;
+        int n = 1;
+        while (e.Props.Any(p => p.Key == $"屬性{n}")) n++;
+        var item = new PropertyItemViewModel($"屬性{n}", "");
+        item.PropertyChanged += (_, _) => IsDirty = true;
+        e.Props.Add(item);
+    }
+
+    [RelayCommand]
+    void RemoveProperty(PropertyItemViewModel? item)
+    {
+        if (SelectedElement is { } e && item is not null) e.Props.Remove(item);
+    }
+}

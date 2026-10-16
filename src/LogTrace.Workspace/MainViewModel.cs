@@ -23,14 +23,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     readonly IUserInteraction _ui;
     readonly string _defaultCasesRoot;
     readonly Func<string, bool> _isInOneDrive;
+    readonly string _plantsRoot;
     AppSettings _settings;
     CaseLibrary _library;
     Case? _case;
 
     /// <param name="defaultCasesRoot">設定中沒有指定存放位置時使用（預設 %LOCALAPPDATA%\LogTrace\Cases）。</param>
     /// <param name="isInOneDrive">判斷位置是否在 OneDrive 同步資料夾內；預設依本機環境判斷。</param>
-    public MainViewModel(SettingsStore settingsStore, IUserInteraction ui, string defaultCasesRoot, Func<string, bool>? isInOneDrive = null)
+    /// <param name="plantsRoot">廠別設定檔的存放位置；預設與預設案件位置同一層的 Plants。</param>
+    public MainViewModel(SettingsStore settingsStore, IUserInteraction ui, string defaultCasesRoot, Func<string, bool>? isInOneDrive = null,
+        string? plantsRoot = null)
     {
+        _plantsRoot = plantsRoot ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(defaultCasesRoot))!, "Plants");
         _settingsStore = settingsStore;
         _ui = ui;
         _defaultCasesRoot = defaultCasesRoot;
@@ -400,6 +404,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         return (modules, rows);
     }
+
+    /// <summary>開啟 Layout 編輯器，編輯廠別設定檔（ADR-0006）。</summary>
+    [RelayCommand]
+    void OpenLayoutEditor() => _ui.ShowLayoutEditor(new Layout.LayoutEditorViewModel(new PlantConfigLibrary(_plantsRoot), _ui));
 
     [RelayCommand]
     void BrowseImportFolder()

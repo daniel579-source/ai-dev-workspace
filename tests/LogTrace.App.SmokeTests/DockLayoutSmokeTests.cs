@@ -69,6 +69,9 @@ public sealed class DockLayoutSmokeTests : IDisposable
     {
         @in("LayoutMenu").AsMenuItem().Expand();
         @in(item).AsMenuItem().Invoke();
+        // Invoke 可能在程式處理點選之前就返回：等程式處理完，再讓呼叫端關閉程式（否則可能存下舊的版面）
+        FlaUI.Core.Input.Wait.UntilInputIsProcessed(TimeSpan.FromMilliseconds(500));
+        Thread.Sleep(300);
     }
 
     [Fact]

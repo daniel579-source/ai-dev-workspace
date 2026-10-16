@@ -77,6 +77,12 @@ public sealed class ImportPerformanceTests(ITestOutputHelper output)
                 Assert.True(watch.Elapsed < TimeSpan.FromSeconds(2), $"{label} 超過 2 秒");
             }
 
+            // 修改時間偏移量（ADR-0003 第 5 點）：重新解析並排序整個案件（#29 補量）
+            var correction = Stopwatch.StartNew();
+            c.SetTimeCorrection(Events.TimeCorrection.Create(TimeSpan.Zero, [KeyValuePair.Create("PLC", TimeSpan.FromSeconds(1))]));
+            correction.Stop();
+            output.WriteLine($"修改時間偏移量（PLC +1 秒，重新排序）：{correction.Elapsed.TotalSeconds:N1} 秒");
+
             // 案件大小：關閉案件後才量（開啟中有 WAL 暫存檔，關閉時併回 case.db）
             var folder = c.Folder;
             c.Dispose();

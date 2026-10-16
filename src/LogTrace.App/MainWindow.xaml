@@ -3,12 +3,14 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ad="https://github.com/Dirkster99/AvalonDock"
         xmlns:local="clr-namespace:LogTrace.App"
-        Title="LogTrace" Width="1360" Height="800" Activated="Window_Activated"
+        Title="LogTrace" Width="1480" Height="860" Activated="Window_Activated"
         AutomationProperties.AutomationId="MainWindow">
     <Window.Resources>
         <local:NotConverter x:Key="Not" />
         <BooleanToVisibilityConverter x:Key="Visible" />
         <local:CollapsedWhenTrueConverter x:Key="Collapsed" />
+        <local:MetersToPixelsConverter x:Key="Px" />
+        <local:PositiveConverter x:Key="Positive" />
     </Window.Resources>
     <DockPanel>
         <!-- 建立案件與匯入 -->
@@ -65,7 +67,8 @@
         <ad:DockingManager>
             <ad:LayoutRoot>
                 <ad:LayoutPanel Orientation="Horizontal">
-                    <ad:LayoutAnchorablePane DockWidth="280">
+                    <ad:LayoutAnchorablePaneGroup DockWidth="1*">
+                    <ad:LayoutAnchorablePane>
                         <ad:LayoutAnchorable ContentId="cases" Title="案件" CanClose="False">
                             <DockPanel Margin="6">
                                 <!-- 存放位置（ADR-0011 第 3 點） -->
@@ -140,7 +143,9 @@
                             </DockPanel>
                         </ad:LayoutAnchorable>
                     </ad:LayoutAnchorablePane>
-                <ad:LayoutPanel Orientation="Vertical">
+                    </ad:LayoutAnchorablePaneGroup>
+                <ad:LayoutPanel Orientation="Vertical" DockWidth="4*">
+                <ad:LayoutPanel Orientation="Horizontal" DockHeight="*">
                     <ad:LayoutAnchorablePane>
                         <ad:LayoutAnchorable ContentId="events" Title="事件清單" CanClose="False">
                             <DockPanel>
@@ -225,12 +230,208 @@
                             </DockPanel>
                         </ad:LayoutAnchorable>
                     </ad:LayoutAnchorablePane>
+                    <ad:LayoutAnchorablePane DockWidth="620">
+                        <ad:LayoutAnchorable ContentId="playback" Title="Layout 回放" CanClose="False">
+                            <!-- ADR-0008 第 6 點：依目前時刻（事件清單選取的事件）顯示世界狀態（ADR-0005） -->
+                            <DockPanel DataContext="{Binding Playback}">
+                                <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="#DDD" BorderThickness="0,0,0,1">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding MomentText, StringFormat=目前時刻：{0}}" AutomationProperties.AutomationId="PlaybackMoment" />
+                                        <WrapPanel Margin="0,3,0,0">
+                                            <Border Background="#E5E7EB" BorderBrush="#9CA3AF" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="未知" Margin="0,0,10,0" Foreground="#555" />
+                                            <Border Background="White" BorderBrush="#9CA3AF" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="空" Margin="0,0,10,0" Foreground="#555" />
+                                            <Border Background="#BFDBFE" BorderBrush="#9CA3AF" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="有貨" Margin="0,0,10,0" Foreground="#555" />
+                                            <Border Background="#FDE68A" BorderBrush="#9CA3AF" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="搬送機執行中" Margin="0,0,10,0" Foreground="#555" />
+                                            <Border Background="#FEE2E2" BorderBrush="#DC2626" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="異常中" Margin="0,0,10,0" Foreground="#555" />
+                                            <TextBlock Text="●在席 ON　○OFF　◌未知　⚠ 不一致" Foreground="#555" />
+                                        </WrapPanel>
+                                        <TextBlock Text="{Binding Message}" Foreground="#B45309" TextWrapping="Wrap" Margin="0,3,0,0" AutomationProperties.AutomationId="PlaybackMessage">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Message}" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+                                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#F8FAFC">
+                                    <ItemsControl ItemsSource="{Binding Elements}" Margin="8" AutomationProperties.AutomationId="PlaybackLayout">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <Canvas Width="1280" Height="800" Background="White" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemContainerStyle>
+                                            <Style TargetType="ContentPresenter">
+                                                <Setter Property="Canvas.Left" Value="{Binding X, Converter={StaticResource Px}}" />
+                                                <Setter Property="Canvas.Top" Value="{Binding Y, Converter={StaticResource Px}}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsConveyor}" Value="True">
+                                                        <Setter Property="Canvas.Left" Value="0" />
+                                                        <Setter Property="Canvas.Top" Value="0" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Type}" Value="Area">
+                                                        <Setter Property="Panel.ZIndex" Value="-1" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </ItemsControl.ItemContainerStyle>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid>
+                                                    <Line X1="{Binding LineX1, Converter={StaticResource Px}}" Y1="{Binding LineY1, Converter={StaticResource Px}}"
+                                                          X2="{Binding LineX2, Converter={StaticResource Px}}" Y2="{Binding LineY2, Converter={StaticResource Px}}"
+                                                          Stroke="#94A3B8" StrokeThickness="3" StrokeDashArray="3 2" IsHitTestVisible="False"
+                                                          Visibility="{Binding IsConveyor, Converter={StaticResource Visible}}" />
+                                                    <Border x:Name="Shape" Tag="{Binding}" Cursor="Hand" MouseLeftButtonUp="PlaybackElement_Click"
+                                                            Width="{Binding W, Converter={StaticResource Px}}" Height="{Binding H, Converter={StaticResource Px}}"
+                                                            BorderBrush="#64748B" BorderThickness="1" Background="#E5E7EB" RenderTransformOrigin="0.5,0.5"
+                                                            Visibility="{Binding HasGeometry, Converter={StaticResource Visible}}" ToolTip="{Binding Aliases}">
+                                                        <Border.RenderTransform>
+                                                            <RotateTransform Angle="{Binding Rotation}" />
+                                                        </Border.RenderTransform>
+                                                        <Grid>
+                                                            <!-- 料架：沿長邊切成列，以有貨的層數表示 -->
+                                                            <ItemsControl ItemsSource="{Binding Cells}" Visibility="{Binding IsRack, Converter={StaticResource Visible}}">
+                                                                <ItemsControl.ItemsPanel>
+                                                                    <ItemsPanelTemplate>
+                                                                        <UniformGrid Rows="1" />
+                                                                    </ItemsPanelTemplate>
+                                                                </ItemsControl.ItemsPanel>
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Border x:Name="Cell" Tag="{Binding}" BorderBrush="#CBD5E1" BorderThickness="0.5" Background="#F8FAFC"
+                                                                                MouseLeftButtonUp="RackCell_Click" Cursor="Hand"
+                                                                                ToolTip="{Binding Column, StringFormat=第 {0} 列（點一下看側視圖）}">
+                                                                            <TextBlock x:Name="Count" Text="{Binding Occupied}" FontSize="9" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                                                                                       Foreground="#1E3A8A" Visibility="Collapsed" />
+                                                                        </Border>
+                                                                        <DataTemplate.Triggers>
+                                                                            <DataTrigger Binding="{Binding Occupied}" Value="0">
+                                                                                <Setter TargetName="Count" Property="Visibility" Value="Collapsed" />
+                                                                            </DataTrigger>
+                                                                            <MultiDataTrigger>
+                                                                                <MultiDataTrigger.Conditions>
+                                                                                    <Condition Binding="{Binding Occupied, Converter={StaticResource Positive}}" Value="True" />
+                                                                                </MultiDataTrigger.Conditions>
+                                                                                <Setter TargetName="Cell" Property="Background" Value="#93C5FD" />
+                                                                                <Setter TargetName="Count" Property="Visibility" Value="Visible" />
+                                                                            </MultiDataTrigger>
+                                                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                                <Setter TargetName="Cell" Property="BorderBrush" Value="#2563EB" />
+                                                                                <Setter TargetName="Cell" Property="BorderThickness" Value="2" />
+                                                                            </DataTrigger>
+                                                                        </DataTemplate.Triggers>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False">
+                                                                <TextBlock Text="{Binding Name}" FontSize="11" TextAlignment="Center" />
+                                                                <TextBlock Text="{Binding Summary}" FontSize="10" Foreground="#1E3A8A" TextAlignment="Center" TextWrapping="Wrap" />
+                                                            </StackPanel>
+                                                            <TextBlock Text="{Binding PresenceLight}" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,3,0"
+                                                                       IsHitTestVisible="False" />
+                                                            <TextBlock x:Name="Warn" Text="⚠" Foreground="#B45309" FontSize="12" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                                       Margin="3,0,0,0" Visibility="Collapsed" IsHitTestVisible="False" ToolTip="不一致：命令與在席訊號矛盾" />
+                                                        </Grid>
+                                                    </Border>
+                                                </Grid>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding Look}" Value="Empty">
+                                                        <Setter TargetName="Shape" Property="Background" Value="White" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Look}" Value="Occupied">
+                                                        <Setter TargetName="Shape" Property="Background" Value="#BFDBFE" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Look}" Value="Executing">
+                                                        <Setter TargetName="Shape" Property="Background" Value="#FDE68A" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Look}" Value="Alarm">
+                                                        <Setter TargetName="Shape" Property="Background" Value="#FEE2E2" />
+                                                        <Setter TargetName="Shape" Property="BorderBrush" Value="#DC2626" />
+                                                        <Setter TargetName="Shape" Property="BorderThickness" Value="2" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Look}" Value="Auxiliary">
+                                                        <Setter TargetName="Shape" Property="Background" Value="#0F94A3B8" />
+                                                        <Setter TargetName="Shape" Property="BorderBrush" Value="#CBD5E1" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Type}" Value="Label">
+                                                        <Setter TargetName="Shape" Property="Background" Value="Transparent" />
+                                                        <Setter TargetName="Shape" Property="BorderBrush" Value="Transparent" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsInconsistent}" Value="True">
+                                                        <Setter TargetName="Warn" Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                        <Setter TargetName="Shape" Property="BorderBrush" Value="#2563EB" />
+                                                        <Setter TargetName="Shape" Property="BorderThickness" Value="2" />
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </DockPanel>
+                        </ad:LayoutAnchorable>
+                    </ad:LayoutAnchorablePane>
+                </ad:LayoutPanel>
                     <ad:LayoutPanel Orientation="Horizontal" DockHeight="240">
                         <ad:LayoutAnchorablePane DockWidth="420">
                             <ad:LayoutAnchorable ContentId="detail" Title="詳細資訊" CanClose="False">
                                 <TextBox Text="{Binding SelectedDetail, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"
                                          VerticalScrollBarVisibility="Auto" FontFamily="Consolas, Microsoft JhengHei UI" BorderThickness="0"
                                          AutomationProperties.AutomationId="EventDetail" />
+                            </ad:LayoutAnchorable>
+                        </ad:LayoutAnchorablePane>
+                        <ad:LayoutAnchorablePane DockWidth="420">
+                            <ad:LayoutAnchorable ContentId="elementstate" Title="元素狀態" CanClose="False">
+                                <!-- 選取元素的目前狀態，每一列附上造成它的事件；料架顯示側視圖 -->
+                                <DockPanel DataContext="{Binding Playback}">
+                                    <TextBlock DockPanel.Dock="Top" Padding="6,3" FontWeight="SemiBold" AutomationProperties.AutomationId="ElementStateTitle"
+                                               Text="{Binding SelectedElement.Name, TargetNullValue=點選 Layout 上的元素}" />
+                                    <ListView DockPanel.Dock="Top" ItemsSource="{Binding Detail}" BorderThickness="0" MaxHeight="220"
+                                              AutomationProperties.AutomationId="ElementState">
+                                        <ListView.View>
+                                            <GridView>
+                                                <GridViewColumn Header="狀態" DisplayMemberBinding="{Binding Label}" Width="70" />
+                                                <GridViewColumn Header="值" Width="180">
+                                                    <GridViewColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Text="{Binding Value}" TextWrapping="Wrap" />
+                                                        </DataTemplate>
+                                                    </GridViewColumn.CellTemplate>
+                                                </GridViewColumn>
+                                                <GridViewColumn Header="造成這個狀態的事件" Width="300">
+                                                    <GridViewColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock TextTrimming="CharacterEllipsis" ToolTip="{Binding CauseText}">
+                                                                <Hyperlink Command="{Binding DataContext.Playback.GoToCauseCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                           CommandParameter="{Binding Cause}">
+                                                                    <Run Text="{Binding CauseText, Mode=OneWay}" />
+                                                                </Hyperlink>
+                                                            </TextBlock>
+                                                        </DataTemplate>
+                                                    </GridViewColumn.CellTemplate>
+                                                </GridViewColumn>
+                                            </GridView>
+                                        </ListView.View>
+                                    </ListView>
+                                    <TextBlock DockPanel.Dock="Top" Text="{Binding SideViewTitle}" Padding="6,6,6,2" FontWeight="SemiBold" />
+                                    <ListView ItemsSource="{Binding SideView}" BorderThickness="0" AutomationProperties.AutomationId="RackSideView">
+                                        <ListView.View>
+                                            <GridView>
+                                                <GridViewColumn Header="層" DisplayMemberBinding="{Binding Level}" Width="40" />
+                                                <GridViewColumn Header="儲位" DisplayMemberBinding="{Binding StorageCode}" Width="80" />
+                                                <GridViewColumn Header="棧板" DisplayMemberBinding="{Binding Pallet, TargetNullValue=—}" Width="110" />
+                                                <GridViewColumn Header="造成這個狀態的事件" DisplayMemberBinding="{Binding CauseText}" Width="260" />
+                                            </GridView>
+                                        </ListView.View>
+                                    </ListView>
+                                </DockPanel>
                             </ad:LayoutAnchorable>
                         </ad:LayoutAnchorablePane>
                         <ad:LayoutAnchorablePane>

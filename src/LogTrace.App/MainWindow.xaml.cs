@@ -81,6 +81,23 @@ public partial class MainWindow : Window
         if (EventList.SelectedItem is { } selected) EventList.ScrollIntoView(selected);
     }
 
+    /// <summary>Layout 回放：點元素選取它（料架的列另外處理）。</summary>
+    void PlaybackElement_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: LogTrace.Workspace.Playback.PlaybackElementViewModel el } && !e.Handled)
+            _vm?.Playback.SelectElementCommand.Execute(el);
+    }
+
+    /// <summary>Layout 回放：點料架的一列顯示側視圖。</summary>
+    void RackCell_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: LogTrace.Workspace.Playback.RackCellViewModel cell })
+        {
+            _vm?.Playback.SelectRackCell(cell);
+            e.Handled = true;
+        }
+    }
+
     /// <summary>回到主畫面時（例如關閉 Layout 編輯器後）重新列出廠別設定。</summary>
     void Window_Activated(object? sender, EventArgs e) => _vm?.RefreshPlants();
 
@@ -105,6 +122,14 @@ public sealed class CollapsedWhenTrueConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
         value is true ? Visibility.Collapsed : Visibility.Visible;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
+}
+
+/// <summary>數值大於 0 時為 true。</summary>
+public sealed class PositiveConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value is int n && n > 0;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
 }

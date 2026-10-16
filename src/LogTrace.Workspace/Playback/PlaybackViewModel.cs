@@ -1,0 +1,353 @@
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using LogTrace.Engine.Events;
+using LogTrace.Engine.Playback;
+using LogTrace.Engine.Plants;
+using LogTrace.Workspace.Layout;
+
+namespace LogTrace.Workspace.Playback;
+
+/// <summary>元素在 Layout 面板上的外觀（ADR-0008 第 6 點的圖例）。</summary>
+public enum ElementLook
+{
+    /// <summary>沒有任何事件確定過狀態：灰色。</summary>
+    Unknown,
+    /// <summary>狀態已知、沒有貨物。</summary>
+    Empty,
+    /// <summary>有貨物。</summary>
+    Occupied,
+    /// <summary>搬送機執行中。</summary>
+    Executing,
+    /// <summary>異常中（有未復歸的警報）。</summary>
+    Alarm,
+    /// <summary>輔助元素（區域、文字、輸送線），不推導狀態。</summary>
+    Auxiliary,
+}
+
+/// <summary>詳細資訊的一列：狀態，以及造成這個狀態的事件（可以跳過去）。</summary>
+public sealed record StateLineViewModel(string Label, string Value, long? Cause, string? CauseText);
+
+/// <summary>料架的一列（沿長邊切成的小格）；以有貨的層數表示深淺（ADR-0006 第 4 點）。</summary>
+public sealed partial class RackCellViewModel(int column, int levels) : ObservableObject
+{
+    public int Column { get; } = column;
+    public int Levels { get; } = levels;
+
+    [ObservableProperty]
+    public partial int Occupied { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsSelected { get; set; }
+}
+
+/// <summary>料架側視圖的一層。</summary>
+public sealed record RackLevelViewModel(int Level, string? StorageCode, string? Pallet, long? Cause, string? CauseText);
+
+/// <summary>Layout 面板上的一個元素與它在目前時刻的狀態。</summary>
+public sealed partial class PlaybackElementViewModel : ObservableObject
+{
+    public PlaybackElementViewModel(LayoutElement e, IReadOnlyDictionary<string, LayoutElement> byId)
+    {
+        Model = e;
+        (X, Y, W, H, Rotation) = (e.X ?? 0, e.Y ?? 0, e.W ?? 0, e.H ?? 0, e.Rotation ?? 0);
+        if (e.Type == LayoutElementType.Conveyor && e.From is { } f && e.To is { } t && byId.TryGetValue(f, out var a) && byId.TryGetValue(t, out var b))
+            (LineX1, LineY1, LineX2, LineY2) = (Center(a).X, Center(a).Y, Center(b).X, Center(b).Y);
+        if (e.Type == LayoutElementType.Rack && e.ColFrom is { } from && e.ColTo is { } to && to >= from)
+            for (int c = from; c <= to; c++) Cells.Add(new RackCellViewModel(c, e.Levels ?? 0));
+        Look = IsAuxiliary ? ElementLook.Auxiliary : ElementLook.Unknown;
+    }
+
+    static (double X, double Y) Center(LayoutElement e) => ((e.X ?? 0) + (e.W ?? 0) / 2, (e.Y ?? 0) + (e.H ?? 0) / 2);
+
+    public LayoutElement Model { get; }
+    public string Id => Model.Id;
+    public LayoutElementType Type => Model.Type;
+    public string Name => Model.Name ?? Model.Id;
+    public string TypeLabel => LayoutElementTypes.Label(Model.Type);
+    public string Aliases => string.Join("・", Model.Aliases ?? []);
+    public bool IsConveyor => Type == LayoutElementType.Conveyor;
+    public bool IsRack => Type == LayoutElementType.Rack;
+    public bool HasGeometry => !IsConveyor;
+    public bool IsAuxiliary => Type is LayoutElementType.Conveyor or LayoutElementType.Area or LayoutElementType.Label;
+
+    public double X { get; }
+    public double Y { get; }
+    public double W { get; }
+    public double H { get; }
+    public int Rotation { get; }
+    public double LineX1 { get; }
+    public double LineY1 { get; }
+    public double LineX2 { get; }
+    public double LineY2 { get; }
+
+    /// <summary>料架的各列。</summary>
+    public ObservableCollection<RackCellViewModel> Cells { get; } = [];
+
+    [ObservableProperty]
+    public partial ElementLook Look { get; set; }
+
+    /// <summary>站點右上角的在席指示燈：●＝ON、○＝OFF、◌＝未知（ADR-0005 第 3 點）；其他元素為 null。</summary>
+    [ObservableProperty]
+    public partial string? PresenceLight { get; set; }
+
+    /// <summary>命令與在席訊號矛盾（ADR-0005 第 3 點）。</summary>
+    [ObservableProperty]
+    public partial bool IsInconsistent { get; set; }
+
+    /// <summary>元素上的簡短狀態（例如棧板編號、搬送機的命令）。</summary>
+    [ObservableProperty]
+    public partial string? Summary { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsSelected { get; set; }
+}
+
+/// <summary>
+/// Layout 回放（ADR-0008 第 6 點）：Layout 面板、選取元素的詳細資訊（含造成狀態的事件）、料架側視圖。
+/// 目前時刻由主畫面設定（事件清單選取的事件）；推不出狀態時顯示「未知」，不顯示猜測值。
+/// </summary>
+public sealed partial class PlaybackViewModel : ObservableObject
+{
+    WorldModel? _model;
+    IReadOnlyDictionary<long, LogEvent> _events = new Dictionary<long, LogEvent>();
+    WorldState _state = new();
+    string? _storageRule;
+
+    /// <summary>點「造成這個狀態的事件」時呼叫：主畫面選取該事件。</summary>
+    public Action<long>? GoToEvent { get; set; }
+
+    public ObservableCollection<PlaybackElementViewModel> Elements { get; } = [];
+
+    /// <summary>沒有 Layout 或沒有狀態規則時的說明；可以回放時為 null。</summary>
+    [ObservableProperty]
+    public partial string? Message { get; private set; } = "請開啟案件。";
+
+    /// <summary>目前時刻（顯示用）。</summary>
+    [ObservableProperty]
+    public partial string? MomentText { get; private set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelection))]
+    public partial PlaybackElementViewModel? SelectedElement { get; set; }
+
+    public bool HasSelection => SelectedElement is not null;
+
+    /// <summary>選取元素在目前時刻的狀態，每一列附上造成它的事件。</summary>
+    public ObservableCollection<StateLineViewModel> Detail { get; } = [];
+
+    /// <summary>料架側視圖：選取的列，逐層列出儲位與棧板。</summary>
+    public ObservableCollection<RackLevelViewModel> SideView { get; } = [];
+
+    [ObservableProperty]
+    public partial string? SideViewTitle { get; private set; }
+
+    RackCellViewModel? _selectedCell;
+
+    public void Clear(string message)
+    {
+        _model = null;
+        Elements.Clear();
+        Detail.Clear();
+        SideView.Clear();
+        SelectedElement = null;
+        SideViewTitle = null;
+        MomentText = null;
+        Message = message;
+    }
+
+    /// <summary>載入 Layout 與世界模型；events 用來顯示造成狀態的事件。</summary>
+    public void Load(WorldModel model, LayoutSection layout, IReadOnlyList<LogEvent> events, bool hasStateRules)
+    {
+        _model = model;
+        _storageRule = layout.StorageCodeRule;
+        _events = events.ToDictionary(e => e.Sequence);
+        var byId = layout.Elements.ToDictionary(e => e.Id, StringComparer.Ordinal);
+        Elements.Clear();
+        foreach (var e in layout.Elements) Elements.Add(new PlaybackElementViewModel(e, byId));
+        SelectedElement = null;
+        Message = hasStateRules ? null : "廠別設定的解析規則中，只有在席等少數狀態變化；命令、搬送機、警報等需要在規則中設定「效果」才能推導。";
+        SetMoment(0);
+    }
+
+    /// <summary>目前時刻：事件序號 sequence（含）之前的所有事件套用後的狀態。</summary>
+    public void SetMoment(long sequence)
+    {
+        if (_model is null) return;
+        _state = _model.StateAt(sequence);
+        MomentText = sequence == 0 || !_events.TryGetValue(sequence, out var e)
+            ? "案件開始（所有元素都是未知）"
+            : $"{e.Timestamp:yyyy-MM-dd HH:mm:ss.ffff}　事件 #{sequence}";
+        foreach (var el in Elements) Update(el);
+        UpdateDetail();
+        UpdateSideView();
+    }
+
+    partial void OnSelectedElementChanged(PlaybackElementViewModel? oldValue, PlaybackElementViewModel? newValue)
+    {
+        if (oldValue is not null) oldValue.IsSelected = false;
+        if (newValue is not null) newValue.IsSelected = true;
+        if (newValue is null || !newValue.IsRack) SelectRackCell(null);
+        UpdateDetail();
+    }
+
+    void Update(PlaybackElementViewModel el)
+    {
+        var w = _state;
+        switch (el.Type)
+        {
+            case LayoutElementType.Station:
+            {
+                w.Stations.TryGetValue(el.Id, out var s);
+                var pallets = w.PalletsAt(LocationKind.Station, el.Id).Select(p => p.Id).ToList();
+                el.PresenceLight = s?.Presence switch { true => "●", false => "○", null => "◌" };
+                el.IsInconsistent = w.IsInconsistent(el.Id);
+                el.Summary = pallets.Count > 0 ? string.Join("、", pallets) : null;
+                el.Look = w.Alarms.ContainsKey(el.Id) ? ElementLook.Alarm
+                    : pallets.Count > 0 ? ElementLook.Occupied
+                    : s is null ? ElementLook.Unknown : ElementLook.Empty;
+                break;
+            }
+            case LayoutElementType.Vehicle:
+            {
+                w.Vehicles.TryGetValue(el.Id, out var v);
+                var load = w.PalletsAt(LocationKind.Vehicle, el.Id).Select(p => p.Id).ToList();
+                el.Summary = v?.Work == VehicleWork.Executing ? $"{v.Command} → {v.Destination}" : load.Count > 0 ? string.Join("、", load) : null;
+                el.Look = w.Alarms.ContainsKey(el.Id) ? ElementLook.Alarm
+                    : v?.Work == VehicleWork.Executing ? ElementLook.Executing
+                    : v is null ? ElementLook.Unknown : ElementLook.Empty;
+                break;
+            }
+            case LayoutElementType.Dock:
+            {
+                var delivered = w.PalletsAt(LocationKind.Delivered, el.Id).Count();
+                el.Summary = delivered > 0 ? $"已交出 {delivered}" : null;
+                el.Look = w.Alarms.ContainsKey(el.Id) ? ElementLook.Alarm : delivered > 0 ? ElementLook.Empty : ElementLook.Unknown;
+                break;
+            }
+            case LayoutElementType.Rack:
+            {
+                int total = 0;
+                foreach (var cell in el.Cells)
+                {
+                    cell.Occupied = Enumerable.Range(1, cell.Levels)
+                        .Count(l => StorageCode.Format(_storageRule, el.Model.Row ?? "", cell.Column, l) is { } code && w.Storage.ContainsKey(code));
+                    total += cell.Occupied;
+                }
+                el.Summary = total > 0 ? $"{total} 個儲位有貨" : null;
+                el.Look = total > 0 ? ElementLook.Occupied : ElementLook.Unknown;
+                break;
+            }
+        }
+    }
+
+    StateLineViewModel Line(string label, string value, long? cause) =>
+        new(label, value, cause, cause is { } c && _events.TryGetValue(c, out var e) ? $"#{c} {e.Timestamp:HH:mm:ss.ffff} {e.Message.Split('\n')[0]}" : null);
+
+    void UpdateDetail()
+    {
+        Detail.Clear();
+        if (SelectedElement is not { } el || _model is null) return;
+        var w = _state;
+        switch (el.Type)
+        {
+            case LayoutElementType.Station:
+            {
+                w.Stations.TryGetValue(el.Id, out var s);
+                Detail.Add(Line("在席", s?.Presence switch { true => "ON", false => "OFF", null => "未知" }, s?.PresenceCause));
+                Detail.Add(Line("站點模式", s?.Mode ?? "未知", s?.ModeCause));
+                foreach (var (name, (on, cause)) in s?.Signals ?? []) Detail.Add(Line(name, on ? "ON" : "OFF", cause));
+                foreach (var p in w.PalletsAt(LocationKind.Station, el.Id))
+                    Detail.Add(Line("貨物", PalletText(p), p.LocationCause));
+                if (w.IsInconsistent(el.Id))
+                    Detail.Add(Line("不一致", "命令說貨物在這個站點，但在席是 OFF（不判斷哪一邊才對）", s?.PresenceCause));
+                break;
+            }
+            case LayoutElementType.Vehicle:
+            {
+                w.Vehicles.TryGetValue(el.Id, out var v);
+                Detail.Add(Line("連線", v?.Connection ?? "未知", v?.ConnectionCause));
+                Detail.Add(Line("模式", v?.Connection == "OFF-LINE" ? "（OFF-LINE 時沒有意義）" : v?.Mode ?? "未知", v?.ModeCause));
+                Detail.Add(Line("作業", v?.Work switch
+                {
+                    VehicleWork.Executing => $"執行中：命令 {v.Command} → {v.Destination}",
+                    VehicleWork.Idle => "閒置",
+                    _ => "未知",
+                }, v?.WorkCause));
+                foreach (var p in w.PalletsAt(LocationKind.Vehicle, el.Id))
+                    Detail.Add(Line("載著", PalletText(p), p.LocationCause));
+                break;
+            }
+            case LayoutElementType.Dock:
+                foreach (var p in w.PalletsAt(LocationKind.Delivered, el.Id))
+                    Detail.Add(Line("已交出", PalletText(p), p.LocationCause));
+                if (Detail.Count == 0) Detail.Add(Line("已交出", "無", null));
+                break;
+            case LayoutElementType.Rack:
+                Detail.Add(Line("料架", $"排 {el.Model.Row}，列 {el.Model.ColFrom}～{el.Model.ColTo}，{el.Model.Levels} 層；點一列看側視圖", null));
+                break;
+            default:
+                Detail.Add(Line(el.TypeLabel, "輔助元素，不推導狀態", null));
+                break;
+        }
+        if (w.Alarms.TryGetValue(el.Id, out var alarm))
+            Detail.Add(Line("異常中", $"警報 {alarm.Code}" + (_model.IsAlarmNeverReset(el.Id, alarm) ? "（未見復歸紀錄）" : ""), alarm.Cause));
+        foreach (var c in w.Commands.Values.Where(c => c.Vehicle == el.Id && !c.IsFinished))
+            Detail.Add(Line("命令", CommandText(c), c.StatusCause));
+    }
+
+    string PalletText(PalletState p) =>
+        p.Id + (p.Bins is { } bins ? $"（桶 {bins.Count} 個：{string.Join("、", bins)}）" : "（桶清單未知）") + (p.Preexisting ? "；案件開始前已存在" : "");
+
+    string CommandText(CommandState c) =>
+        $"{c.Id}（{c.Type ?? "類型未知"}）" + c.Status switch
+        {
+            CommandStatus.Created => "已建立",
+            CommandStatus.SegmentRunning => $"第 {c.Segment} 段執行中 → {c.SegmentDestination}",
+            CommandStatus.SegmentArrived => $"第 {c.Segment} 段已抵達",
+            CommandStatus.Completed => "已完成",
+            _ => "已完成（已交出）",
+        } + (_model?.IsUnfinishedInCase(c.Id) == true ? "；案件範圍內未完成" : "");
+
+    /// <summary>選取元素（Layout 面板上點一下）。</summary>
+    [RelayCommand]
+    void SelectElement(PlaybackElementViewModel? element) => SelectedElement = element;
+
+    /// <summary>點料架的一列：顯示側視圖。</summary>
+    public void SelectRackCell(RackCellViewModel? cell)
+    {
+        if (_selectedCell is not null) _selectedCell.IsSelected = false;
+        _selectedCell = cell;
+        if (cell is not null)
+        {
+            cell.IsSelected = true;
+            SelectedElement = Elements.FirstOrDefault(e => e.Cells.Contains(cell));
+        }
+        UpdateSideView();
+    }
+
+    void UpdateSideView()
+    {
+        SideView.Clear();
+        if (_selectedCell is not { } cell || Elements.FirstOrDefault(e => e.Cells.Contains(cell)) is not { } rack)
+        {
+            SideViewTitle = null;
+            return;
+        }
+        SideViewTitle = $"{rack.Name}　第 {cell.Column} 列（由上而下）";
+        for (int level = cell.Levels; level >= 1; level--)
+        {
+            var code = StorageCode.Format(_storageRule, rack.Model.Row ?? "", cell.Column, level);
+            string? pallet = code is not null && _state.Storage.TryGetValue(code, out var p) ? p : null;
+            long? cause = pallet is not null ? _state.Pallets[pallet].LocationCause : null;
+            SideView.Add(new RackLevelViewModel(level, code, pallet, cause, Line("", "", cause).CauseText));
+        }
+    }
+
+    /// <summary>跳到造成狀態的事件（主畫面選取它，目前時刻也跟著移動）。</summary>
+    [RelayCommand]
+    void GoToCause(long? sequence)
+    {
+        if (sequence is { } s) GoToEvent?.Invoke(s);
+    }
+}

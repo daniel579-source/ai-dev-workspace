@@ -4,6 +4,8 @@ using CommunityToolkit.Mvvm.Input;
 using LogTrace.Engine.Cases;
 using LogTrace.Engine.Import;
 using LogTrace.Engine.Parsing;
+using LogTrace.Engine.Playback;
+using LogTrace.Workspace.Playback;
 using LogTrace.Engine.Plants;
 
 namespace LogTrace.Workspace;
@@ -47,6 +49,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         UpdateCasesRoot();
         RefreshCases();
         RefreshPlants();
+        Playback.GoToEvent = GoToEvent;
+    }
+
+    /// <summary>Layout 回放（ADR-0008 第 6 點）；目前時刻＝事件清單選取的事件。</summary>
+    public PlaybackViewModel Playback { get; } = new();
+
+    /// <summary>選取指定的事件（例如從 Layout 回放跳到造成狀態的事件）；被篩選掉時先顯示全部。</summary>
+    void GoToEvent(long sequence)
+    {
+        if (_allRows.FirstOrDefault(r => r.Sequence == sequence) is not { } row) return;
+        if (!Events.Contains(row)) ClearFilter();
+        SelectedEvent = row;
     }
 
     // ---- 案件管理 ----
@@ -150,6 +164,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         _selectedFields = value is not null && _case is not null ? _case.GetFields(value.Sequence) : [];
         UpdateRawLog(value);
+        Playback.SetMoment(value?.Sequence ?? 0);
     }
 
     // ---- 依解析欄位篩選（#23） ----
@@ -211,27 +226,32 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SelectedEvent = selected is not null && Events.Contains(selected) ? selected : Events.FirstOrDefault();
     }
 
-    /// <summary>從廠別設定存放位置找出案件所屬廠別的設定檔，列出有別名的元素（Layout 快照在 #27 加入）。</summary>
-    void LoadElementChoices(Case c)
+    /// <summary>從廠別設定存放位置找出案件所屬廠別的設定檔（Layout 快照在 #27 加入）；找不到時為 null。</summary>
+    PlantConfigDocument? FindPlantDocument(Case c)
     {
-        ElementChoices.Clear();
-        SelectedFilterElement = null;
-        if (c.Info.Plant.Revision == 0) return;
+        if (c.Info.Plant.Revision == 0) return null;
         foreach (var path in new PlantConfigLibrary(_plantsRoot).List())
         {
             try
             {
                 var doc = PlantConfigFile.Load(path);
-                if (!string.Equals(doc.Plant, c.Info.Plant.Name, StringComparison.Ordinal)) continue;
-                foreach (var e in doc.Layout.Elements.Where(e => e.Aliases is { Count: > 0 }))
-                    ElementChoices.Add(new ElementChoiceViewModel(e.Name ?? e.Id, Layout.LayoutElementTypes.Label(e.Type), e.Aliases!));
-                return;
+                if (string.Equals(doc.Plant, c.Info.Plant.Name, StringComparison.Ordinal)) return doc;
             }
             catch (Exception ex) when (ex is PlantConfigFormatException or IOException or UnauthorizedAccessException)
             {
                 // 讀不了的設定檔略過
             }
         }
+        return null;
+    }
+
+    /// <summary>列出有別名的元素（篩選用）。</summary>
+    void LoadElementChoices(PlantConfigDocument? doc)
+    {
+        ElementChoices.Clear();
+        SelectedFilterElement = null;
+        foreach (var e in doc?.Layout.Elements.Where(e => e.Aliases is { Count: > 0 }) ?? [])
+            ElementChoices.Add(new ElementChoiceViewModel(e.Name ?? e.Id, Layout.LayoutElementTypes.Label(e.Type), e.Aliases!));
     }
 
     /// <summary>原始 LOG 面板與選取的事件同步（ADR-0008 第 4 點）：依原始行序顯示事件前後各 RawContextLines 行。</summary>
@@ -433,6 +453,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _allRows = [];
         FilterStatus = null;
         ElementChoices.Clear();
+        Playback.Clear("請開啟案件。");
         Modules.Clear();
         _case?.Dispose();
         _case = null;
@@ -507,9 +528,27 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _allRows = rows;
         FilterStatus = null;
         foreach (var r in rows) Events.Add(r);
+        var doc = FindPlantDocument(c);
+        LoadElementChoices(doc);
+        await LoadPlaybackAsync(c, doc, rows);
         SelectedEvent = Events.FirstOrDefault();
-        LoadElementChoices(c);
         ApplyFilterCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>建立世界模型（開啟案件時在記憶體中建立快照）並載入 Layout 回放。</summary>
+    async Task LoadPlaybackAsync(Case c, PlantConfigDocument? doc, List<EventRowViewModel> rows)
+    {
+        if (doc is null)
+        {
+            Playback.Clear(c.Info.Plant.Revision == 0
+                ? "這個案件使用內建預設的廠別設定，沒有 Layout。請在 Layout 編輯器建立廠別設定，並以它建立案件。"
+                : $"找不到廠別「{c.Info.Plant.Name}」的設定檔，無法顯示 Layout。");
+            return;
+        }
+        var presence = c.Info.Plant.PresenceSignal;
+        var model = await Task.Run(() => new WorldModel(c.GetEffects(), doc.Layout, presence));
+        var hasStateRules = c.Info.Plant.ParseRules.Any(r => r.Effect is { } e && e != EffectKinds.Signal);
+        Playback.Load(model, doc.Layout, rows.Select(r => r.Event).ToList(), hasStateRules);
     }
 
     static (List<string> Modules, List<EventRowViewModel> Rows) LoadAll(Case c)

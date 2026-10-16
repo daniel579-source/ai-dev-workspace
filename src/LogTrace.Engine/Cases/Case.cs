@@ -158,20 +158,26 @@ public sealed class Case : IDisposable
             if (FieldExtractor.Check(rule) is { } problem) throw new ArgumentException(problem, nameof(rules));
         var extractor = new FieldExtractor(rules);
         var fields = new List<EventField>();
+        var effects = new List<EventEffect>();
         long next = 1;
         while (true)
         {
             ct.ThrowIfCancellationRequested();
             var page = _store.GetEvents(next, 10_000);
             if (page.Count == 0) break;
-            fields.AddRange(extractor.ExtractAll(page));
+            var (f, x) = extractor.ExtractAllWithEffects(page);
+            fields.AddRange(f);
+            effects.AddRange(x);
             next = page[^1].Sequence + 1;
         }
         var info = Info with { Plant = Info.Plant with { ParseRules = [.. rules] } };
-        _store.ReplaceFields(fields, info, AuditEntry.Now("重新解析欄位", Info.Name, $"{rules.Count} 條規則；{fields.Count} 個欄位值"));
+        _store.ReplaceFields(fields, effects, info, AuditEntry.Now("重新解析欄位", Info.Name, $"{rules.Count} 條規則；{fields.Count} 個欄位值"));
         Info = info;
         return fields.Count;
     }
+
+    /// <summary>所有效果，依事件序號（世界模型的輸入，ADR-0005）。</summary>
+    public IReadOnlyList<EventEffect> GetEffects() => _store.GetEffects();
 
     public void Dispose() => _store.Dispose();
 }

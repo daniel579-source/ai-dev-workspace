@@ -474,10 +474,14 @@
                         <Button Content="＋ 新增編碼設定" HorizontalAlignment="Left" Padding="8,1" Margin="0,4,0,0"
                                 Command="{Binding AddEncodingRuleCommand}" AutomationProperties.AutomationId="AddEncodingRule" />
 
+                        <TextBlock Text="在席訊號" FontWeight="SemiBold" Margin="0,16,0,0" />
+                        <TextBlock Text="效果為 signal 的規則抽到這個訊號名稱時，決定站點的在席指示燈。" Foreground="#777" TextWrapping="Wrap" />
+                        <TextBox Text="{Binding PresenceSignal, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,4,0,0" />
+
                         <!-- ADR-0005 第 8 點：解析欄位的抽取規則 -->
                         <TextBlock Text="解析規則" FontWeight="SemiBold" Margin="0,16,0,0" />
                         <TextBlock Foreground="#777" TextWrapping="Wrap"
-                                   Text="正規表示式；具名群組的名稱就是欄位，例如 (?&lt;station&gt;…)。可以用的欄位：station、vehicle、dock、storage、command、commandType、source、destination、pallet、bin、signal、signalValue、stationMode、alarm、alarmCode、online、mode。模組、Logger 空白表示全部。修改後，新匯入的案件使用新規則。" />
+                                   Text="正規表示式；具名群組的名稱就是欄位，例如 (?&lt;station&gt;…)。可以用的欄位：station、vehicle、dock、storage、command、commandType、segment、source、destination、pallet、bin、signal、signalValue、stationMode、alarm、alarmCode、online、mode。模組、Logger 空白表示全部。「效果」表示這一行代表哪一種狀態變化（回放用）。修改後，新匯入的案件使用新規則。" />
                         <ItemsControl ItemsSource="{Binding ParseRules}" Margin="0,4,0,0" AutomationProperties.AutomationId="ParseRules">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -502,6 +506,11 @@
                                                 <TextBox Grid.Column="3" Text="{Binding Logger, UpdateSourceTrigger=PropertyChanged}" />
                                             </Grid>
                                             <TextBox Text="{Binding Pattern, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                            <DockPanel Margin="0,2,0,0">
+                                                <TextBlock Text="效果" Foreground="#555" VerticalAlignment="Center" Margin="0,0,4,0"
+                                                           ToolTip="這一行 LOG 代表的狀態變化（世界模型）；空白表示只抽欄位" />
+                                                <ComboBox ItemsSource="{Binding EffectChoices}" SelectedItem="{Binding Effect}" />
+                                            </DockPanel>
                                         </StackPanel>
                                     </Border>
                                 </DataTemplate>

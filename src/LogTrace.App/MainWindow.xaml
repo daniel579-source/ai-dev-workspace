@@ -62,6 +62,27 @@
             </Grid>
         </Border>
 
+        <!-- 廠別設定有新版時的提示（ADR-0006 第 8 點）：由使用者決定是否套用 -->
+        <Border DockPanel.Dock="Top" Background="#FEF3C7" BorderBrush="#F59E0B" BorderThickness="0,0,0,1" Padding="8,4"
+                AutomationProperties.AutomationId="NewerPlantBar">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding NewerPlantNotice}" Value="{x:Null}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="不套用" Command="{Binding DismissNewerPlantCommand}" Padding="10,1" Margin="6,0,0,0"
+                        ToolTip="維持案件目前的設定（快照）" AutomationProperties.AutomationId="DismissNewerPlant" />
+                <Button DockPanel.Dock="Right" Content="套用新版" Command="{Binding ApplyNewerPlantCommand}" Padding="10,1" FontWeight="SemiBold"
+                        AutomationProperties.AutomationId="ApplyNewerPlant" />
+                <TextBlock Text="{Binding NewerPlantNotice}" TextWrapping="Wrap" VerticalAlignment="Center" AutomationProperties.AutomationId="NewerPlantNotice" />
+            </DockPanel>
+        </Border>
+
         <StatusBar DockPanel.Dock="Bottom">
             <StatusBarItem>
                 <TextBlock Text="{Binding CurrentCaseName, StringFormat=案件：{0}, TargetNullValue=尚未開啟案件}" />

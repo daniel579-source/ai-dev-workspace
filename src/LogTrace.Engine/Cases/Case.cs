@@ -47,7 +47,9 @@ public sealed class Case : IDisposable
         _raw = new RawLogReader(RawFolder);
     }
 
-    public static Case Create(string folder, string name, PlantConfig plant)
+    /// <param name="snapshot">建立案件時所用的廠別設定檔（含 Layout）；保存為快照（ADR-0006 第 8 點）。內建預設時為 null。</param>
+    /// <param name="snapshotSource">廠別設定檔的路徑，用來檢查之後是否有新版。</param>
+    public static Case Create(string folder, string name, PlantConfig plant, PlantConfigDocument? snapshot = null, string? snapshotSource = null)
     {
         if (Directory.Exists(folder) && Directory.EnumerateFileSystemEntries(folder).Any())
             throw new IOException($"案件資料夾已存在：{folder}");
@@ -56,6 +58,7 @@ public sealed class Case : IDisposable
         var store = new SqliteEventStore(Path.Combine(folder, DatabaseFileName));
         var info = new CaseInfo(name, plant, DateTimeOffset.Now);
         store.SaveInfo(info);
+        if (snapshot is not null) store.SavePlantSnapshot(PlantConfigFile.Serialize(snapshot), snapshotSource);
         store.AddAudit(AuditEntry.Now("建立案件", name, $"廠別：{plant.Name}（修訂 {plant.Revision}）；位置：{folder}"));
         return new Case(folder, store, info);
     }
@@ -184,6 +187,59 @@ public sealed class Case : IDisposable
     {
         _store.EnsureSearchText();
         return _store.Search(query, ct);
+    }
+
+    // ---- 廠別設定的快照與套用新版（ADR-0006 第 8 點） ----
+
+    /// <summary>
+    /// 建立案件時所用廠別設定檔的快照（含 Layout）。案件一律以快照開啟，廠別設定檔被修改或刪除都不影響。
+    /// 內建預設、或快照功能加入前建立的案件為 null。
+    /// </summary>
+    public PlantConfigDocument? PlantSnapshot => _store.LoadPlantSnapshot().Json is { } json ? PlantConfigFile.Deserialize(json) : null;
+
+    /// <summary>快照的來源檔案路徑。</summary>
+    public string? PlantSnapshotSource => _store.LoadPlantSnapshot().SourcePath;
+
+    /// <summary>
+    /// 找出比案件所用版本新的廠別設定檔：先看快照的來源路徑，再依廠別名稱找存放位置下的設定檔。
+    /// 讀不了的檔案略過；內建預設的案件沒有新版。
+    /// </summary>
+    public (PlantConfigDocument Document, string Path)? FindNewerPlant(PlantConfigLibrary library)
+    {
+        if (Info.Plant.Revision == 0 && PlantSnapshot is null) return null;
+        var candidates = new List<string>();
+        if (PlantSnapshotSource is { } source && File.Exists(source)) candidates.Add(source);
+        candidates.AddRange(library.List().Where(p => !candidates.Contains(p, StringComparer.OrdinalIgnoreCase)));
+        foreach (var path in candidates)
+        {
+            try
+            {
+                var doc = PlantConfigFile.Load(path);
+                if (string.Equals(doc.Plant, Info.Plant.Name, StringComparison.Ordinal) && doc.Revision > Info.Plant.Revision) return (doc, path);
+            }
+            catch (Exception ex) when (ex is PlantConfigFormatException or IOException or UnauthorizedAccessException)
+            {
+                // 讀不了的設定檔略過
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 套用新版的廠別設定：以新的設定重建事件（解碼、排序、解析欄位與效果），更新快照，並寫入稽核紀錄（舊修訂號、新修訂號、時間）。
+    /// 原始檔複本不變；穩定識別碼不變，事件序號可能改變。
+    /// </summary>
+    public void ApplyPlant(PlantConfigDocument document, string? sourcePath, CancellationToken ct = default)
+    {
+        var plant = document.ToPlantConfig();
+        foreach (var rule in plant.ParseRules)
+            if (FieldExtractor.Check(rule) is { } problem) throw new ArgumentException(problem, nameof(document));
+        var (files, events, fields, effects) = CaseImporter.Rebuild(Folder, plant, _store, ct);
+        var info = Info with { Plant = plant };
+        _store.Rebuild(files, events, fields, effects, info, PlantConfigFile.Serialize(document), sourcePath,
+            AuditEntry.Now("套用新版廠別設定", plant.Name, $"修訂 {Info.Plant.Revision} → {plant.Revision}；事件 {events.Count} 筆"));
+        Info = info;
+        _activeFiles = null;
     }
 
     /// <summary>所有效果，依事件序號（世界模型的輸入，ADR-0005）。</summary>

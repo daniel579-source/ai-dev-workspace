@@ -24,14 +24,14 @@ public sealed class CaseLibrary(string root)
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LogTrace");
 
     /// <summary>以案件名稱建立新的案件資料夾；名稱重複時加上序號。</summary>
-    public Case Create(string name, PlantConfig plant)
+    public Case Create(string name, PlantConfig plant, PlantConfigDocument? snapshot = null, string? snapshotSource = null)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("請輸入案件名稱", nameof(name));
         Directory.CreateDirectory(Root);
         var baseName = SafeFolderName(name.Trim());
         var folder = Path.Combine(Root, baseName);
         for (int i = 2; Directory.Exists(folder); i++) folder = Path.Combine(Root, $"{baseName} ({i})");
-        var c = Case.Create(folder, name.Trim(), plant);
+        var c = Case.Create(folder, name.Trim(), plant, snapshot, snapshotSource);
         AppendAudit(AuditEntry.Now("建立案件", folder, name.Trim()));
         return c;
     }

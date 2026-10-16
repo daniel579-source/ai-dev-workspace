@@ -225,19 +225,7 @@ internal static class CaseImporter
         }
 
         // 重新解析：參與查詢的檔案，以及這次新放進來的版本（記錄編碼與事件數）
-        var parsed = new List<(StoredFile File, IReadOnlyList<ParsedEvent> Events)>();
-        for (int i = 0; i < files.Count; i++)
-        {
-            ct.ThrowIfCancellationRequested();
-            var f = files[i];
-            if (!f.Active && f.ImportId != record.Id) continue;
-            // 廠別設定有指定編碼時以指定為準，否則自動判斷（O-002）
-            var bytes = File.ReadAllBytes(Path.Combine(rawFolder, f.StoragePath));
-            var result = LogRecordParser.Parse(bytes, plant.EncodingFor(f.Module, f.Logger) ?? LogEncoding.Detect(bytes));
-            files[i] = f = f with { Encoding = result.Encoding, EventCount = result.Events.Count, Unparsable = result.Unparsable };
-            if (f.Active) parsed.Add((f, result.Events));
-        }
-        var events = Sequence(parsed, plant);
+        var events = Reparse(files, f => f.Active || f.ImportId == record.Id, rawFolder, plant, ct);
 
         audit.Insert(0, AuditEntry.Now("匯入", record.SourcePath,
             $"{record.SourceKind}；{prepared.Items.Count} 個檔案：新增 {added}、相同略過 {prepared.Items.Count(i => i.Kind == ImportItemKind.Identical)}、" +
@@ -248,6 +236,40 @@ internal static class CaseImporter
 
         return new ImportResult(prepared.Items.Count, added, prepared.Items.Count(i => i.Kind == ImportItemKind.Identical), extended,
             usedNew, keptOld, events.Count, files.Count(f => f.Active && f.Unparsable), prepared.Clock.Elapsed);
+    }
+
+    /// <summary>
+    /// 依廠別設定解析 files 中符合 include 的檔案（更新其編碼、事件數、無法解析），參與查詢的檔案依 ADR-0004 排序並編事件序號。
+    /// files 會被就地更新。
+    /// </summary>
+    static List<LogEvent> Reparse(List<StoredFile> files, Func<StoredFile, bool> include, string rawFolder, PlantConfig plant, CancellationToken ct)
+    {
+        var parsed = new List<(StoredFile File, IReadOnlyList<ParsedEvent> Events)>();
+        for (int i = 0; i < files.Count; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var f = files[i];
+            if (!include(f)) continue;
+            // 廠別設定有指定編碼時以指定為準，否則自動判斷（O-002）
+            var bytes = File.ReadAllBytes(Path.Combine(rawFolder, f.StoragePath));
+            var result = LogRecordParser.Parse(bytes, plant.EncodingFor(f.Module, f.Logger) ?? LogEncoding.Detect(bytes));
+            files[i] = f = f with { Encoding = result.Encoding, EventCount = result.Events.Count, Unparsable = result.Unparsable };
+            if (f.Active) parsed.Add((f, result.Events));
+        }
+        return Sequence(parsed, plant);
+    }
+
+    /// <summary>
+    /// 以新的廠別設定重建案件的事件（套用新版，ADR-0006 第 8 點）：重新解碼、排序、編事件序號，重新抽出解析欄位與效果。
+    /// 原始檔複本不變；穩定識別碼不變，事件序號可能改變。
+    /// </summary>
+    public static (List<StoredFile> Files, List<LogEvent> Events, List<EventField> Fields, List<EventEffect> Effects) Rebuild(
+        string caseFolder, PlantConfig plant, IEventStore store, CancellationToken ct)
+    {
+        var files = store.GetFiles().ToList();
+        var events = Reparse(files, f => f.Active, Path.Combine(caseFolder, Cases.Case.RawFolderName), plant, ct);
+        var (fields, effects) = new FieldExtractor(plant.ParseRules).ExtractAllWithEffects(events);
+        return (files, events, fields, effects);
     }
 
     /// <summary>把來源檔放進案件：壓縮檔解開的暫存檔直接搬移，資料夾來源則複製。兩者都以準備時的雜湊確認。</summary>

@@ -78,17 +78,16 @@ public sealed class ParsedFieldsViewModelTests : IDisposable
 
         _vm.SelectedFilter = _vm.FilterOptions.Single(f => f.Kind == FieldFilterKind.Element);
         _vm.SelectedFilterElement = _vm.ElementChoices[0];
-        _vm.ApplyFilterCommand.Execute(null);
+        await _vm.SearchCommand.ExecuteAsync(null);
 
         // A-01 兩筆（PLC）＋ 1001 一筆（站點模式；路徑規劃中的「來源=1001」是來源欄位，不算站點）
         Assert.Equal(3, _vm.Events.Count);
         Assert.Contains(_vm.Events, e => e.Event.Message.Contains("模式=2"));
-        Assert.Contains("入庫口1（別名 A-01・1001）", _vm.FilterStatus);
-        Assert.Contains("3 筆", _vm.FilterStatus);
+        Assert.Contains("符合 3 筆", _vm.SearchStatus);
 
-        _vm.ClearFilterCommand.Execute(null);
+        _vm.ClearSearchCommand.Execute(null);
         Assert.Equal(11, _vm.Events.Count);
-        Assert.Null(_vm.FilterStatus);
+        Assert.Null(_vm.SearchStatus);
     }
 
     [Fact]
@@ -100,7 +99,7 @@ public sealed class ParsedFieldsViewModelTests : IDisposable
 
         _vm.SelectedFilter = _vm.FilterOptions.Single(f => f.Kind == FieldFilterKind.Command);
         _vm.FilterValue = "00030001";
-        _vm.ApplyFilterCommand.Execute(null);
+        await _vm.SearchCommand.ExecuteAsync(null);
 
         Assert.Equal(2, _vm.Events.Count);
         Assert.Same(selected, _vm.SelectedEvent);
@@ -115,10 +114,12 @@ public sealed class ParsedFieldsViewModelTests : IDisposable
         await _vm.ImportCommand.ExecuteAsync(null);
 
         Assert.Empty(_vm.ElementChoices);
-        Assert.False(_vm.ApplyFilterCommand.CanExecute(null));
+        _vm.SelectedFilter = _vm.FilterOptions.Single(f => f.Kind == FieldFilterKind.Element);
+        await _vm.SearchCommand.ExecuteAsync(null);
+        Assert.Equal("請選擇 Layout 元素。", _vm.SearchStatus);
         _vm.SelectedFilter = _vm.FilterOptions.Single(f => f.Kind == FieldFilterKind.Pallet);
         _vm.FilterValue = "123456789";
-        _vm.ApplyFilterCommand.Execute(null);
+        await _vm.SearchCommand.ExecuteAsync(null);
         Assert.Single(_vm.Events);
     }
 

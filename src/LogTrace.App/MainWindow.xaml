@@ -11,7 +11,15 @@
         <local:CollapsedWhenTrueConverter x:Key="Collapsed" />
         <local:MetersToPixelsConverter x:Key="Px" />
         <local:PositiveConverter x:Key="Positive" />
+        <DataTemplate x:Key="Choice">
+            <CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected}" Margin="0,1" />
+        </DataTemplate>
     </Window.Resources>
+    <Window.InputBindings>
+        <!-- ADR-0008 第 1 點：Ctrl＋方向鍵移到上一筆／下一筆符合的事件 -->
+        <KeyBinding Key="Right" Modifiers="Control" Command="{Binding NextMatchCommand}" />
+        <KeyBinding Key="Left" Modifiers="Control" Command="{Binding PreviousMatchCommand}" />
+    </Window.InputBindings>
     <DockPanel>
         <!-- 建立案件與匯入 -->
         <Border DockPanel.Dock="Top" Padding="8" BorderBrush="#DDD" BorderThickness="0,0,0,1">
@@ -142,6 +150,79 @@
                                 </ListBox>
                             </DockPanel>
                         </ad:LayoutAnchorable>
+                        <ad:LayoutAnchorable ContentId="search" Title="搜尋" CanClose="False">
+                            <!-- ADR-0010：三個輸入框、篩選條件；按「搜尋」才查詢 -->
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel Margin="6">
+                                    <StackPanel.Resources>
+                                        <Style TargetType="TextBox">
+                                            <Setter Property="Margin" Value="0,1,0,4" />
+                                            <Setter Property="VerticalContentAlignment" Value="Center" />
+                                        </Style>
+                                    </StackPanel.Resources>
+                                    <TextBlock Text="全部包含" />
+                                    <TextBox Text="{Binding SearchAllOf, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="SearchAllOf"
+                                             ToolTip="以空白分隔；包含空白的片語用雙引號，例如 &quot;door open&quot;">
+                                        <TextBox.InputBindings>
+                                            <KeyBinding Key="Enter" Command="{Binding SearchCommand}" />
+                                        </TextBox.InputBindings>
+                                    </TextBox>
+                                    <TextBlock Text="任一包含" />
+                                    <TextBox Text="{Binding SearchAnyOf, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="SearchAnyOf">
+                                        <TextBox.InputBindings>
+                                            <KeyBinding Key="Enter" Command="{Binding SearchCommand}" />
+                                        </TextBox.InputBindings>
+                                    </TextBox>
+                                    <TextBlock Text="不包含" />
+                                    <TextBox Text="{Binding SearchNoneOf, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="SearchNoneOf">
+                                        <TextBox.InputBindings>
+                                            <KeyBinding Key="Enter" Command="{Binding SearchCommand}" />
+                                        </TextBox.InputBindings>
+                                    </TextBox>
+                                    <CheckBox Content="區分大小寫（全形與半形仍視為相同）" IsChecked="{Binding SearchCaseSensitive}" Margin="0,0,0,6" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="搜尋" Command="{Binding SearchCommand}" Padding="16,2" FontWeight="SemiBold"
+                                                AutomationProperties.AutomationId="Search" />
+                                        <Button Content="清除" Command="{Binding ClearSearchCommand}" Padding="8,2" Margin="6,0,0,0" />
+                                    </StackPanel>
+                                    <TextBlock Text="最近的搜尋" Margin="0,8,0,0" />
+                                    <ComboBox ItemsSource="{Binding RecentSearches}" SelectedItem="{Binding SelectedRecentSearch}" DisplayMemberPath="Label"
+                                              AutomationProperties.AutomationId="RecentSearches" ToolTip="選擇後把條件填回，按「搜尋」才查詢" />
+
+                                    <Expander Header="篩選條件（所有條件為 AND）" Margin="0,10,0,0" IsExpanded="False" AutomationProperties.AutomationId="SearchFilters">
+                                        <StackPanel Margin="0,4,0,0">
+                                            <TextBlock Text="時間（yyyy-MM-dd HH:mm:ss，空白表示不限）" TextWrapping="Wrap" Foreground="#555" />
+                                            <DockPanel>
+                                                <TextBlock Text="從" Width="24" VerticalAlignment="Center" />
+                                                <TextBox Text="{Binding SearchFrom, UpdateSourceTrigger=PropertyChanged}" />
+                                            </DockPanel>
+                                            <DockPanel>
+                                                <TextBlock Text="到" Width="24" VerticalAlignment="Center" />
+                                                <TextBox Text="{Binding SearchTo, UpdateSourceTrigger=PropertyChanged}" />
+                                            </DockPanel>
+                                            <TextBlock Text="解析欄位" Foreground="#555" Margin="0,4,0,0" />
+                                            <ComboBox ItemsSource="{Binding FilterOptions}" SelectedItem="{Binding SelectedFilter}" DisplayMemberPath="Label"
+                                                      AutomationProperties.AutomationId="FilterKind" />
+                                            <ComboBox ItemsSource="{Binding ElementChoices}" SelectedItem="{Binding SelectedFilterElement}" DisplayMemberPath="Display"
+                                                      Margin="0,2,0,0" AutomationProperties.AutomationId="FilterElement"
+                                                      Visibility="{Binding IsElementFilter, Converter={StaticResource Visible}}"
+                                                      ToolTip="案件所屬廠別的 Layout 中有別名的元素；比對元素的所有別名" />
+                                            <TextBox Text="{Binding FilterValue, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,0"
+                                                     AutomationProperties.AutomationId="FilterValue"
+                                                     Visibility="{Binding IsValueFilter, Converter={StaticResource Visible}}" />
+                                            <TextBlock Text="模組" Foreground="#555" Margin="0,6,0,0" />
+                                            <ItemsControl ItemsSource="{Binding ModuleChoices}" ItemTemplate="{StaticResource Choice}" />
+                                            <TextBlock Text="等級" Foreground="#555" Margin="0,6,0,0" />
+                                            <ItemsControl ItemsSource="{Binding LevelChoices}" ItemTemplate="{StaticResource Choice}" />
+                                            <TextBlock Text="旗標（有任一個即符合）" Foreground="#555" Margin="0,6,0,0" />
+                                            <ItemsControl ItemsSource="{Binding FlagChoices}" ItemTemplate="{StaticResource Choice}" />
+                                            <TextBlock Text="Logger" Foreground="#555" Margin="0,6,0,0" />
+                                            <ItemsControl ItemsSource="{Binding LoggerChoices}" ItemTemplate="{StaticResource Choice}" />
+                                        </StackPanel>
+                                    </Expander>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </ad:LayoutAnchorable>
                     </ad:LayoutAnchorablePane>
                     </ad:LayoutAnchorablePaneGroup>
                 <ad:LayoutPanel Orientation="Vertical" DockWidth="4*">
@@ -175,30 +256,21 @@
                                         </ItemsControl>
                                     </DockPanel>
                                 </Border>
-                                <!-- 依解析欄位篩選（#23）：Layout 元素比對所有別名，或命令、棧板、桶編號 -->
+                                <!-- 搜尋結果（ADR-0010 第 4 點）：條件在左側「搜尋」面板 -->
                                 <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="#DDD" BorderThickness="0,0,0,1">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="篩選" VerticalAlignment="Center" Margin="0,0,6,0" />
-                                        <ComboBox ItemsSource="{Binding FilterOptions}" SelectedItem="{Binding SelectedFilter}" DisplayMemberPath="Label" Width="110"
-                                                  AutomationProperties.AutomationId="FilterKind" />
-                                        <ComboBox ItemsSource="{Binding ElementChoices}" SelectedItem="{Binding SelectedFilterElement}" DisplayMemberPath="Display"
-                                                  Width="280" Margin="6,0,0,0" AutomationProperties.AutomationId="FilterElement"
-                                                  Visibility="{Binding IsElementFilter, Converter={StaticResource Visible}}"
-                                                  ToolTip="案件所屬廠別的 Layout 中有別名的元素；比對元素的所有別名" />
-                                        <TextBox Text="{Binding FilterValue, UpdateSourceTrigger=PropertyChanged}" Width="180" Margin="6,0,0,0"
-                                                 VerticalContentAlignment="Center" AutomationProperties.AutomationId="FilterValue"
-                                                 Visibility="{Binding IsElementFilter, Converter={StaticResource Collapsed}}">
-                                            <TextBox.InputBindings>
-                                                <KeyBinding Key="Enter" Command="{Binding ApplyFilterCommand}" />
-                                            </TextBox.InputBindings>
-                                        </TextBox>
-                                        <Button Content="篩選" Command="{Binding ApplyFilterCommand}" Padding="10,1" Margin="6,0,0,0"
-                                                AutomationProperties.AutomationId="ApplyFilter" />
-                                        <Button Content="顯示全部" Command="{Binding ClearFilterCommand}" Padding="8,1" Margin="6,0,0,0"
-                                                AutomationProperties.AutomationId="ClearFilter" />
-                                        <TextBlock Text="{Binding FilterStatus}" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#2A6CB0"
-                                                   AutomationProperties.AutomationId="FilterStatus" />
-                                    </StackPanel>
+                                    <WrapPanel>
+                                        <TextBlock Text="{Binding SearchStatus, TargetNullValue=沒有搜尋（顯示全部事件）}" VerticalAlignment="Center" Foreground="#2A6CB0"
+                                                   Margin="0,0,12,0" AutomationProperties.AutomationId="SearchStatus" />
+                                        <RadioButton Content="只顯示符合的" IsChecked="{Binding ShowAllWithMarks, Converter={StaticResource Not}}" Margin="0,0,8,0"
+                                                     VerticalAlignment="Center" AutomationProperties.AutomationId="ShowMatchesOnly" />
+                                        <RadioButton Content="顯示全部並標示符合的" IsChecked="{Binding ShowAllWithMarks}" Margin="0,0,12,0"
+                                                     VerticalAlignment="Center" AutomationProperties.AutomationId="ShowAllWithMarks" />
+                                        <Button Content="◀ 上一筆符合" Command="{Binding PreviousMatchCommand}" Padding="6,0" ToolTip="Ctrl＋←" />
+                                        <Button Content="下一筆符合 ▶" Command="{Binding NextMatchCommand}" Padding="6,0" Margin="4,0,0,0" ToolTip="Ctrl＋→"
+                                                AutomationProperties.AutomationId="NextMatch" />
+                                        <Button Content="清除搜尋" Command="{Binding ClearSearchCommand}" Padding="6,0" Margin="8,0,0,0"
+                                                AutomationProperties.AutomationId="ClearSearch" />
+                                    </WrapPanel>
                                 </Border>
                                 <!-- ADR-0007 技術驗證：ListView＋GridView、固定列高。View 由 MainWindow.xaml.cs 依混合／分軌切換 -->
                                 <ListView x:Name="EventList" ItemsSource="{Binding Events}" SelectedItem="{Binding SelectedEvent}"
@@ -382,9 +454,25 @@
                     <ad:LayoutPanel Orientation="Horizontal" DockHeight="240">
                         <ad:LayoutAnchorablePane DockWidth="420">
                             <ad:LayoutAnchorable ContentId="detail" Title="詳細資訊" CanClose="False">
-                                <TextBox Text="{Binding SelectedDetail, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"
-                                         VerticalScrollBarVisibility="Auto" FontFamily="Consolas, Microsoft JhengHei UI" BorderThickness="0"
-                                         AutomationProperties.AutomationId="EventDetail" />
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Top" HorizontalAlignment="Left" Margin="4,2" Padding="6,0" Command="{Binding ToggleRevealCommand}"
+                                            Visibility="{Binding SelectedHasMasked, Converter={StaticResource Visible}}"
+                                            AutomationProperties.AutomationId="ToggleReveal" ToolTip="電話號碼預設遮罩（ADR-0009）；換一筆事件後恢復遮罩">
+                                        <Button.Style>
+                                            <Style TargetType="Button">
+                                                <Setter Property="Content" Value="顯示完整電話號碼" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding RevealSensitive}" Value="True">
+                                                        <Setter Property="Content" Value="遮罩電話號碼" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                    <RichTextBox IsReadOnly="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas, Microsoft JhengHei UI" BorderThickness="0"
+                                                 local:Highlight.Segments="{Binding SelectedDetailSegments}" IsDocumentEnabled="True"
+                                                 AutomationProperties.AutomationId="EventDetail" />
+                                </DockPanel>
                             </ad:LayoutAnchorable>
                         </ad:LayoutAnchorablePane>
                         <ad:LayoutAnchorablePane DockWidth="420">

@@ -138,6 +138,9 @@ public static class PlantConfigFile
                      .GroupBy(r => ((r.Module ?? "").ToUpperInvariant(), r.Logger.ToUpperInvariant())).Where(g => g.Count() > 1))
             issues.Add(new($"「{(g.First().Module is { } m ? m + " / " : "")}{g.First().Logger}」的編碼設定重複。", []));
 
+        foreach (var pattern in doc.MaskPatterns)
+            if (Search.TextMasker.Check(pattern) is { } problem) issues.Add(new(problem, []));
+
         foreach (var rule in doc.ParseRules)
         {
             if (string.IsNullOrWhiteSpace(rule.Name)) issues.Add(new("有沒有名稱的解析規則。", []));

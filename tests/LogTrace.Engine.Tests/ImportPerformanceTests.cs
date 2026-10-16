@@ -32,7 +32,7 @@ public sealed class ImportPerformanceTests(ITestOutputHelper output)
         {
             var sourceBytes = Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length);
             var library = new CaseLibrary(root);
-            using var c = library.Create("效能", PlantConfig.Default);
+            var c = library.Create("效能", PlantConfig.Default);
 
             var import = Stopwatch.StartNew();
             var result = c.Import(source);
@@ -49,19 +49,45 @@ public sealed class ImportPerformanceTests(ITestOutputHelper output)
             }
             load.Stop();
 
-            var caseBytes = Directory.EnumerateFiles(c.Folder, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length);
             output.WriteLine($"來源：{result.FileCount} 個檔案，{sourceBytes / 1024d / 1024d:N0} MB");
             output.WriteLine($"事件：{result.EventCount:N0} 筆");
             output.WriteLine($"匯入：{import.Elapsed.TotalSeconds:N1} 秒");
             output.WriteLine($"讀出所有事件：{load.Elapsed.TotalSeconds:N1} 秒");
-            output.WriteLine($"案件大小：{caseBytes / 1024d / 1024d:N0} MB（原始 LOG 的 {(double)caseBytes / sourceBytes:N2} 倍）");
 
             Assert.Equal(result.EventCount, count);
             Assert.True(import.Elapsed + load.Elapsed < TimeSpan.FromMinutes(2), "超過 2 分鐘的目標");
+
+            // 搜尋（ADR-0010 第 5 點：一般關鍵字，一天份 2 秒內）；第一次搜尋前先執行一次熱身
+            c.Search(new Search.SearchQuery { AllOf = "熱身" });
+            foreach (var (label, query) in new (string, Search.SearchQuery)[]
+            {
+                ("常見詞「卸貨」", new() { AllOf = "卸貨" }),
+                ("罕見詞（命令編號）", new() { AllOf = "00010927" }),
+                ("兩個詞 AND", new() { AllOf = "卸貨 A-17" }),
+                ("任一包含", new() { AnyOf = "出庫循環 卸貨完成" }),
+                ("不包含", new() { AllOf = "CMD_NO", NoneOf = "卸貨" }),
+                ("區分大小寫", new() { AllOf = "SubmitCompleted", CaseSensitive = true }),
+                ("不存在的詞", new() { AllOf = "不存在的虛構字串" }),
+            })
+            {
+                var watch = Stopwatch.StartNew();
+                var hits = c.Search(query);
+                watch.Stop();
+                output.WriteLine($"搜尋 {label}：{hits.Count:N0} 筆，{watch.Elapsed.TotalSeconds:N2} 秒");
+                Assert.True(watch.Elapsed < TimeSpan.FromSeconds(2), $"{label} 超過 2 秒");
+            }
+
+            // 案件大小：關閉案件後才量（開啟中有 WAL 暫存檔，關閉時併回 case.db）
+            var folder = c.Folder;
+            c.Dispose();
+            var caseBytes = Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length);
+            output.WriteLine($"案件大小（關閉後）：{caseBytes / 1024d / 1024d:N0} MB（原始 LOG 的 {(double)caseBytes / sourceBytes:N2} 倍；上限 5 倍）");
+            Assert.True(caseBytes < sourceBytes * 5, "超過原始 LOG 的 5 倍");
         }
         finally
         {
-            if (Directory.Exists(root))
+            // LOGTRACE_PERF_KEEP=1 時保留案件，用來分析各資料表的大小
+            if (Directory.Exists(root) && Environment.GetEnvironmentVariable("LOGTRACE_PERF_KEEP") != "1")
             {
                 foreach (var f in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
                     File.SetAttributes(f, FileAttributes.Normal);

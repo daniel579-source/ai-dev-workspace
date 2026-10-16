@@ -176,6 +176,16 @@ public sealed class Case : IDisposable
         return fields.Count;
     }
 
+    /// <summary>
+    /// 搜尋（ADR-0010）：傳回符合的事件序號，依時間排序（與事件清單相同）。
+    /// 之前建立的案件第一次搜尋時，先補上搜尋用文字。
+    /// </summary>
+    public IReadOnlyList<long> Search(Search.SearchQuery query, CancellationToken ct = default)
+    {
+        _store.EnsureSearchText();
+        return _store.Search(query, ct);
+    }
+
     /// <summary>所有效果，依事件序號（世界模型的輸入，ADR-0005）。</summary>
     public IReadOnlyList<EventEffect> GetEffects() => _store.GetEffects();
 

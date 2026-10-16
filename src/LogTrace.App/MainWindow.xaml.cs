@@ -18,6 +18,14 @@ public partial class MainWindow : Window
         </DataTemplate>
         """);
 
+    /// <summary>訊息欄：搜尋符合處醒目標示（ADR-0010 第 4 點）。</summary>
+    static readonly DataTemplate MessageCell = (DataTemplate)XamlReader.Parse("""
+        <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                      xmlns:local="clr-namespace:LogTrace.App;assembly=LogTrace">
+            <TextBlock local:Highlight.Segments="{Binding MessageSegments}" ToolTip="{Binding MatchNote}" />
+        </DataTemplate>
+        """);
+
     MainViewModel? _vm;
 
     public MainWindow()
@@ -74,7 +82,7 @@ public partial class MainWindow : Window
             view.Columns.Add(Text("模組", nameof(EventRowViewModel.Module), 60));
             view.Columns.Add(Text("Logger", nameof(EventRowViewModel.Logger), 120));
             view.Columns.Add(Text("等級", nameof(EventRowViewModel.Level), 60));
-            view.Columns.Add(Text("訊息", nameof(EventRowViewModel.Message), 520));
+            view.Columns.Add(new GridViewColumn { Header = "訊息", CellTemplate = MessageCell, Width = 520 });
             view.Columns.Add(Text("來源", nameof(EventRowViewModel.Source), 320));
         }
         EventList.View = view;

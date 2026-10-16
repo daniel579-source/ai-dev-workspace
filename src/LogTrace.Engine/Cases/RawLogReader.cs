@@ -17,21 +17,21 @@ internal sealed class RawLogReader(string rawFolder)
     int[] _lineStarts = [];
     System.Text.Encoding _encoding = LogEncoding.Get(LogEncoding.Utf8Name);
 
-    public int LineCount(string relativePath, string encoding)
+    public int LineCount(string storagePath, string encoding)
     {
         lock (_lock)
         {
-            Load(relativePath, encoding);
+            Load(storagePath, encoding);
             return _lineStarts.Length;
         }
     }
 
     /// <summary>讀取第 firstLine 行起最多 count 行；超出檔案範圍的部分略過。</summary>
-    public IReadOnlyList<RawLine> Read(string relativePath, string encoding, int firstLine, int count)
+    public IReadOnlyList<RawLine> Read(string storagePath, string encoding, int firstLine, int count)
     {
         lock (_lock)
         {
-            Load(relativePath, encoding);
+            Load(storagePath, encoding);
             int from = Math.Max(1, firstLine), to = (int)Math.Min(_lineStarts.Length, (long)firstLine + count - 1);
             var list = new List<RawLine>(Math.Max(0, to - from + 1));
             for (int n = from; n <= to; n++)
@@ -45,17 +45,17 @@ internal sealed class RawLogReader(string rawFolder)
         }
     }
 
-    void Load(string relativePath, string encoding)
+    void Load(string storagePath, string encoding)
     {
-        if (_path == relativePath) return;
-        var full = Path.GetFullPath(Path.Combine(rawFolder, relativePath));
+        if (_path == storagePath) return;
+        var full = Path.GetFullPath(Path.Combine(rawFolder, storagePath));
         if (!full.StartsWith(Path.GetFullPath(rawFolder), StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException("路徑不在案件的原始檔資料夾內", nameof(relativePath));
+            throw new ArgumentException("路徑不在案件的原始檔資料夾內", nameof(storagePath));
         var bytes = File.ReadAllBytes(full);
         var starts = new List<int> { 0 };
         for (int i = 0; i < bytes.Length; i++)
             if (bytes[i] == '\n' && i + 1 < bytes.Length) starts.Add(i + 1);
         if (bytes.Length == 0) starts.Clear();
-        (_path, _bytes, _lineStarts, _encoding) = (relativePath, bytes, starts.ToArray(), LogEncoding.Get(encoding));
+        (_path, _bytes, _lineStarts, _encoding) = (storagePath, bytes, starts.ToArray(), LogEncoding.Get(encoding));
     }
 }

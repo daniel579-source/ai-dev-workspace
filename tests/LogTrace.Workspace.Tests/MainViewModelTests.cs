@@ -1,4 +1,3 @@
-using LogTrace.Engine.Cases;
 using LogTrace.Tests.Support;
 
 namespace LogTrace.Workspace.Tests;
@@ -7,10 +6,11 @@ namespace LogTrace.Workspace.Tests;
 public sealed class MainViewModelTests : IDisposable
 {
     readonly TempFolder _tmp = new();
-    readonly FakeFolderPicker _picker = new();
+    readonly FakeUserInteraction _ui = new();
     readonly MainViewModel _vm;
 
-    public MainViewModelTests() => _vm = new MainViewModel(new CaseLibrary(Path.Combine(_tmp.Path, "Cases")), _picker);
+    public MainViewModelTests() =>
+        _vm = new MainViewModel(new SettingsStore(Path.Combine(_tmp.Path, "settings.json")), _ui, Path.Combine(_tmp.Path, "Cases"), _ => false);
 
     public void Dispose()
     {
@@ -18,17 +18,11 @@ public sealed class MainViewModelTests : IDisposable
         _tmp.Dispose();
     }
 
-    sealed class FakeFolderPicker : IFolderPicker
-    {
-        public string? Result { get; set; }
-        public string? PickFolder(string title) => Result;
-    }
-
     [Fact]
     public void 未建立案件時不能匯入_輸入名稱後可以建立案件()
     {
         Assert.False(_vm.CreateCaseCommand.CanExecute(null));
-        _vm.ImportFolder = TempFolder.Fixture("one-day-plc");
+        _vm.ImportSource = TempFolder.Fixture("one-day-plc");
         Assert.False(_vm.ImportCommand.CanExecute(null));
 
         _vm.NewCaseName = "案件一";
@@ -44,14 +38,15 @@ public sealed class MainViewModelTests : IDisposable
     {
         _vm.NewCaseName = "案件一";
         _vm.CreateCaseCommand.Execute(null);
-        _vm.ImportFolder = TempFolder.Fixture("one-day-plc");
+        _vm.ImportSource = TempFolder.Fixture("one-day-plc");
 
         await _vm.ImportCommand.ExecuteAsync(null);
 
         Assert.Equal([1L, 2, 3, 4, 5], _vm.Events.Select(e => e.Sequence));
         Assert.Equal("[A-02][Station_Status_Change] => 在席 = OFF", _vm.Events[0].Message);
         Assert.Same(_vm.Events[0], _vm.SelectedEvent);
-        Assert.Contains("已匯入 1 個檔案、5 筆事件", _vm.Status);
+        Assert.Contains("已匯入 1 個檔案（新增 1）", _vm.Status);
+        Assert.Contains("案件共 5 筆事件", _vm.Status);
         Assert.False(_vm.IsBusy);
     }
 
@@ -60,7 +55,7 @@ public sealed class MainViewModelTests : IDisposable
     {
         _vm.NewCaseName = "案件一";
         _vm.CreateCaseCommand.Execute(null);
-        _vm.ImportFolder = TempFolder.Fixture("one-day-plc");
+        _vm.ImportSource = TempFolder.Fixture("one-day-plc");
         await _vm.ImportCommand.ExecuteAsync(null);
 
         _vm.SelectedEvent = _vm.Events.Single(e => e.Sequence == 4);
@@ -77,7 +72,7 @@ public sealed class MainViewModelTests : IDisposable
     {
         _vm.NewCaseName = "案件一";
         _vm.CreateCaseCommand.Execute(null);
-        _vm.ImportFolder = Path.Combine(_tmp.Path, "不存在的資料夾");
+        _vm.ImportSource = Path.Combine(_tmp.Path, "不存在的資料夾");
 
         await _vm.ImportCommand.ExecuteAsync(null);
 
@@ -87,15 +82,19 @@ public sealed class MainViewModelTests : IDisposable
     }
 
     [Fact]
-    public void 瀏覽選取資料夾後_填入匯入資料夾_取消時不變()
+    public void 瀏覽選取資料夾或壓縮檔後_填入匯入來源_取消時不變()
     {
-        _vm.ImportFolder = "原本";
-        _picker.Result = null;
+        _vm.ImportSource = "原本";
         _vm.BrowseImportFolderCommand.Execute(null);
-        Assert.Equal("原本", _vm.ImportFolder);
+        _vm.BrowseImportArchiveCommand.Execute(null);
+        Assert.Equal("原本", _vm.ImportSource);
 
-        _picker.Result = @"D:\虛構\logs";
+        _ui.FolderResult = @"D:\虛構\logs";
         _vm.BrowseImportFolderCommand.Execute(null);
-        Assert.Equal(@"D:\虛構\logs", _vm.ImportFolder);
+        Assert.Equal(@"D:\虛構\logs", _vm.ImportSource);
+
+        _ui.ArchiveResult = @"D:\虛構\logs.7z";
+        _vm.BrowseImportArchiveCommand.Execute(null);
+        Assert.Equal(@"D:\虛構\logs.7z", _vm.ImportSource);
     }
 }

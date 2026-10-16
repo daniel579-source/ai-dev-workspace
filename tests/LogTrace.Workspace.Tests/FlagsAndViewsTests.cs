@@ -1,4 +1,3 @@
-using LogTrace.Engine.Cases;
 using LogTrace.Engine.Events;
 using LogTrace.Tests.Support;
 
@@ -13,7 +12,8 @@ public sealed class FlagsAndViewsTests : IDisposable
     readonly TempFolder _tmp = new();
     readonly MainViewModel _vm;
 
-    public FlagsAndViewsTests() => _vm = new MainViewModel(new CaseLibrary(Path.Combine(_tmp.Path, "Cases")), new NoPicker());
+    public FlagsAndViewsTests() =>
+        _vm = new MainViewModel(new SettingsStore(Path.Combine(_tmp.Path, "settings.json")), new FakeUserInteraction(), Path.Combine(_tmp.Path, "Cases"), _ => false);
 
     public void Dispose()
     {
@@ -21,16 +21,11 @@ public sealed class FlagsAndViewsTests : IDisposable
         _tmp.Dispose();
     }
 
-    sealed class NoPicker : IFolderPicker
-    {
-        public string? PickFolder(string title) => null;
-    }
-
     async Task ImportParsingCases()
     {
         _vm.NewCaseName = "解析狀況";
         _vm.CreateCaseCommand.Execute(null);
-        _vm.ImportFolder = TempFolder.Fixture("parsing-cases");
+        _vm.ImportSource = TempFolder.Fixture("parsing-cases");
         await _vm.ImportCommand.ExecuteAsync(null);
     }
 
@@ -42,7 +37,8 @@ public sealed class FlagsAndViewsTests : IDisposable
     {
         await ImportParsingCases();
 
-        Assert.Contains("已匯入 5 個檔案、9 筆事件", _vm.Status);
+        Assert.Contains("已匯入 5 個檔案（新增 5）", _vm.Status);
+        Assert.Contains("案件共 9 筆事件", _vm.Status);
         Assert.Contains("無法解析的檔案 1 個", _vm.Status);
     }
 

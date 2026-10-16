@@ -44,7 +44,7 @@ public sealed class PlaybackViewModelTests : IDisposable
 
         Assert.Null(P.Message);
         Assert.Equal(11, P.Elements.Count);
-        _vm.SelectedEvent = null;
+        _vm.SeekTime(DateTime.MinValue); // 第一筆事件之前
         Assert.StartsWith("案件開始", P.MomentText);
         Assert.All(P.Elements.Where(e => !e.IsAuxiliary), e => Assert.Equal(ElementLook.Unknown, e.Look));
         Assert.Equal("◌", El("st-1").PresenceLight);

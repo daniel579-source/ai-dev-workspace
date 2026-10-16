@@ -80,7 +80,7 @@ public sealed class ParsedFieldsViewModelTests : IDisposable
         _vm.SelectedFilterElement = _vm.ElementChoices[0];
         await _vm.SearchCommand.ExecuteAsync(null);
 
-        // A-01 兩筆（PLC）＋ 1001 一筆（站點模式；路徑規劃中的「來源=1001」是來源欄位，不算站點）
+        // A-01 兩筆（PLC）＋ 1001 一筆（站點模式）。路徑規劃中的「來源=1001」要有抽出來源欄位的規則才算，這個廠別設定沒有
         Assert.Equal(3, _vm.Events.Count);
         Assert.Contains(_vm.Events, e => e.Event.Message.Contains("模式=2"));
         Assert.Contains("符合 3 筆", _vm.SearchStatus);

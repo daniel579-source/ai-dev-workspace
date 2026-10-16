@@ -106,6 +106,26 @@ public sealed class WorldModel
     public bool IsAlarmNeverReset(string elementId, AlarmState alarm) =>
         Final.Alarms.TryGetValue(elementId, out var a) && a.Cause == alarm.Cause;
 
+    /// <summary>
+    /// 警報期間（ADR-0008 第 3 點：從發生到復歸；沒有復歸時 EndSequence 為 null，表示延伸到案件結束）。
+    /// 只列出對應到 Layout 元素的警報。
+    /// </summary>
+    public IReadOnlyList<(string ElementId, string? Code, long StartSequence, long? EndSequence)> AlarmPeriods()
+    {
+        var open = new Dictionary<string, (string? Code, long Start)>(StringComparer.Ordinal);
+        var list = new List<(string, string?, long, long?)>();
+        foreach (var x in _effects)
+        {
+            if (x.Effect is not (EffectKinds.AlarmRaised or EffectKinds.AlarmCleared)) continue;
+            var target = Resolve(x.Get(FieldKinds.Vehicle)) ?? Resolve(x.Get(FieldKinds.Station)) ?? Resolve(x.Get(FieldKinds.Dock));
+            if (target is null) continue;
+            if (open.Remove(target.Id, out var o)) list.Add((target.Id, o.Code, o.Start, x.Sequence));
+            if (x.Effect == EffectKinds.AlarmRaised) open[target.Id] = (x.Get(FieldKinds.AlarmCode), x.Sequence);
+        }
+        foreach (var (id, (code, start)) in open) list.Add((id, code, start, null));
+        return list.OrderBy(a => a.Item3).ToList();
+    }
+
     /// <summary>LOG 中的編號對應到的 Layout 元素；沒有對應時為 null。</summary>
     public LayoutElement? Resolve(string? code) => code is not null && _byAlias.TryGetValue(code.Trim(), out var e) ? e : null;
 

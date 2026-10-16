@@ -156,6 +156,12 @@ public partial class MainWindow : Window
     /// <summary>回到主畫面時（例如關閉 Layout 編輯器後）重新列出廠別設定。</summary>
     void Window_Activated(object? sender, EventArgs e) => _vm?.RefreshPlants();
 
+    /// <summary>命令串起來的事件：點一筆跳到該時刻（ADR-0008 第 4 點）。</summary>
+    void CommandEventList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (CommandEventList.SelectedItem is EventRowViewModel row) _vm?.GoToCommandEventCommand.Execute(row);
+    }
+
     void CaseList_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (_vm?.OpenSelectedCaseCommand.CanExecute(null) == true) _vm.OpenSelectedCaseCommand.Execute(null);

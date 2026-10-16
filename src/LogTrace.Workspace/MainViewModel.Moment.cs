@@ -57,6 +57,7 @@ public sealed partial class MainViewModel
         _momentSequence = sequence;
         Playback.SetMoment(sequence);
         Timeline.SetCurrent(time);
+        UpdateMomentPanels();
     }
 
     /// <summary>
@@ -100,6 +101,7 @@ public sealed partial class MainViewModel
     {
         _changes = changes.Distinct().Order().ToArray();
         Timeline.Load(_allRows, _changes, alarms);
+        LoadCommands();
         IsPlaying = false;
         FocusedElement = null;
         if (_allRows.Count > 0) ApplyMoment(_allRows[0].Event.Timestamp, _allRows[0].Sequence);
@@ -113,6 +115,9 @@ public sealed partial class MainViewModel
         FocusedElement = null;
         CurrentTime = null;
         Timeline.Clear();
+        Commands.Clear();
+        CommandEvents.Clear();
+        UnmappedNearby.Clear();
     }
 
     /// <summary>目前可以移動到的事件序號：「只看這個元素」或搜尋中時只限顯示中的事件。</summary>

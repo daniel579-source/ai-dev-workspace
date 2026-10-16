@@ -4,6 +4,7 @@
         xmlns:ad="https://github.com/Dirkster99/AvalonDock"
         xmlns:local="clr-namespace:LogTrace.App"
         xmlns:vm="clr-namespace:LogTrace.Workspace;assembly=LogTrace.Workspace"
+        xmlns:pb="clr-namespace:LogTrace.Workspace.Playback;assembly=LogTrace.Workspace"
         Title="LogTrace" Width="1480" Height="860" Activated="Window_Activated" PreviewKeyDown="Window_PreviewKeyDown"
         AutomationProperties.AutomationId="MainWindow">
     <Window.Resources>
@@ -576,6 +577,113 @@
                                                 <GridViewColumn Header="儲位" DisplayMemberBinding="{Binding StorageCode}" Width="80" />
                                                 <GridViewColumn Header="棧板" DisplayMemberBinding="{Binding Pallet, TargetNullValue=—}" Width="110" />
                                                 <GridViewColumn Header="造成這個狀態的事件" DisplayMemberBinding="{Binding CauseText}" Width="260" />
+                                            </GridView>
+                                        </ListView.View>
+                                    </ListView>
+                                </DockPanel>
+                            </ad:LayoutAnchorable>
+                            <ad:LayoutAnchorable ContentId="commands" Title="命令" CanClose="False">
+                                <!-- ADR-0008 第 6 點：每個命令目前的狀態與到案件結束時的狀態；選一個命令列出串起來的事件 -->
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+                                    <ListView ItemsSource="{Binding Commands}" SelectedItem="{Binding SelectedCommand}" BorderThickness="0"
+                                              AutomationProperties.AutomationId="CommandList">
+                                        <ListView.View>
+                                            <GridView>
+                                                <GridViewColumn Header="命令" DisplayMemberBinding="{Binding Id}" Width="80" />
+                                                <GridViewColumn Header="事件" DisplayMemberBinding="{Binding EventCount}" Width="40" />
+                                                <GridViewColumn Header="目前時刻" DisplayMemberBinding="{Binding CurrentStatus}" Width="180" />
+                                                <GridViewColumn Header="案件結束時" DisplayMemberBinding="{Binding FinalStatus}" Width="200" />
+                                            </GridView>
+                                        </ListView.View>
+                                    </ListView>
+                                    <TextBlock Grid.Row="1" Text="{Binding SelectedCommand.Id, StringFormat=命令 {0} 串起來的事件（點一筆跳到該時刻）, TargetNullValue=選一個命令，列出串起來的所有事件}"
+                                               Padding="6,3" Foreground="#555" />
+                                    <ListView x:Name="CommandEventList" Grid.Row="2" ItemsSource="{Binding CommandEvents}" BorderThickness="0"
+                                              SelectionChanged="CommandEventList_SelectionChanged" AutomationProperties.AutomationId="CommandEvents">
+                                        <ListView.View>
+                                            <GridView>
+                                                <GridViewColumn Header="時間" DisplayMemberBinding="{Binding Time}" Width="150" />
+                                                <GridViewColumn Header="模組" DisplayMemberBinding="{Binding Module}" Width="50" />
+                                                <GridViewColumn Header="訊息" DisplayMemberBinding="{Binding Message}" Width="320" />
+                                            </GridView>
+                                        </ListView.View>
+                                    </ListView>
+                                </Grid>
+                            </ad:LayoutAnchorable>
+                            <ad:LayoutAnchorable ContentId="equipment" Title="設備狀態表" CanClose="False">
+                                <!-- ADR-0008 第 6 點：所有站點、搬送機、對接設備在目前時刻的狀態；可排序，可以只看異常中或不一致 -->
+                                <DockPanel DataContext="{Binding Playback}">
+                                    <CheckBox DockPanel.Dock="Top" Content="只看異常中或不一致" IsChecked="{Binding OnlyAbnormal}" Margin="6,4"
+                                              AutomationProperties.AutomationId="OnlyAbnormal" />
+                                    <ListView ItemsSource="{Binding Equipment}" BorderThickness="0" AutomationProperties.AutomationId="EquipmentTable">
+                                        <ListView.ItemContainerStyle>
+                                            <Style TargetType="ListViewItem">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsAbnormal}" Value="True">
+                                                        <Setter Property="Background" Value="#FEE2E2" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </ListView.ItemContainerStyle>
+                                        <ListView.View>
+                                            <GridView>
+                                                <GridViewColumn DisplayMemberBinding="{Binding Name}" Width="90">
+                                                    <GridViewColumn.Header>
+                                                        <Button Content="名稱" Command="{Binding DataContext.SortEquipmentCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                                CommandParameter="{x:Static pb:EquipmentSort.Name}" BorderThickness="0" Background="Transparent" />
+                                                    </GridViewColumn.Header>
+                                                </GridViewColumn>
+                                                <GridViewColumn DisplayMemberBinding="{Binding TypeLabel}" Width="70">
+                                                    <GridViewColumn.Header>
+                                                        <Button Content="種類" Command="{Binding DataContext.SortEquipmentCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                                CommandParameter="{x:Static pb:EquipmentSort.Type}" BorderThickness="0" Background="Transparent" />
+                                                    </GridViewColumn.Header>
+                                                </GridViewColumn>
+                                                <GridViewColumn Width="60">
+                                                    <GridViewColumn.Header>
+                                                        <Button Content="異常" Command="{Binding DataContext.SortEquipmentCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                                CommandParameter="{x:Static pb:EquipmentSort.Abnormal}" BorderThickness="0" Background="Transparent" />
+                                                    </GridViewColumn.Header>
+                                                    <GridViewColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock x:Name="Mark" Text="" Foreground="#B91C1C" FontWeight="Bold" />
+                                                            <DataTemplate.Triggers>
+                                                                <DataTrigger Binding="{Binding IsAbnormal}" Value="True">
+                                                                    <Setter TargetName="Mark" Property="Text" Value="⚠" />
+                                                                </DataTrigger>
+                                                            </DataTemplate.Triggers>
+                                                        </DataTemplate>
+                                                    </GridViewColumn.CellTemplate>
+                                                </GridViewColumn>
+                                                <GridViewColumn DisplayMemberBinding="{Binding State}" Width="320">
+                                                    <GridViewColumn.Header>
+                                                        <Button Content="狀態" Command="{Binding DataContext.SortEquipmentCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                                CommandParameter="{x:Static pb:EquipmentSort.State}" BorderThickness="0" Background="Transparent" />
+                                                    </GridViewColumn.Header>
+                                                </GridViewColumn>
+                                                <GridViewColumn Header="別名" DisplayMemberBinding="{Binding Aliases}" Width="100" />
+                                            </GridView>
+                                        </ListView.View>
+                                    </ListView>
+                                </DockPanel>
+                            </ad:LayoutAnchorable>
+                            <ad:LayoutAnchorable ContentId="unmapped" Title="未對應" CanClose="False">
+                                <!-- 目前時刻前後 30 秒內出現、但 Layout 沒有對應元素的編號 -->
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Top" Text="目前時刻前後 30 秒內出現、但 Layout 沒有對應元素的編號；可以在 Layout 編輯器中拖到元素上成為別名。"
+                                               TextWrapping="Wrap" Foreground="#555" Padding="6,3" />
+                                    <ListView ItemsSource="{Binding UnmappedNearby}" BorderThickness="0" AutomationProperties.AutomationId="UnmappedNearby">
+                                        <ListView.View>
+                                            <GridView>
+                                                <GridViewColumn Header="編號" DisplayMemberBinding="{Binding Value}" Width="100" />
+                                                <GridViewColumn Header="種類" DisplayMemberBinding="{Binding KindLabel}" Width="70" />
+                                                <GridViewColumn Header="附近" DisplayMemberBinding="{Binding NearbyCount}" Width="50" />
+                                                <GridViewColumn Header="案件中" DisplayMemberBinding="{Binding TotalCount}" Width="60" />
                                             </GridView>
                                         </ListView.View>
                                     </ListView>

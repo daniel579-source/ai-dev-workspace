@@ -56,6 +56,9 @@ public static class EffectKinds
     public const string SegmentDispatched = "segmentDispatched";
     public const string SegmentArrived = "segmentArrived";
     public const string CommandCompleted = "commandCompleted";
+
+    /// <summary>命令取消（LOG 樣式待確認，ADR-0005 第 6 點；以可設定的規則處理）。</summary>
+    public const string CommandCancelled = "commandCancelled";
     public const string Connection = "connection";
     public const string AlarmRaised = "alarmRaised";
     public const string AlarmCleared = "alarmCleared";
@@ -70,6 +73,7 @@ public static class EffectKinds
         (SegmentDispatched, "命令的一段派給搬送機", [FieldKinds.Command, FieldKinds.Vehicle, FieldKinds.Destination]),
         (SegmentArrived, "命令的一段抵達目的地", [FieldKinds.Command, FieldKinds.Destination]),
         (CommandCompleted, "命令完成", [FieldKinds.Command]),
+        (CommandCancelled, "命令取消（樣式待確認）", [FieldKinds.Command]),
         (Connection, "搬送機連線狀態或自動／手動", [FieldKinds.Vehicle, $"{FieldKinds.Online}|{FieldKinds.Mode}"]),
         (AlarmRaised, "警報發生", [$"{FieldKinds.Vehicle}|{FieldKinds.Station}|{FieldKinds.Dock}"]),
         (AlarmCleared, "警報復歸", [$"{FieldKinds.Vehicle}|{FieldKinds.Station}|{FieldKinds.Dock}"]),

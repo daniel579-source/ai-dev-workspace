@@ -99,6 +99,8 @@ public enum CommandStatus
     Completed,
     /// <summary>已完成，貨物已交給對接設備。</summary>
     Delivered,
+    /// <summary>已取消（LOG 樣式待確認；由廠別設定的規則判斷）。</summary>
+    Cancelled,
 }
 
 /// <summary>命令（一趟搬送任務，分成多段）。</summary>
@@ -115,7 +117,7 @@ public sealed class CommandState
     public string? Vehicle { get; set; }
     public string? SegmentDestination { get; set; }
 
-    public bool IsFinished => Status is CommandStatus.Completed or CommandStatus.Delivered;
+    public bool IsFinished => Status is CommandStatus.Completed or CommandStatus.Delivered or CommandStatus.Cancelled;
 
     public CommandState Clone() => (CommandState)MemberwiseClone();
 }

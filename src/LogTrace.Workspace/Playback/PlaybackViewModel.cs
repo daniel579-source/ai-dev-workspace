@@ -25,6 +25,19 @@ public enum ElementLook
     Auxiliary,
 }
 
+/// <summary>設備狀態表的排序欄位。</summary>
+public enum EquipmentSort
+{
+    Name,
+    Type,
+    State,
+    Abnormal,
+}
+
+/// <summary>設備狀態表的一列（ADR-0008 第 6 點）：站點、搬送機、對接設備在目前時刻的狀態。</summary>
+/// <param name="IsAbnormal">異常中（有未復歸的警報）或不一致。</param>
+public sealed record EquipmentRowViewModel(string Id, string Name, string TypeLabel, string Aliases, string State, bool IsAbnormal, ElementLook Look);
+
 /// <summary>詳細資訊的一列：狀態，以及造成這個狀態的事件（可以跳過去）。</summary>
 public sealed record StateLineViewModel(string Label, string Value, long? Cause, string? CauseText);
 
@@ -110,6 +123,12 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
 public sealed partial class PlaybackViewModel : ObservableObject
 {
     WorldModel? _model;
+
+    /// <summary>世界模型；沒有 Layout 時為 null。</summary>
+    public WorldModel? Model => _model;
+
+    /// <summary>目前時刻的世界狀態。</summary>
+    public WorldState State => _state;
     IReadOnlyDictionary<long, LogEvent> _events = new Dictionary<long, LogEvent>();
     WorldState _state = new();
     string? _storageRule;
@@ -147,6 +166,8 @@ public sealed partial class PlaybackViewModel : ObservableObject
     public void Clear(string message)
     {
         _model = null;
+        _state = new();
+        Equipment.Clear();
         Elements.Clear();
         Detail.Clear();
         SideView.Clear();
@@ -181,6 +202,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
         foreach (var el in Elements) Update(el);
         UpdateDetail();
         UpdateSideView();
+        UpdateEquipment();
     }
 
     partial void OnSelectedElementChanged(PlaybackElementViewModel? oldValue, PlaybackElementViewModel? newValue)
@@ -300,14 +322,98 @@ public sealed partial class PlaybackViewModel : ObservableObject
         p.Id + (p.Bins is { } bins ? $"（桶 {bins.Count} 個：{string.Join("、", bins)}）" : "（桶清單未知）") + (p.Preexisting ? "；案件開始前已存在" : "");
 
     string CommandText(CommandState c) =>
-        $"{c.Id}（{c.Type ?? "類型未知"}）" + c.Status switch
+        $"{c.Id}（{c.Type ?? "類型未知"}）" + StatusText(c) + (_model?.IsUnfinishedInCase(c.Id) == true ? "；案件範圍內未完成" : "");
+
+    /// <summary>命令狀態的文字（ADR-0005 第 6 點）；搬送機以 Layout 上的名稱顯示。</summary>
+    public string StatusText(CommandState c) => c.Status switch
+    {
+        CommandStatus.Created => "已建立",
+        CommandStatus.SegmentRunning => $"第 {c.Segment} 段執行中（{NameOf(c.Vehicle)} → {c.SegmentDestination}）",
+        CommandStatus.SegmentArrived => $"第 {c.Segment} 段已抵達",
+        CommandStatus.Completed => "已完成",
+        CommandStatus.Cancelled => "已取消",
+        _ => "已完成（已交出）",
+    };
+
+    string? NameOf(string? elementId) => Elements.FirstOrDefault(e => e.Id == elementId)?.Name ?? elementId;
+
+    // ---- 設備狀態表（ADR-0008 第 6 點） ----
+
+    /// <summary>站點、搬送機、對接設備在目前時刻的狀態；與 Layout 面板使用同一份世界狀態。</summary>
+    public ObservableCollection<EquipmentRowViewModel> Equipment { get; } = [];
+
+    /// <summary>只看異常中或不一致的設備。</summary>
+    [ObservableProperty]
+    public partial bool OnlyAbnormal { get; set; }
+
+    [ObservableProperty]
+    public partial EquipmentSort SortBy { get; private set; } = EquipmentSort.Name;
+
+    [ObservableProperty]
+    public partial bool SortDescending { get; private set; }
+
+    partial void OnOnlyAbnormalChanged(bool value) => UpdateEquipment();
+
+    /// <summary>依欄位排序；再按同一欄位時反向。</summary>
+    [RelayCommand]
+    void SortEquipment(EquipmentSort column)
+    {
+        SortDescending = SortBy == column && !SortDescending;
+        SortBy = column;
+        UpdateEquipment();
+    }
+
+    void UpdateEquipment()
+    {
+        var rows = Elements.Where(e => e.Type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Dock)
+            .Select(e => new EquipmentRowViewModel(e.Id, e.Name, e.TypeLabel, e.Aliases, EquipmentState(e), _state.Alarms.ContainsKey(e.Id) || e.IsInconsistent, e.Look))
+            .Where(r => !OnlyAbnormal || r.IsAbnormal);
+        Func<EquipmentRowViewModel, string> key = SortBy switch
         {
-            CommandStatus.Created => "已建立",
-            CommandStatus.SegmentRunning => $"第 {c.Segment} 段執行中 → {c.SegmentDestination}",
-            CommandStatus.SegmentArrived => $"第 {c.Segment} 段已抵達",
-            CommandStatus.Completed => "已完成",
-            _ => "已完成（已交出）",
-        } + (_model?.IsUnfinishedInCase(c.Id) == true ? "；案件範圍內未完成" : "");
+            EquipmentSort.Type => r => r.TypeLabel + "\u0001" + r.Name,
+            EquipmentSort.State => r => r.State,
+            EquipmentSort.Abnormal => r => (r.IsAbnormal ? "0" : "1") + r.Name,
+            _ => r => r.Name,
+        };
+        var sorted = SortDescending ? rows.OrderByDescending(key, StringComparer.CurrentCulture) : rows.OrderBy(key, StringComparer.CurrentCulture);
+        Equipment.Clear();
+        foreach (var r in sorted) Equipment.Add(r);
+    }
+
+    /// <summary>設備在目前時刻的狀態摘要；推不出來的部分顯示「未知」。</summary>
+    string EquipmentState(PlaybackElementViewModel e)
+    {
+        var w = _state;
+        var parts = new List<string>();
+        if (w.Alarms.TryGetValue(e.Id, out var alarm))
+            parts.Add($"異常中（警報 {alarm.Code}{(_model?.IsAlarmNeverReset(e.Id, alarm) == true ? "，未見復歸紀錄" : "")}）");
+        switch (e.Type)
+        {
+            case LayoutElementType.Station:
+                w.Stations.TryGetValue(e.Id, out var s);
+                parts.Add("在席 " + (s?.Presence switch { true => "ON", false => "OFF", null => "未知" }));
+                var pallets = w.PalletsAt(LocationKind.Station, e.Id).Select(p => p.Id).ToList();
+                if (pallets.Count > 0) parts.Add("貨物 " + string.Join("、", pallets));
+                if (e.IsInconsistent) parts.Add("不一致");
+                break;
+            case LayoutElementType.Vehicle:
+                w.Vehicles.TryGetValue(e.Id, out var v);
+                parts.Add($"連線 {v?.Connection ?? "未知"}");
+                parts.Add($"模式 {v?.Mode ?? "未知"}");
+                parts.Add(v?.Work switch
+                {
+                    VehicleWork.Executing => $"執行中 {v.Command} → {v.Destination}",
+                    VehicleWork.Idle => "閒置",
+                    _ => "作業未知",
+                });
+                break;
+            case LayoutElementType.Dock:
+                var delivered = w.PalletsAt(LocationKind.Delivered, e.Id).Count();
+                parts.Add(delivered > 0 ? $"已交出 {delivered}" : "未交出");
+                break;
+        }
+        return string.Join("；", parts);
+    }
 
     /// <summary>選取元素（Layout 面板上點一下）。</summary>
     [RelayCommand]

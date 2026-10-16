@@ -405,6 +405,24 @@ public sealed class SqliteEventStore : IEventStore
         return list;
     }
 
+    public IReadOnlyList<(string Kind, string Value, long Count)> GetFieldValueCounts(IReadOnlyList<string> kinds, long fromSequence, long toSequence)
+    {
+        using var cmd = _conn.CreateCommand();
+        var names = kinds.Select((k, i) => "$k" + i).ToList();
+        cmd.CommandText = $"""
+            SELECT kind, value, count(DISTINCT seq) FROM event_fields
+            WHERE seq BETWEEN $from AND $to AND kind IN ({string.Join(",", names)})
+            GROUP BY kind, value COLLATE NOCASE ORDER BY count(DISTINCT seq) DESC, value
+            """;
+        cmd.Parameters.AddWithValue("$from", fromSequence);
+        cmd.Parameters.AddWithValue("$to", toSequence);
+        for (int i = 0; i < kinds.Count; i++) cmd.Parameters.AddWithValue(names[i], kinds[i]);
+        using var r = cmd.ExecuteReader();
+        var list = new List<(string, string, long)>();
+        while (r.Read()) list.Add((r.GetString(0), r.GetString(1), r.GetInt64(2)));
+        return list;
+    }
+
     public IReadOnlyList<long> FindSequences(IReadOnlyList<string> kinds, IReadOnlyList<string> values)
     {
         if (kinds.Count == 0 || values.Count == 0) return [];

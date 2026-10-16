@@ -242,6 +242,15 @@ public sealed class WorldModel
                 }
                 break;
             }
+            case EffectKinds.CommandCancelled when x.Get(FieldKinds.Command) is { } id:
+            {
+                var c = CommandOf(w, id, seq);
+                (c.Status, c.StatusCause) = (CommandStatus.Cancelled, seq);
+                // 執行中的搬送機回到閒置（取消後的實際動作待確認，不推測貨物位置）
+                if (c.Vehicle is { } vh && w.Vehicles.TryGetValue(vh, out var v) && v.Command == id)
+                    (v.Work, v.WorkCause, v.Command, v.Destination) = (VehicleWork.Idle, seq, null, null);
+                break;
+            }
             case EffectKinds.CommandCompleted when x.Get(FieldKinds.Command) is { } id:
             {
                 var c = CommandOf(w, id, seq);

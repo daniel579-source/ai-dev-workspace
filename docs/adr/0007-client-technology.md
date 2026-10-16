@@ -37,7 +37,7 @@
 - 2026-10-16 #29 補充：
   - 以 `scripts/package.ps1` 產生 zip，內含使用說明、`THIRD-PARTY-NOTICES.md` 與 `licenses\`；不含有 unRAR 授權限制的 `7z.dll`。版本號放在 `LogTrace.App.csproj`。
   - 開發電腦驗證：程式自帶執行環境（`includedFrameworks`）；原生 DLL 只依賴 Windows 10 內建的元件；zip 解壓後的發佈版冒煙測試全部通過。
-  - **乾淨、離線的 Windows 10 待實機確認**（步驟見 `validation/results/release-29-dev-pc.md` 第 7 節）。
+  - ~~乾淨、離線的 Windows 10 待實機確認~~ → 2026-10-16 **通過**：使用者以 `LogTrace-0.1.0-win-x64.zip`（`main` 的 `bab8b8e`，SHA-256 `3239E629…A76D`），在乾淨、離線的 Windows 10 實機上依 `validation/results/release-29-dev-pc.md` 第 7 節的 5 個步驟確認（確認者：repo owner）。
 
 ### 3. 元件政策
 
@@ -73,7 +73,7 @@
 | 1. 10 萬筆清單 | 每格換掉整個可見範圍的極端情境：DataGrid 約 21 fps、ListView 約 31～36 fps | **待體感確認** |
 | 1. 時間軸 | 60 fps（密度長條畫進點陣圖；每欄一個幾何圖形只有約 8 fps） | 通過 |
 | 2. 版面儲存與還原 | 儲存、改變、還原後完全相同；損壞的版面檔可退回預設 | 通過 |
-| 3. self-contained | 單一資料夾 136 MB（zip 59 MB），本機確認 self-contained 執行 | 本機通過；**乾淨、離線的 Windows 10 待測** |
+| 3. self-contained | 單一資料夾 136 MB（zip 59 MB），本機確認 self-contained 執行 | 本機通過；乾淨、離線的 Windows 10 **通過**（2026-10-16 #29 實機確認，見第 2 點） |
 | 4. 2D 畫布 | 縮放＋平移 60 fps；拖曳元素 54 fps | 通過 |
 
 狀態維持「待技術驗證」，第 1 項的體感與第 3 項完成後再更新。實作（#16 起）依下列結果進行：
@@ -120,7 +120,7 @@
 ## 後續驗證方式
 
 - 依第 4 點進行技術驗證，並記錄結果（開發用電腦的結果見第 5 點）。
-- 尚待完成：事件清單的實際操作體感；乾淨、離線的 Windows 10（`validation/README.md` 的手動檢查）。
+- 尚待完成：事件清單的實際操作體感（#47）。乾淨、離線的 Windows 10 已於 2026-10-16 實機確認通過（#29）。
 - 在乾淨、離線的 Windows 10 與 Windows 11 上，解壓後直接執行，確認不需要額外安裝任何元件。
 - 列出所有第三方元件與授權，確認都可以免費用於公司內部。
 

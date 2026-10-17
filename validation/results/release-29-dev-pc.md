@@ -72,7 +72,7 @@
 - **乾淨、離線的 Windows 10**：~~待確認~~ → **2026-10-16 通過**。使用者以 `LogTrace-0.1.0-win-x64.zip`（`main` 的 `bab8b8e`，SHA-256 `3239E629…A76D`），在沒有安裝 .NET、沒有網路的 Windows 10 實機上依下列步驟確認：
   1. 把 zip 複製到該電腦，解壓到任一資料夾。
   2. 執行 `LogTrace.exe`，確認視窗出現、右上角顯示時區。
-  3. 建立案件，匯入一份虛構 LOG（例如 repo 的 `tests\fixtures\multi-day.7z`），確認事件清單出現、可以搜尋與用方向鍵移動。
+  3. 建立案件，匯入一份虛構 LOG（例如 repo 的 `tests\fixtures\multi-day.7z`），確認事件清單出現、可以搜尋與用方向鍵移動。（實機確認時匯入的是 `multi-day.7z`，因此也確認了 ADR-0012 的 7z 解開。）
   4. 開啟 Layout 編輯器，新增一個站點並存檔。
   5. 關閉程式，確認 `%LOCALAPPDATA%\LogTrace` 下有案件與設定。
 - 以下項目已移到 #47 追蹤：

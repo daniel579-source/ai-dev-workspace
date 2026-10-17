@@ -51,7 +51,7 @@
 ## 後續驗證方式
 
 - 以虛構資料確認資料夾、7z、zip 三種來源的匯入結果相同（#18 的測試）。
-- 在乾淨、離線的 Windows 10 上確認 self-contained 發佈可以解開 7z（與 ADR-0007 的待測項目一起進行）。
+- ~~在乾淨、離線的 Windows 10 上確認 self-contained 發佈可以解開 7z~~ → 2026-10-16 **通過**：與 ADR-0007 第 2 點的實機確認同一次進行，使用者以 `LogTrace-0.1.0-win-x64.zip`（`main` 的 `bab8b8e`）在乾淨、離線的 Windows 10 上匯入虛構的 `tests\fixtures\multi-day.7z` 成功（確認者：repo owner）。
 - 取得真實的 LOG 壓縮檔後，確認解開時間與格式（是否為 solid、壓縮方式）。
 
 ## 影響範圍

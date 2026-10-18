@@ -164,6 +164,46 @@ public sealed class SearchIndexTests : IDisposable
     }
 
     [Fact]
+    public void 建好的索引分片沒有空頁()
+    {
+        _case.BuildIndex();
+
+        // 合併索引片段（optimize）後留下的空頁要整理掉（#51：真實樣本 31% 是空頁）
+        var shards = Directory.GetFiles(_case.Index.Folder, "*.db");
+        Assert.Equal(2, shards.Length);
+        foreach (var shard in shards)
+        {
+            using var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={shard};Mode=ReadOnly;Pooling=False");
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "PRAGMA freelist_count";
+            Assert.Equal(0L, cmd.ExecuteScalar());
+        }
+    }
+
+    [Fact]
+    public void 建好的索引會讓案件超過上限時_捨棄那一天_其餘以掃描_之後不再重建()
+    {
+        // 建立前未超過上限，任何一天的索引建好後都會超過：以實際大小判斷（#51：估計係數 0.3 對真實樣本偏低）
+        _case.Index.DiskLimitRatio = (_case.Index.CaseBytes() + 1024.0) / _case.RawBytes();
+
+        var result = _case.BuildIndex();
+
+        Assert.True(result.LimitReached);
+        Assert.Equal(0, result.BuiltDays);
+        Assert.Empty(Directory.GetFiles(_case.Index.Folder, "*.db*"));
+        Assert.True(_case.Index.CaseBytes() <= _case.RawBytes() * _case.Index.DiskLimitRatio);
+        Assert.Equal((0, 2), Route(new SearchQuery { AllOf = "heartbeat" }));
+        Assert.NotEmpty(_case.Search(new SearchQuery { AllOf = "heartbeat" }));
+
+        // 再次開啟案件時（內容沒有改變）不再白費時間重建
+        var progress = new List<IndexBuildProgress>();
+        var again = _case.BuildIndex(new SyncProgress<IndexBuildProgress>(progress.Add));
+        Assert.True(again.LimitReached);
+        Assert.All(progress, p => Assert.Null(p.Day));
+    }
+
+    [Fact]
     public void 正規表示式_比對整筆事件_全形半形相同_不分大小寫可選()
     {
         var events = _case.GetEvents(1, int.MaxValue).ToList();

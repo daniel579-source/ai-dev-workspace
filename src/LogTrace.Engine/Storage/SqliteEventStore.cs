@@ -28,7 +28,10 @@ public sealed class SqliteEventStore : IEventStore
         }.ToString());
         _conn.Open();
         if (readOnly) return;
+        // 分頁大小只對新的資料庫有效（要在 WAL 之前設定），既有案件維持原本的分頁（#51）：
+        // 長的多行事件（SQL、JSON、stack trace）跨頁存放時，4 KB 分頁浪費空間
         Exec("""
+            PRAGMA page_size=8192;
             PRAGMA journal_mode=WAL;
             PRAGMA synchronous=NORMAL;
             CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);

@@ -28,6 +28,48 @@ public sealed class CaseManagementTests : IDisposable
         Assert.Contains("先在 LogTrace 中關閉這個案件", text);
     }
 
+    static long Pragma(string db, string sql)
+    {
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db};Pooling=False");
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        return cmd.ExecuteScalar() is long n ? n : 0;
+    }
+
+    [Fact]
+    public void 新案件以8KB分頁建立()
+    {
+        string db;
+        using (var c = _library.Create("分頁", PlantConfig.Default))
+        {
+            c.Import(TempFolder.Fixture("multi-day.zip"));
+            db = Path.Combine(c.Folder, Case.DatabaseFileName);
+        }
+
+        // 長的多行事件跨頁存放時，4 KB 分頁浪費空間（#51：真實樣本 4 KB 60 MB、8 KB 45 MB）
+        Assert.Equal(8192, Pragma(db, "PRAGMA page_size"));
+    }
+
+    [Fact]
+    public void 以4KB分頁建立的舊案件_照常開啟_匯入與搜尋_分頁不變()
+    {
+        string folder, db;
+        using (var c = _library.Create("舊案件", PlantConfig.Default))
+            (folder, db) = (c.Folder, Path.Combine(c.Folder, Case.DatabaseFileName));
+        Pragma(db, "PRAGMA journal_mode=DELETE; PRAGMA page_size=4096; VACUUM; PRAGMA journal_mode=WAL;"); // 同一個連線內才有效
+        Assert.Equal(4096, Pragma(db, "PRAGMA page_size"));
+
+        using (var c = Case.Open(folder))
+        {
+            c.Import(TempFolder.Fixture("multi-day.zip"));
+            Assert.NotEmpty(AllEvents(c));
+            Assert.NotEmpty(c.Search(new Search.SearchQuery { AllOf = "CMD_NO" }));
+        }
+
+        Assert.Equal(4096, Pragma(db, "PRAGMA page_size"));
+    }
+
     [Fact]
     public void 關閉案件後複製整個資料夾_在另一處可以開啟_內容相同()
     {

@@ -72,6 +72,6 @@
 
 ## 後續驗證方式
 
-- 以樣本確認：全部時間戳記都能解析；同時間戳記與時間倒退的筆數，與 `docs/log-format-notes.md` 的統計一致。
+- 以樣本確認：全部時間戳記都能解析；同時間戳記與時間倒退的筆數，與 `docs/log-format-notes.md` 的統計一致。→ 2026-10-18 以真實樣本**通過**（#47，`validation/results/real-sample-47-dev-pc.md`）：無效時間 0 筆；時間倒退 PLCLOG 6 處、WebServiceLOG 2 處；檔案內相鄰同時間的比例 PLCLOG 30%、EXEDebug 42%、BCR_LOG 20%。
 - 人工製作含無效時間戳記的測試檔（虛構資料），確認標示與位置正確。
 - 設定偏移量後確認：顯示時間改變、原始時間不變、改回 0 後完全恢復。

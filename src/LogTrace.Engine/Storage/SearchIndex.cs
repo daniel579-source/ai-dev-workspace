@@ -32,14 +32,20 @@ public sealed class SearchIndex(string caseFolder, string caseDbPath)
 
     public const double DefaultDiskLimitRatio = 5;
 
-    /// <summary>估計一天的索引大小：該日原始 LOG 大小的倍數（技術驗證 detail=none 約 0.23 倍，取寬鬆值）。</summary>
-    const double EstimatedIndexRatio = 0.3;
+    /// <summary>
+    /// 建好分片後會超過磁碟上限而捨棄時留下的紀錄（內容為當時的內容版本）：內容沒有改變時，下次不再白費時間重建。
+    /// </summary>
+    const string LimitFileName = "limit-reached";
 
     const string FormatVersion = "1";
 
     public string Folder => Path.Combine(caseFolder, FolderName);
 
     string ShardPath(string day) => Path.Combine(Folder, day + ".db");
+
+    string LimitPath => Path.Combine(Folder, LimitFileName);
+
+    enum ShardResult { Built, Busy, LimitReached }
 
     static SqliteConnection Open(string path, bool readOnly)
     {
@@ -133,7 +139,7 @@ public sealed class SearchIndex(string caseFolder, string caseDbPath)
 
     /// <summary>
     /// 依日期建立尚未建好的分片（背景執行；可以取消，取消時已建好的分片保留）。
-    /// 建立前估計磁碟用量，會超過原始 LOG 的 5 倍時停止，其餘日期以掃描搜尋。
+    /// 每建好一天就以實際大小檢查磁碟用量，會超過原始 LOG 的 5 倍時捨棄那一天並停止，其餘日期以掃描搜尋。
     /// </summary>
     /// <param name="days">日期資料夾與該日原始 LOG 的大小。</param>
     public IndexBuildResult Build(IReadOnlyList<(string Day, long RawBytes)> days, string contentVersion, long rawBytes,
@@ -144,17 +150,25 @@ public sealed class SearchIndex(string caseFolder, string caseDbPath)
         int built = days.Count(d => IsBuilt(d.Day, contentVersion));
         progress?.Report(new(built, days.Count, null));
         bool limit = false;
-        foreach (var (day, dayRaw) in days)
+        long limitBytes = (long)(rawBytes * DiskLimitRatio);
+        foreach (var (day, _) in days)
         {
             ct.ThrowIfCancellationRequested();
             if (IsBuilt(day, contentVersion)) continue;
-            if (CaseBytes() + dayRaw * EstimatedIndexRatio > rawBytes * DiskLimitRatio)
+            if (CaseBytes() > limitBytes || LimitReachedBefore(contentVersion))
             {
                 limit = true;
                 break;
             }
             progress?.Report(new(built, days.Count, day));
-            if (BuildShard(day, contentVersion, ct)) built++;
+            var r = BuildShard(day, contentVersion, limitBytes, ct);
+            if (r == ShardResult.Built) built++;
+            else if (r == ShardResult.LimitReached)
+            {
+                File.WriteAllText(LimitPath, contentVersion);
+                limit = true;
+                break;
+            }
         }
         progress?.Report(new(built, days.Count, null));
         return new(built, days.Count, limit, clock.Elapsed);
@@ -166,7 +180,19 @@ public sealed class SearchIndex(string caseFolder, string caseDbPath)
             .Where(f => !f.EndsWith("-wal", StringComparison.Ordinal) && !f.EndsWith("-shm", StringComparison.Ordinal))
             .Sum(f => new FileInfo(f).Length);
 
-    bool BuildShard(string day, string contentVersion, CancellationToken ct)
+    bool LimitReachedBefore(string contentVersion)
+    {
+        try
+        {
+            return File.Exists(LimitPath) && File.ReadAllText(LimitPath) == contentVersion;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
+    ShardResult BuildShard(string day, string contentVersion, long limitBytes, CancellationToken ct)
     {
         var path = ShardPath(day);
         var tmp = path + ".tmp";
@@ -213,16 +239,20 @@ public sealed class SearchIndex(string caseFolder, string caseDbPath)
                 meta.ExecuteNonQuery();
                 tx.Commit();
                 Exec(shard, "INSERT INTO fts(fts) VALUES('optimize');");
+                Exec(shard, "VACUUM;"); // optimize 合併後留下空頁（#51：真實樣本 31%）
             }
+            // 以實際大小判斷磁碟上限（#51：事先估計對真實 LOG 偏低）；被取代的舊分片不算
+            long replaced = File.Exists(path) ? new FileInfo(path).Length : 0;
+            if (CaseBytes() - replaced > limitBytes) return ShardResult.LimitReached;
             try
             {
                 if (File.Exists(path)) File.Delete(path); // 舊版本的分片
                 File.Move(tmp, path);
-                return true;
+                return ShardResult.Built;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                return false; // 舊分片正被搜尋使用：下次再建立
+                return ShardResult.Busy; // 舊分片正被搜尋使用：下次再建立
             }
         }
         finally

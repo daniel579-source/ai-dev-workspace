@@ -96,6 +96,8 @@ public enum CommandStatus
     Created,
     SegmentRunning,
     SegmentArrived,
+    /// <summary>一段作業完成，但 LOG 沒有記錄地點（不推導，#53）。</summary>
+    SegmentFinished,
     Completed,
     /// <summary>已完成，貨物已交給對接設備。</summary>
     Delivered,

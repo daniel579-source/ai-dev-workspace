@@ -242,6 +242,19 @@ public sealed class WorldModel
                 }
                 break;
             }
+            case EffectKinds.SegmentFinished when x.Get(FieldKinds.Command) is { } id:
+            {
+                // LOG 沒有記錄地點：不推導（不沿用派送的目的地），貨物位置維持最後的紀錄（#53）
+                var c = CommandOf(w, id, seq);
+                (c.Status, c.StatusCause, c.Segment) = (CommandStatus.SegmentFinished, seq, ParseInt(x.Get(FieldKinds.Segment)) ?? c.Segment);
+                var vh = Element(FieldKinds.Vehicle, LayoutElementType.Vehicle) ?? c.Vehicle;
+                if (vh is not null)
+                {
+                    var v = VehicleOf(w, vh);
+                    (v.Work, v.WorkCause, v.Command, v.Destination) = (VehicleWork.Idle, seq, null, null);
+                }
+                break;
+            }
             case EffectKinds.CommandCancelled when x.Get(FieldKinds.Command) is { } id:
             {
                 var c = CommandOf(w, id, seq);

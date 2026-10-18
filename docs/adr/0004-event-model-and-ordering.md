@@ -95,8 +95,8 @@
 
 ## 後續驗證方式
 
-- 以樣本確認：事件數與 `docs/log-format-notes.md` 統計一致（例如 PLCLOG 6,532 筆、DBLOG 35 筆且每筆含 stack trace）。
-- 確認時間倒退的事件筆數與統計一致（PLCLOG 6 處、WebServiceLOG 2 處），且都有標示。
+- 以樣本確認：事件數與 `docs/log-format-notes.md` 統計一致（例如 PLCLOG 6,532 筆、DBLOG 35 筆且每筆含 stack trace）。→ 2026-10-18 以真實樣本**通過**（#47，`validation/results/real-sample-47-dev-pc.md`）：14 個檔案的事件數都相同，合計 25,337 筆；DBLOG 35 筆都是多行事件。
+- 確認時間倒退的事件筆數與統計一致（PLCLOG 6 處、WebServiceLOG 2 處），且都有標示。→ 2026-10-18 以真實樣本**通過**（#47，`validation/results/real-sample-47-dev-pc.md`）。
 - 同一查詢重複執行，順序完全相同。
 - 模擬重新匯入「新檔多出後半段」後，原有事件的識別碼不變。
 

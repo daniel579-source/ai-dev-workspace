@@ -55,6 +55,8 @@ public static class EffectKinds
     public const string CommandCreated = "commandCreated";
     public const string SegmentDispatched = "segmentDispatched";
     public const string SegmentArrived = "segmentArrived";
+    /// <summary>命令的一段作業完成，LOG 沒有記錄地點（例如放進儲位的完成回報，#53）。</summary>
+    public const string SegmentFinished = "segmentFinished";
     public const string CommandCompleted = "commandCompleted";
 
     /// <summary>命令取消（LOG 樣式待確認，ADR-0005 第 6 點；以可設定的規則處理）。</summary>
@@ -72,6 +74,7 @@ public static class EffectKinds
         (CommandCreated, "建立命令", [FieldKinds.Command]),
         (SegmentDispatched, "命令的一段派給搬送機", [FieldKinds.Command, FieldKinds.Vehicle, FieldKinds.Destination]),
         (SegmentArrived, "命令的一段抵達目的地", [FieldKinds.Command, FieldKinds.Destination]),
+        (SegmentFinished, "命令的一段作業完成（LOG 沒有記錄地點）", [FieldKinds.Command]),
         (CommandCompleted, "命令完成", [FieldKinds.Command]),
         (CommandCancelled, "命令取消（樣式待確認）", [FieldKinds.Command]),
         (Connection, "搬送機連線狀態或自動／手動", [FieldKinds.Vehicle, $"{FieldKinds.Online}|{FieldKinds.Mode}"]),

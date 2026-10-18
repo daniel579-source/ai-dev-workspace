@@ -37,6 +37,14 @@ public sealed class CommandsEquipmentTests : IDisposable
     EquipmentRowViewModel Equip(string name) => _vm.Playback.Equipment.Single(e => e.Name == name);
 
     [Fact]
+    public void 一段作業完成但沒有地點_與已抵達分開顯示()
+    {
+        var c = new LogTrace.Engine.Playback.CommandState { Id = "00090001", Status = LogTrace.Engine.Playback.CommandStatus.SegmentFinished, Segment = 2 };
+
+        Assert.Equal("第 2 段作業完成（地點未記錄）", _vm.Playback.StatusText(c));
+    }
+
+    [Fact]
     public async Task 命令清單_事件數與案件結束時的狀態()
     {
         await Open();

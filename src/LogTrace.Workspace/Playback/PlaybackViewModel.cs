@@ -330,6 +330,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
         CommandStatus.Created => "已建立",
         CommandStatus.SegmentRunning => $"第 {c.Segment} 段執行中（{NameOf(c.Vehicle)} → {c.SegmentDestination}）",
         CommandStatus.SegmentArrived => $"第 {c.Segment} 段已抵達",
+        CommandStatus.SegmentFinished => $"第 {c.Segment} 段作業完成（地點未記錄）",
         CommandStatus.Completed => "已完成",
         CommandStatus.Cancelled => "已取消",
         _ => "已完成（已交出）",

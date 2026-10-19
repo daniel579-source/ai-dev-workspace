@@ -139,6 +139,26 @@
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
+                                    <!-- 廠別設定的存放位置（ADR-0006 第 7 點，#57） -->
+                                    <TextBlock Text="廠別設定位置" Foreground="#555" Margin="0,6,0,0" />
+                                    <DockPanel Margin="0,2,0,0">
+                                        <Button DockPanel.Dock="Right" Content="變更…" Command="{Binding ChangePlantsRootCommand}" Padding="8,1" Margin="6,0,0,0"
+                                                AutomationProperties.AutomationId="ChangePlantsRoot" />
+                                        <TextBlock Text="{Binding PlantsRoot}" TextTrimming="CharacterEllipsis" ToolTip="{Binding PlantsRoot}"
+                                                   VerticalAlignment="Center" AutomationProperties.AutomationId="PlantsRoot" />
+                                    </DockPanel>
+                                    <TextBlock Text="{Binding PlantsRootWarning}" TextWrapping="Wrap" Foreground="#B00020" Margin="0,4,0,0"
+                                               AutomationProperties.AutomationId="PlantsRootWarning">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding PlantsRootWarning}" Value="{x:Null}">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </StackPanel>
                                 <!-- 目前的案件 -->
                                 <Border DockPanel.Dock="Bottom" BorderBrush="#DDD" BorderThickness="0,1,0,0" Padding="0,6,0,0" Margin="0,6,0,0">

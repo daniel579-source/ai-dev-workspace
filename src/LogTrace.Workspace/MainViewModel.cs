@@ -27,7 +27,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     readonly IUserInteraction _ui;
     readonly string _defaultCasesRoot;
     readonly Func<string, bool> _isInOneDrive;
-    readonly string _plantsRoot;
+    readonly string _defaultPlantsRoot;
+    string _plantsRoot;
     AppSettings _settings;
     CaseLibrary _library;
     Case? _case;
@@ -37,17 +38,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <param name="defaultCasesRoot">設定中沒有指定存放位置時使用（預設 %LOCALAPPDATA%\LogTrace\Cases）。</param>
     /// <param name="isInOneDrive">判斷位置是否在 OneDrive 同步資料夾內；預設依本機環境判斷。</param>
-    /// <param name="plantsRoot">廠別設定檔的存放位置；預設與預設案件位置同一層的 Plants。</param>
+    /// <param name="plantsRoot">設定中沒有指定時的廠別設定檔存放位置；預設與預設案件位置同一層的 Plants。</param>
     public MainViewModel(SettingsStore settingsStore, IUserInteraction ui, string defaultCasesRoot, Func<string, bool>? isInOneDrive = null,
         string? plantsRoot = null)
     {
-        _plantsRoot = plantsRoot ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(defaultCasesRoot))!, "Plants");
+        _defaultPlantsRoot = plantsRoot ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(defaultCasesRoot))!, "Plants");
         _settingsStore = settingsStore;
         _ui = ui;
         _defaultCasesRoot = defaultCasesRoot;
         _isInOneDrive = isInOneDrive ?? OneDriveDetector.IsInOneDrive;
         _settings = settingsStore.Load();
         _library = new CaseLibrary(_settings.CasesRoot ?? defaultCasesRoot);
+        _plantsRoot = Path.GetFullPath(_settings.PlantsRoot ?? _defaultPlantsRoot);
         UpdateCasesRoot();
         RefreshCases();
         RefreshPlants();
@@ -76,6 +78,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>存放位置在 OneDrive 同步資料夾內時的警告；沒有問題時為 null。</summary>
     [ObservableProperty]
     public partial string? CasesRootWarning { get; private set; }
+
+    /// <summary>廠別設定檔的存放位置（ADR-0006 第 7 點）。</summary>
+    [ObservableProperty]
+    public partial string PlantsRoot { get; private set; } = "";
+
+    /// <summary>廠別設定檔存放位置的問題（例如所在的磁碟不存在）；沒有問題時為 null。</summary>
+    [ObservableProperty]
+    public partial string? PlantsRootWarning { get; private set; }
 
     /// <summary>案件清單：最近使用的在前（依使用順序），其餘依名稱。</summary>
     public ObservableCollection<CaseListItemViewModel> Cases { get; } = [];
@@ -265,10 +275,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     void UpdateCasesRoot()
     {
         CasesRoot = _library.Root;
-        CasesRootWarning = _isInOneDrive(_library.Root)
-            ? "案件存放位置在 OneDrive 同步資料夾內。案件開啟時資料一直在變動，同步可能產生不完整的複本，也會把真實 LOG 上傳到雲端；建議改到不同步的位置。"
-            : null;
+        CasesRootWarning = DriveMissing(_library.Root, "案件")
+            ?? (_isInOneDrive(_library.Root)
+                ? "案件存放位置在 OneDrive 同步資料夾內。案件開啟時資料一直在變動，同步可能產生不完整的複本，也會把真實 LOG 上傳到雲端；建議改到不同步的位置。"
+                : null);
+        PlantsRoot = _plantsRoot;
+        PlantsRootWarning = DriveMissing(_plantsRoot, "廠別設定");
     }
+
+    /// <summary>存放位置所在的磁碟不存在時的提示（例如沒有 D 槽，#57）。</summary>
+    static string? DriveMissing(string root, string what) =>
+        Path.GetPathRoot(root) is { Length: > 0 } drive && !Directory.Exists(drive)
+            ? $"{what}存放位置所在的磁碟（{drive.TrimEnd(Path.DirectorySeparatorChar)}）不存在，無法存檔；請按「變更…」改到其他位置。"
+            : null;
 
     void RefreshCases()
     {
@@ -312,6 +331,68 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         UpdateCasesRoot();
         RefreshCases();
         Status = $"案件存放位置改為 {_library.Root}。已有的案件不會搬移。";
+    }
+
+    /// <summary>變更廠別設定檔的存放位置（ADR-0006 第 7 點）。已有的設定檔不會搬移。</summary>
+    [RelayCommand(CanExecute = nameof(CanChangeCasesRoot))]
+    void ChangePlantsRoot()
+    {
+        if (_ui.PickFolder("選擇廠別設定的存放位置") is not { } folder) return;
+        _plantsRoot = Path.GetFullPath(folder);
+        SaveSettings(_settings with { PlantsRoot = _plantsRoot });
+        UpdateCasesRoot();
+        RefreshPlants();
+        Status = $"廠別設定的存放位置改為 {_plantsRoot}。已有的設定檔不會搬移。";
+    }
+
+    /// <summary>
+    /// 舊的預設位置（#57 之前的 %LOCALAPPDATA%\LogTrace\Cases 與 Plants）還有資料時，詢問是否搬到目前的位置。
+    /// 只處理仍使用預設位置的項目（設定中自行指定過位置的不動）。同意時逐項複製、核對後才刪除舊位置；
+    /// 不同意時改為繼續使用舊位置，之後不再詢問，使用者可以自行變更位置。
+    /// </summary>
+    public void OfferRelocation(string oldCasesRoot, string oldPlantsRoot)
+    {
+        var items = new List<(string Label, string From, string To, Func<string, AppSettings> UseOld)>();
+        if (_settings.CasesRoot is null && DataRelocation.HasData(oldCasesRoot) && !DataRelocation.SameFolder(oldCasesRoot, _library.Root))
+            items.Add(("案件", oldCasesRoot, _library.Root, old => _settings with { CasesRoot = old }));
+        if (_settings.PlantsRoot is null && DataRelocation.HasData(oldPlantsRoot) && !DataRelocation.SameFolder(oldPlantsRoot, _plantsRoot))
+            items.Add(("廠別設定", oldPlantsRoot, _plantsRoot, old => _settings with { PlantsRoot = old }));
+        if (items.Count == 0) return;
+
+        var list = string.Join("\n", items.Select(i => $"・{i.Label}：{i.From} → {i.To}"));
+        var driveOk = items.All(i => DriveMissing(i.To, "") is null);
+        var move = driveOk && _ui.Confirm("搬移資料",
+            $"預設存放位置已改為 D 槽（公司備份不包含 AppData\\Local，請自行備份 D 槽）。舊位置還有資料：\n{list}\n\n" +
+            "要搬到新位置嗎？每個檔案複製並核對後，才會刪除舊位置的資料。選「否」會繼續使用舊位置。");
+        if (!move)
+        {
+            foreach (var i in items) SaveSettings(i.UseOld(Path.GetFullPath(i.From)));
+            ApplyRoots();
+            Status = driveOk
+                ? "繼續使用舊位置；可以在案件面板按「變更…」改到其他位置。"
+                : "新位置所在的磁碟不存在，繼續使用舊位置；可以在案件面板按「變更…」改到其他位置。";
+            return;
+        }
+
+        var report = new List<string>();
+        foreach (var i in items)
+        {
+            var r = DataRelocation.Move(i.From, i.To);
+            report.Add($"{i.Label}：搬移 {r.Moved.Count} 項"
+                + (r.Skipped.Count > 0 ? $"；新位置已有同名項目、留在舊位置 {r.Skipped.Count} 項（{string.Join("、", r.Skipped)}）" : "")
+                + (r.Failed.Count > 0 ? $"；失敗 {r.Failed.Count} 項（{string.Join("；", r.Failed.Select(f => $"{f.Name}：{f.Error}"))}）" : ""));
+        }
+        ApplyRoots();
+        Status = string.Join("。", report) + "。";
+    }
+
+    void ApplyRoots()
+    {
+        _library = new CaseLibrary(_settings.CasesRoot ?? _defaultCasesRoot);
+        _plantsRoot = Path.GetFullPath(_settings.PlantsRoot ?? _defaultPlantsRoot);
+        UpdateCasesRoot();
+        RefreshCases();
+        RefreshPlants();
     }
 
     /// <summary>重新列出廠別設定檔（例如在 Layout 編輯器中新增或改名之後）；保留原本的選擇。</summary>

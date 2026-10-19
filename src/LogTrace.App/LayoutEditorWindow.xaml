@@ -170,11 +170,25 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Grid>
-                                    <!-- 輸送線：只表示方向 -->
+                                    <!-- 輸送線：表示貨物流向；連到搬送機的那一端畫到交接點，以橘點拖曳調整 -->
                                     <Line X1="{Binding LineX1, Converter={StaticResource Px}}" Y1="{Binding LineY1, Converter={StaticResource Px}}"
                                           X2="{Binding LineX2, Converter={StaticResource Px}}" Y2="{Binding LineY2, Converter={StaticResource Px}}"
                                           Stroke="#94A3B8" StrokeThickness="3" StrokeDashArray="3 2" Tag="{Binding}"
                                           Visibility="{Binding IsConveyor, Converter={StaticResource Visible}}" />
+                                    <Canvas Visibility="{Binding IsConveyor, Converter={StaticResource Visible}}">
+                                        <Ellipse Tag="fromPoint" Width="10" Height="10" Fill="#F59E0B" Stroke="White" Cursor="SizeAll"
+                                                 Canvas.Left="{Binding LineX1, Converter={StaticResource Px}}" Canvas.Top="{Binding LineY1, Converter={StaticResource Px}}"
+                                                 Visibility="{Binding HasFromPoint, Converter={StaticResource Visible}}"
+                                                 AutomationProperties.AutomationId="{Binding Id, StringFormat=FromPoint_{0}}">
+                                            <Ellipse.RenderTransform><TranslateTransform X="-5" Y="-5" /></Ellipse.RenderTransform>
+                                        </Ellipse>
+                                        <Ellipse Tag="toPoint" Width="10" Height="10" Fill="#F59E0B" Stroke="White" Cursor="SizeAll"
+                                                 Canvas.Left="{Binding LineX2, Converter={StaticResource Px}}" Canvas.Top="{Binding LineY2, Converter={StaticResource Px}}"
+                                                 Visibility="{Binding HasToPoint, Converter={StaticResource Visible}}"
+                                                 AutomationProperties.AutomationId="{Binding Id, StringFormat=ToPoint_{0}}">
+                                            <Ellipse.RenderTransform><TranslateTransform X="-5" Y="-5" /></Ellipse.RenderTransform>
+                                        </Ellipse>
+                                    </Canvas>
                                     <Border x:Name="Shape" Tag="{Binding}" Cursor="SizeAll"
                                             Width="{Binding W, Converter={StaticResource Px}}" Height="{Binding H, Converter={StaticResource Px}}"
                                             BorderBrush="#475569" BorderThickness="1" Background="#E2E8F0"
@@ -271,7 +285,9 @@
                                 <ComboBox ItemsSource="{Binding DataContext.ConveyorEndpoints, RelativeSource={RelativeSource AncestorType=Window}}"
                                           SelectedValuePath="Id" DisplayMemberPath="Name" SelectedValue="{Binding To}" />
                             </DockPanel>
-                            <TextBlock Text="輸送線只表示方向，不和 LOG 對應，也不從 LOG 推導狀態。" TextWrapping="Wrap" Foreground="#777" Margin="0,4,0,0" />
+                            <CheckBox Content="雙向" IsChecked="{Binding Bidirectional}" Margin="0,4,0,0" AutomationProperties.AutomationId="ConveyorBidirectional" />
+                            <TextBlock Text="{Binding TransferPointsText, StringFormat=交接點：{0}, TargetNullValue=''}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            <TextBlock Text="輸送線表示貨物流向（單向為起點 → 終點），不和 LOG 對應，也不從 LOG 推導狀態。連到搬送機時，線畫到交接點，拖曳線端的橘點調整。" TextWrapping="Wrap" Foreground="#777" Margin="0,4,0,0" />
                         </StackPanel>
 
                         <!-- 位置、尺寸、旋轉 -->

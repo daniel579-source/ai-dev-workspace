@@ -42,7 +42,12 @@ public static class PlantConfigFile
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false), new PropsConverter() },
     };
 
-    public static string Serialize(PlantConfigDocument doc) => JsonSerializer.Serialize(doc, Options);
+    /// <summary>寫出 JSON；格式版本依內容決定（用到新功能時才升版，ADR-0006 第 7 點）。</summary>
+    public static string Serialize(PlantConfigDocument doc)
+    {
+        doc.FormatVersion = doc.RequiredFormatVersion();
+        return JsonSerializer.Serialize(doc, Options);
+    }
 
     public static PlantConfigDocument Deserialize(string json)
     {
@@ -113,7 +118,7 @@ public static class PlantConfigFile
         }
     }
 
-    /// <summary>存檔前的檢查：別名在整份設定中不可重複（大小寫視為相同）、id 不可重複、旋轉角度、輸送線的兩端。</summary>
+    /// <summary>存檔前的檢查：別名在整份設定中不可重複（大小寫視為相同）、id 不可重複、旋轉角度、輸送線的兩端與交接點。</summary>
     public static IReadOnlyList<PlantConfigIssue> Validate(PlantConfigDocument doc)
     {
         var issues = new List<PlantConfigIssue>();
@@ -181,9 +186,12 @@ public static class PlantConfigFile
                 issues.Add(new($"「{Label(e)}」的旋轉角度 {r} 度不允許；只能是 0、90、180、270。", [e.Id]));
             if (e.Type == LayoutElementType.Conveyor)
             {
-                bool Endpoint(string? id) => elements.Any(x => x.Id == id && x.Type is LayoutElementType.Station or LayoutElementType.Dock);
-                if (!Endpoint(e.From) || !Endpoint(e.To))
-                    issues.Add(new($"輸送線「{Label(e)}」的兩端必須是站點或對接設備。", [e.Id]));
+                LayoutElement? End(string? id) => elements.FirstOrDefault(x => x.Id == id && LayoutElement.CanBeConveyorEnd(x.Type));
+                var (from, to) = (End(e.From), End(e.To));
+                if (from is null || to is null)
+                    issues.Add(new($"輸送線「{Label(e)}」的兩端必須是站點、對接設備或搬送機。", [e.Id]));
+                else if ((from.Type == LayoutElementType.Vehicle && e.FromPoint is null) || (to.Type == LayoutElementType.Vehicle && e.ToPoint is null))
+                    issues.Add(new($"輸送線「{Label(e)}」連到搬送機的那一端沒有交接點。", [e.Id]));
             }
             if (e.Props is { } props)
                 foreach (var g in props.GroupBy(p => p.Key, StringComparer.Ordinal).Where(g => g.Count() > 1 || string.IsNullOrWhiteSpace(g.Key)))

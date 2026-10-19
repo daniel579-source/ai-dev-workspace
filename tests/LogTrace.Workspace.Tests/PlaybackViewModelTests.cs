@@ -179,4 +179,19 @@ public sealed class PlaybackViewModelTests : IDisposable
         Assert.Empty(P.Elements);
         Assert.Contains("內建預設", P.Message);
     }
+
+    [Fact]
+    public void 輸送線連到搬送機時_回放畫面畫到交接點_其他端畫到中心()
+    {
+        var st = new Engine.Plants.LayoutElement { Id = "st-1", Type = Engine.Plants.LayoutElementType.Station, X = 1, Y = 1, W = 2, H = 2 };
+        var vh = new Engine.Plants.LayoutElement { Id = "vh-1", Type = Engine.Plants.LayoutElementType.Vehicle, X = 10, Y = 1, W = 2.5, H = 1.2 };
+        var cv = new Engine.Plants.LayoutElement
+        {
+            Id = "cv-1", Type = Engine.Plants.LayoutElementType.Conveyor, From = "st-1", To = "vh-1", ToPoint = new(10, 1.5),
+        };
+
+        var el = new PlaybackElementViewModel(cv, new Dictionary<string, Engine.Plants.LayoutElement> { ["st-1"] = st, ["vh-1"] = vh });
+
+        Assert.Equal((2.0, 2.0, 10.0, 1.5), (el.LineX1, el.LineY1, el.LineX2, el.LineY2));
+    }
 }

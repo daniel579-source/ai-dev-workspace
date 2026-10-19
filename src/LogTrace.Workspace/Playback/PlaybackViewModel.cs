@@ -65,11 +65,15 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
         Model = e;
         (X, Y, W, H, Rotation) = (e.X ?? 0, e.Y ?? 0, e.W ?? 0, e.H ?? 0, e.Rotation ?? 0);
         if (e.Type == LayoutElementType.Conveyor && e.From is { } f && e.To is { } t && byId.TryGetValue(f, out var a) && byId.TryGetValue(t, out var b))
-            (LineX1, LineY1, LineX2, LineY2) = (Center(a).X, Center(a).Y, Center(b).X, Center(b).Y);
+            ((LineX1, LineY1), (LineX2, LineY2)) = (End(a, e.FromPoint), End(b, e.ToPoint));
         if (e.Type == LayoutElementType.Rack && e.ColFrom is { } from && e.ColTo is { } to && to >= from)
             for (int c = from; c <= to; c++) Cells.Add(new RackCellViewModel(c, e.Levels ?? 0));
         Look = IsAuxiliary ? ElementLook.Auxiliary : ElementLook.Unknown;
     }
+
+    /// <summary>輸送線的一端：連到搬送機時畫到交接點，其他畫到元素中心（ADR-0006 第 7 點）。</summary>
+    static (double X, double Y) End(LayoutElement e, LayoutPoint? point) =>
+        e.Type == LayoutElementType.Vehicle && point is not null ? (point.X, point.Y) : Center(e);
 
     static (double X, double Y) Center(LayoutElement e) => ((e.X ?? 0) + (e.W ?? 0) / 2, (e.Y ?? 0) + (e.H ?? 0) / 2);
 

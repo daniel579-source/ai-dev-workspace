@@ -178,9 +178,11 @@ public sealed partial class PlaybackViewModel : ObservableObject
     }
 
     /// <summary>載入 Layout 與世界模型；events 用來顯示造成狀態的事件。</summary>
-    public void Load(WorldModel model, LayoutSection layout, IReadOnlyList<LogEvent> events, bool hasStateRules)
+    public void Load(WorldModel model, LayoutSection layout, IReadOnlyList<LogEvent> events, bool hasStateRules,
+        IReadOnlyList<KeyValuePair<string, string>>? stationModeNames = null)
     {
         _model = model;
+        _stationModeNames = (stationModeNames ?? []).GroupBy(p => p.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Value, StringComparer.Ordinal);
         _storageRule = layout.StorageCodeRule;
         _events = events.ToDictionary(e => e.Sequence);
         var byId = layout.Elements.ToDictionary(e => e.Id, StringComparer.Ordinal);
@@ -263,6 +265,12 @@ public sealed partial class PlaybackViewModel : ObservableObject
         }
     }
 
+    Dictionary<string, string> _stationModeNames = [];
+
+    /// <summary>站點模式：廠別設定有名稱時顯示名稱，沒有時直接顯示代號（ADR-0005 第 3 點）。</summary>
+    public string StationModeText(string? code) =>
+        code is null ? "未知" : _stationModeNames.TryGetValue(code, out var name) ? name : code;
+
     StateLineViewModel Line(string label, string value, long? cause) =>
         new(label, value, cause, cause is { } c && _events.TryGetValue(c, out var e) ? $"#{c} {e.Timestamp:HH:mm:ss.ffff} {e.Message.Split('\n')[0]}" : null);
 
@@ -277,7 +285,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
             {
                 w.Stations.TryGetValue(el.Id, out var s);
                 Detail.Add(Line("在席", s?.Presence switch { true => "ON", false => "OFF", null => "未知" }, s?.PresenceCause));
-                Detail.Add(Line("站點模式", s?.Mode ?? "未知", s?.ModeCause));
+                Detail.Add(Line("站點模式", StationModeText(s?.Mode), s?.ModeCause));
                 foreach (var (name, (on, cause)) in s?.Signals ?? []) Detail.Add(Line(name, on ? "ON" : "OFF", cause));
                 foreach (var p in w.PalletsAt(LocationKind.Station, el.Id))
                     Detail.Add(Line("貨物", PalletText(p), p.LocationCause));
@@ -393,6 +401,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
             case LayoutElementType.Station:
                 w.Stations.TryGetValue(e.Id, out var s);
                 parts.Add("在席 " + (s?.Presence switch { true => "ON", false => "OFF", null => "未知" }));
+                if (s?.Mode is { } mode) parts.Add("模式 " + StationModeText(mode)); // 模式未知時不顯示
                 var pallets = w.PalletsAt(LocationKind.Station, e.Id).Select(p => p.Id).ToList();
                 if (pallets.Count > 0) parts.Add("貨物 " + string.Join("、", pallets));
                 if (e.IsInconsistent) parts.Add("不一致");

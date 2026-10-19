@@ -599,7 +599,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var presence = c.Info.Plant.PresenceSignal;
         var model = await Task.Run(() => new WorldModel(effects, doc.Layout, presence));
         var hasStateRules = c.Info.Plant.ParseRules.Any(r => r.Effect is { } e && e != EffectKinds.Signal);
-        Playback.Load(model, doc.Layout, rows.Select(r => r.Event).ToList(), hasStateRules);
+        Playback.Load(model, doc.Layout, rows.Select(r => r.Event).ToList(), hasStateRules, doc.StationModeNames);
         var names = doc.Layout.Elements.ToDictionary(e => e.Id, e => e.Name ?? e.Id);
         LoadMoment(changes, model.AlarmPeriods().Select(a => ($"{names.GetValueOrDefault(a.ElementId, a.ElementId)} {a.Code}", a.StartSequence, a.EndSequence)));
     }

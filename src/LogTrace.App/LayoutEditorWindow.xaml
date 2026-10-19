@@ -478,6 +478,39 @@
                         <TextBlock Text="效果為 signal 的規則抽到這個訊號名稱時，決定站點的在席指示燈。" Foreground="#777" TextWrapping="Wrap" />
                         <TextBox Text="{Binding PresenceSignal, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,4,0,0" />
 
+                        <!-- ADR-0005 第 3 點：站點模式代號的名稱 -->
+                        <TextBlock Text="站點模式名稱" FontWeight="SemiBold" Margin="0,16,0,0" />
+                        <TextBlock Text="效果為 stationMode 的規則抽到的代號，回放時顯示為這裡的名稱；沒填的代號直接顯示。" Foreground="#777" TextWrapping="Wrap" />
+                        <Grid Margin="0,4,0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="70" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="26" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="代號" Foreground="#555" />
+                            <TextBlock Grid.Column="1" Text="名稱" Foreground="#555" />
+                        </Grid>
+                        <ItemsControl ItemsSource="{Binding StationModeNames}" AutomationProperties.AutomationId="StationModeNames">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="70" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="26" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Grid.Column="0" Text="{Binding Code, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,2,0" />
+                                        <TextBox Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                                        <Button Grid.Column="2" Content="×" Margin="2,0,0,0" ToolTip="移除"
+                                                Command="{Binding DataContext.RemoveStationModeNameCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Content="＋ 新增站點模式名稱" HorizontalAlignment="Left" Padding="8,1" Margin="0,4,0,0"
+                                Command="{Binding AddStationModeNameCommand}" AutomationProperties.AutomationId="AddStationModeName" />
+
                         <!-- ADR-0005 第 8 點：解析欄位的抽取規則 -->
                         <TextBlock Text="解析規則" FontWeight="SemiBold" Margin="0,16,0,0" />
                         <TextBlock Foreground="#777" TextWrapping="Wrap"

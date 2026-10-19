@@ -10,7 +10,7 @@
     <RootNamespace>LogTrace.App</RootNamespace>
     <PublishSingleFile>false</PublishSingleFile>
     <SatelliteResourceLanguages>zh-Hant;en</SatelliteResourceLanguages>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
   </PropertyGroup>
 
   <!-- 發佈資料夾附上使用說明、第三方元件清單與授權全文（#29） -->

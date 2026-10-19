@@ -49,6 +49,13 @@ public static class PlantConfigFile
         return JsonSerializer.Serialize(doc, Options);
     }
 
+    /// <summary>只寫出 Layout 元素（編輯器的剪貼簿與復原用，不寫進檔案）。</summary>
+    public static string SerializeElements(IEnumerable<LayoutElement> elements) =>
+        JsonSerializer.Serialize(elements.ToList(), Options);
+
+    public static List<LayoutElement> DeserializeElements(string json) =>
+        JsonSerializer.Deserialize<List<LayoutElement>>(json, Options) ?? [];
+
     public static PlantConfigDocument Deserialize(string json)
     {
         int version;

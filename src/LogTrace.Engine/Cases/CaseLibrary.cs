@@ -8,7 +8,7 @@ namespace LogTrace.Engine.Cases;
 public sealed record CaseSummary(string Folder, string Name, string PlantName, DateTimeOffset CreatedAt, DateTime LastWriteTime);
 
 /// <summary>
-/// 案件存放位置（ADR-0011 第 3 點）：預設 %LOCALAPPDATA%\LogTrace\Cases，可以修改。
+/// 案件存放位置（ADR-0011 第 3 點）：預設 D:\LogTrace\Cases（2026-10-19 #57 修改，原為 %LOCALAPPDATA%\LogTrace\Cases），可以修改。
 /// 刪除案件後案件資料庫就不存在，所以建立與刪除另外記在存放位置下的 audit-log.jsonl（ADR-0009 第 5 點）。
 /// </summary>
 public sealed class CaseLibrary(string root)
@@ -17,9 +17,16 @@ public sealed class CaseLibrary(string root)
 
     public string Root { get; } = Path.GetFullPath(root);
 
-    public static string DefaultRoot => Path.Combine(AppDataRoot, "Cases");
+    public static string DefaultRoot => Path.Combine(DataRoot, "Cases");
 
-    /// <summary>程式的本機資料夾：%LOCALAPPDATA%\LogTrace。</summary>
+    /// <summary>
+    /// 案件與廠別設定的預設資料夾：D:\LogTrace（#57）。公司備份不包含 AppData\Local，工程師自行備份 D 槽。
+    /// </summary>
+    public const string DataRoot = @"D:\LogTrace";
+
+    /// <summary>
+    /// 程式的本機資料夾：%LOCALAPPDATA%\LogTrace。存放程式設定與版面；#57 之前也是案件與廠別設定的預設位置。
+    /// </summary>
     public static string AppDataRoot =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LogTrace");
 

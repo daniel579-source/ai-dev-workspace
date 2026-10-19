@@ -221,7 +221,7 @@ public static class PlantConfigFile
 }
 
 /// <summary>
-/// 廠別設定檔的存放位置：預設 %LOCALAPPDATA%\LogTrace\Plants，每個廠別一個 .json。分享時直接複製檔案（ADR-0006 第 7 點）。
+/// 廠別設定檔的存放位置：預設 D:\LogTrace\Plants（#57），每個廠別一個 .json。分享時直接複製檔案（ADR-0006 第 7 點）。
 /// </summary>
 public sealed class PlantConfigLibrary(string root)
 {

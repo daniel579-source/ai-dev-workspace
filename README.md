@@ -24,8 +24,8 @@
 dotnet build LogTrace.slnx
 dotnet test LogTrace.slnx                                   # 含 FlaUI 冒煙測試，會開啟視窗
 dotnet test LogTrace.slnx --filter "Category!=UI"           # 只跑不開視窗的測試
-dotnet run --project src/LogTrace.App                        # 設定、案件（Cases\）與廠別設定檔（Plants\）預設放在 %LOCALAPPDATA%\LogTrace
-dotnet run --project src/LogTrace.App -- --data-root D:/temp/lt  # 改用其他資料夾（不影響自己的設定與案件）
+dotnet run --project src/LogTrace.App                        # 案件（Cases\）與廠別設定檔（Plants\）預設放在 D:\LogTrace，設定與版面在 %LOCALAPPDATA%\LogTrace
+dotnet run --project src/LogTrace.App -- --data-root D:/temp/lt  # 設定、版面、案件、廠別設定都改用這個資料夾（不影響自己的資料，也不詢問搬移）
 
 # 效能量測（資料量大，不在 repo；未設定環境變數時直接結束）
 #   LOGTRACE_PERF_SOURCE：一天份匯入；LOGTRACE_PERF_SEARCH_SOURCE：全文索引與搜尋（一天或多天的資料夾）

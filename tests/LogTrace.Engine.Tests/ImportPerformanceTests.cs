@@ -55,7 +55,9 @@ public sealed class ImportPerformanceTests(ITestOutputHelper output)
             output.WriteLine($"讀出所有事件：{load.Elapsed.TotalSeconds:N1} 秒");
 
             Assert.Equal(result.EventCount, count);
-            Assert.True(import.Elapsed + load.Elapsed < TimeSpan.FromMinutes(2), "超過 2 分鐘的目標");
+            // ADR-0011 第 4 點：平常量級（一天約 500 MB）2 分鐘、最大量級（一天約 1.5 GB）3 分鐘內可以瀏覽（2026-10-19 #47）
+            var limit = TimeSpan.FromMinutes(sourceBytes > 1024L * 1024 * 1024 ? 3 : 2);
+            Assert.True(import.Elapsed + load.Elapsed < limit, $"超過 {limit.TotalMinutes} 分鐘的目標");
 
             // 搜尋（ADR-0010 第 5 點：一般關鍵字，一天份 2 秒內）；第一次搜尋前先執行一次熱身
             c.Search(new Search.SearchQuery { AllOf = "熱身" });

@@ -55,7 +55,7 @@
 - 公司備份是否涵蓋 AppData **待確認**；說明文件提醒使用者自行複製案件資料夾作為備份（ADR-0009）。
 - 2026-10-19 #47 修改（使用者決定）：
   - 現場問卷確認：公司備份**不包含** AppData\Local；工程師筆電由工程師自主管理（包括備份），每台都有 D 槽，建議存放在 D 槽。
-  - 案件與廠別設定（ADR-0006 第 6 點）的預設存放位置改為 **`D:\LogTrace\Cases\`** 與 **`D:\LogTrace\Plants\`**，可以在設定中修改。
+  - 案件與廠別設定（ADR-0006 第 7 點）的預設存放位置改為 **`D:\LogTrace\Cases\`** 與 **`D:\LogTrace\Plants\`**，可以在設定中修改。
   - 原本選 `%LOCALAPPDATA%` 是為了避開 OneDrive 同步；D 槽通常不在 OneDrive 的已知資料夾內，OneDrive 警告保留。
   - 實作、既有放在 `%LOCALAPPDATA%` 的案件與設定檔如何處理（搬移或繼續讀舊位置），另開 ticket 決定。
 

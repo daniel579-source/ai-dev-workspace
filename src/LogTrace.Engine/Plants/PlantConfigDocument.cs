@@ -109,6 +109,12 @@ public sealed class PlantConfigDocument
     /// <summary>代表「在席」的訊號名稱（在席指示燈）。</summary>
     public string PresenceSignal { get; set; } = PlantConfig.Default.PresenceSignal;
 
+    /// <summary>
+    /// 站點模式代號的名稱（ADR-0005 第 3 點）：代號＝名稱，保持輸入順序。回放畫面顯示名稱，沒填的代號直接顯示。
+    /// 真實的代號意義只填在本機的設定檔。
+    /// </summary>
+    public List<KeyValuePair<string, string>> StationModeNames { get; set; } = [];
+
     /// <summary>個人資料的遮罩規則（正規表示式，ADR-0009 第 1 點）。</summary>
     public List<string> MaskPatterns { get; set; } = [.. Search.TextMasker.DefaultPatterns];
 

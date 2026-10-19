@@ -19,10 +19,12 @@ public sealed class MomentViewModelTests : IDisposable
         _tmp.Dispose();
     }
 
-    async Task Open()
+    async Task Open(params (string Code, string Name)[] modeNames)
     {
         var plants = Directory.CreateDirectory(Path.Combine(_tmp.Path, "Plants")).FullName;
-        File.Copy(Path.Combine(TempFolder.Fixture("playback-prototype"), "plant.json"), Path.Combine(plants, "範例廠.json"));
+        var doc = Engine.Plants.PlantConfigFile.Load(Path.Combine(TempFolder.Fixture("playback-prototype"), "plant.json"));
+        doc.StationModeNames = modeNames.Select(n => KeyValuePair.Create(n.Code, n.Name)).ToList();
+        Engine.Plants.PlantConfigFile.Save(doc, Path.Combine(plants, "範例廠.json"));
         _vm.RefreshPlants();
         _vm.SelectedPlant = _vm.Plants.Single(p => p.Path is not null);
         _vm.NewCaseName = "回放";
@@ -55,6 +57,24 @@ public sealed class MomentViewModelTests : IDisposable
         _vm.SelectedEvent = _vm.Events.First(); // 在事件清單點選：目前時刻跟著移動
         Assert.Equal(_vm.Events.First().Event.Timestamp, _vm.CurrentTime);
         Assert.Equal("未知", _vm.Playback.Detail.Single(d => d.Label == "連線").Value);
+    }
+
+    [Fact]
+    public async Task 站點模式_廠別設定有名稱時顯示名稱_沒有時顯示代號()
+    {
+        await Open(("1", "虛構模式甲"));
+        _vm.SeekTime(At(2.5)); // A-01 站點模式代號 -> 1 之後
+        _vm.Playback.SelectElementCommand.Execute(_vm.Playback.Elements.Single(e => e.Id == "st-1"));
+
+        var mode = _vm.Playback.Detail.Single(d => d.Label == "站點模式");
+        Assert.Equal("虛構模式甲", mode.Value);
+        Assert.NotNull(mode.Cause); // 仍可追溯到原始事件
+        Assert.Equal("7", _vm.Playback.StationModeText("7")); // 沒填的代號
+        Assert.Equal("未知", _vm.Playback.StationModeText(null));
+        Assert.StartsWith("在席 未知；模式 虛構模式甲", _vm.Playback.Equipment.Single(e => e.Id == "st-1").State); // 設備狀態表
+
+        _vm.SeekTime(At(1)); // 模式還未知：設備狀態表不顯示模式
+        Assert.DoesNotContain("模式", _vm.Playback.Equipment.Single(e => e.Id == "st-1").State);
     }
 
     [Fact]

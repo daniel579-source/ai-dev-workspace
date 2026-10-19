@@ -211,6 +211,28 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     }
 
     [Fact]
+    public void 站點模式名稱_新增移除_存檔後讀回_代號重複時無法存檔()
+    {
+        _vm.PlantName = "範例廠";
+        _vm.AddStationModeNameCommand.Execute(null);
+        (_vm.StationModeNames[0].Code, _vm.StationModeNames[0].Name) = (" 1 ", "虛構模式甲");
+        _vm.AddStationModeNameCommand.Execute(null);
+        _vm.RemoveStationModeNameCommand.Execute(_vm.StationModeNames[1]);
+        Assert.True(_vm.IsDirty);
+
+        _vm.SaveCommand.Execute(null);
+        var other = new LayoutEditorViewModel(_library, _ui);
+        other.OpenConfigCommand.Execute(Assert.Single(other.Configs));
+        Assert.Equal([("1", "虛構模式甲")], other.StationModeNames.Select(r => (r.Code, r.Name)));
+
+        other.AddStationModeNameCommand.Execute(null);
+        (other.StationModeNames[1].Code, other.StationModeNames[1].Name) = ("1", "虛構模式乙");
+        other.SaveCommand.Execute(null);
+        Assert.Contains("代號「1」重複", other.Status);
+        Assert.Equal(1, other.Revision);
+    }
+
+    [Fact]
     public void 別名重複時無法存檔_標出衝突的元素()
     {
         _vm.PlantName = "範例廠";

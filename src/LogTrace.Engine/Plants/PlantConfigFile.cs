@@ -138,6 +138,13 @@ public static class PlantConfigFile
                      .GroupBy(r => ((r.Module ?? "").ToUpperInvariant(), r.Logger.ToUpperInvariant())).Where(g => g.Count() > 1))
             issues.Add(new($"「{(g.First().Module is { } m ? m + " / " : "")}{g.First().Logger}」的編碼設定重複。", []));
 
+        foreach (var (code, name) in doc.StationModeNames)
+            if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(name))
+                issues.Add(new($"站點模式名稱中有沒有填代號或名稱的列（代號「{code}」）。", []));
+        foreach (var g in doc.StationModeNames.Where(p => !string.IsNullOrWhiteSpace(p.Key))
+                     .GroupBy(p => p.Key.Trim(), StringComparer.Ordinal).Where(g => g.Count() > 1))
+            issues.Add(new($"站點模式代號「{g.Key}」重複。", []));
+
         foreach (var pattern in doc.MaskPatterns)
             if (Search.TextMasker.Check(pattern) is { } problem) issues.Add(new(problem, []));
 

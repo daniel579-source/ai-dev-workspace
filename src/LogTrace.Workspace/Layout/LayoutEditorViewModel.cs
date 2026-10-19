@@ -163,6 +163,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         ParseRules.Clear();
         foreach (var r in doc.ParseRules) AddParseRule(ParseRuleViewModel.From(r));
         PresenceSignal = doc.PresenceSignal;
+        StationModeNames.Clear();
+        foreach (var (code, name) in doc.StationModeNames) AddModeName(new StationModeNameViewModel(code, name));
         Revision = doc.Revision;
         RevisionInfo = doc.Revision == 0 ? "尚未存檔"
             : doc.RevisedAt is { } at ? $"修訂 {doc.Revision}（{doc.RevisedBy}，{at:yyyy-MM-dd HH:mm}）"
@@ -234,6 +236,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         _document.Encodings = EncodingRules.Select(r => r.ToModel()).ToList();
         _document.ParseRules = ParseRules.Select(r => r.ToModel()).ToList();
         _document.PresenceSignal = PresenceSignal.Trim();
+        _document.StationModeNames = StationModeNames.Select(r => r.ToModel()).ToList();
         try
         {
             PlantConfigFile.Save(_document, path);
@@ -539,6 +542,28 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     public partial string PresenceSignal { get; set; } = "";
 
     partial void OnPresenceSignalChanged(string value) => IsDirty = true;
+
+    /// <summary>站點模式代號的名稱（ADR-0005 第 3 點）；回放畫面顯示名稱，沒填的代號直接顯示。</summary>
+    public ObservableCollection<StationModeNameViewModel> StationModeNames { get; } = [];
+
+    void AddModeName(StationModeNameViewModel row)
+    {
+        row.PropertyChanged += (_, _) => IsDirty = true;
+        StationModeNames.Add(row);
+    }
+
+    [RelayCommand]
+    void AddStationModeName()
+    {
+        AddModeName(new StationModeNameViewModel("", ""));
+        IsDirty = true;
+    }
+
+    [RelayCommand]
+    void RemoveStationModeName(StationModeNameViewModel? row)
+    {
+        if (row is not null && StationModeNames.Remove(row)) IsDirty = true;
+    }
 
     void AddParseRule(ParseRuleViewModel rule)
     {

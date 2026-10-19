@@ -71,6 +71,12 @@ public sealed class LayoutEditorSmokeTests : IDisposable
             Assert.Contains("修訂 1", In(editor, "RevisionInfo").Name);
             // 畫布上也有（元素清單與畫布各一個名稱）
             Assert.True(editor.FindAllDescendants(cf.ByName("新站點 1")).Length >= 2);
+
+            // 「符合視窗」：整張畫布（最小 60 × 40 公尺）放進可視範圍，縮放小於 100%（ADR-0006 第 11 點）
+            Assert.Equal("100%", In(editor, "EditorZoomText").Name);
+            In(editor, "EditorZoomFit").AsButton().Invoke();
+            Assert.True(Retry.WhileFalse(() => In(editor, "EditorZoomText").Name != "100%", TimeSpan.FromSeconds(5)).Result);
+            Assert.True(int.Parse(In(editor, "EditorZoomText").Name.TrimEnd('%')) < 100);
             editor.AsWindow().Close();
         }
         finally

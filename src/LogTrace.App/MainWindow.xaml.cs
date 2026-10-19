@@ -148,6 +148,22 @@ public partial class MainWindow : Window
             _vm?.Playback.SelectElementCommand.Execute(el);
     }
 
+    // Layout 回放的縮放（ADR-0006 第 11 點）
+    void PlaybackScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.Control || _vm is null) return;
+        _vm.Playback.ZoomStep(e.Delta > 0);
+        e.Handled = true;
+    }
+
+    void PlaybackZoomFit_Click(object sender, RoutedEventArgs e) =>
+        _vm?.Playback.FitZoom(PlaybackScroll.ViewportWidth - 16, PlaybackScroll.ViewportHeight - 16, MetersToPixelsConverter.PixelsPerMeter);
+
+    void PlaybackZoomReset_Click(object sender, RoutedEventArgs e)
+    {
+        if (_vm is not null) _vm.Playback.Zoom = 1;
+    }
+
     /// <summary>Layout 回放：點料架的一列顯示側視圖。</summary>
     void RackCell_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {

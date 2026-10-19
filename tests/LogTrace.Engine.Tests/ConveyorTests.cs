@@ -87,4 +87,17 @@ public sealed class ConveyorTests : IDisposable
 
         Assert.Equal(new LayoutPoint(x, y), p);
     }
+
+    [Fact]
+    public void 畫布大小_元素範圍再加20公尺_最小60乘40_考慮旋轉與交接點()
+    {
+        Assert.Equal((60.0, 40.0), LayoutGeometry.CanvasSize(Sample().Layout.Elements)); // 範圍 18 × 10：最小值
+
+        var far = Sample(
+            new LayoutElement { Id = "st-9", Type = LayoutElementType.Station, X = 70, Y = 30, W = 2, H = 6, Rotation = 90 },
+            new LayoutElement { Id = "cv-1", Type = LayoutElementType.Conveyor, From = "st-9", To = "vh-1", ToPoint = new(10, 45.2) });
+
+        // 旋轉 90 度：中心 (71, 33)、寬深對調，右邊到 74；交接點的下邊到 45.2 → 65.2，取整數 66
+        Assert.Equal((94.0, 66.0), LayoutGeometry.CanvasSize(far.Layout.Elements));
+    }
 }

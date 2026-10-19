@@ -104,6 +104,40 @@ public static class LayoutGeometry
         }
         return new LayoutPoint(Math.Round(px, 3), Math.Round(py, 3));
     }
+
+    /// <summary>畫布在元素範圍外留的空白（公尺）。</summary>
+    public const double CanvasMargin = 20;
+    public const double MinCanvasWidth = 60;
+    public const double MinCanvasHeight = 40;
+
+    /// <summary>
+    /// 畫布大小（公尺，ADR-0006 第 11 點）：所有元素的範圍（右邊、下邊）再加 20 公尺，最小 60 × 40 公尺。不寫進設定檔。
+    /// </summary>
+    public static (double Width, double Height) CanvasSize(IEnumerable<(double Right, double Bottom)> extents)
+    {
+        double right = 0, bottom = 0;
+        foreach (var (r, b) in extents)
+        {
+            right = Math.Max(right, r);
+            bottom = Math.Max(bottom, b);
+        }
+        return (Math.Max(MinCanvasWidth, Math.Ceiling(right + CanvasMargin)), Math.Max(MinCanvasHeight, Math.Ceiling(bottom + CanvasMargin)));
+    }
+
+    /// <summary>Layout 的畫布大小：有位置的元素取旋轉後的範圍，輸送線取交接點。</summary>
+    public static (double Width, double Height) CanvasSize(IEnumerable<LayoutElement> elements) =>
+        CanvasSize(elements.SelectMany(Extents));
+
+    static IEnumerable<(double, double)> Extents(LayoutElement e)
+    {
+        if (e.X is { } x && e.Y is { } y)
+        {
+            var (_, _, r, b) = Bounds(x, y, e.W ?? 0, e.H ?? 0, e.Rotation ?? 0);
+            yield return (r, b);
+        }
+        if (e.FromPoint is { } f) yield return (f.X, f.Y);
+        if (e.ToPoint is { } t) yield return (t.X, t.Y);
+    }
 }
 
 /// <summary>Layout 區段（ADR-0006 第 7 點）。</summary>

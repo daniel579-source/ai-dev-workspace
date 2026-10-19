@@ -142,6 +142,37 @@ public sealed partial class PlaybackViewModel : ObservableObject
 
     public ObservableCollection<PlaybackElementViewModel> Elements { get; } = [];
 
+    /// <summary>畫布大小（公尺）：元素範圍再加 20 公尺，最小 60 × 40（ADR-0006 第 11 點）。不寫進設定檔。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanvasSizeText))]
+    public partial double CanvasWidth { get; private set; } = LayoutGeometry.MinCanvasWidth;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanvasSizeText))]
+    public partial double CanvasHeight { get; private set; } = LayoutGeometry.MinCanvasHeight;
+
+    public string CanvasSizeText => $"{CanvasWidth:0} × {CanvasHeight:0} 公尺";
+
+    /// <summary>畫面縮放（1 = 100%）；只改變顯示。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ZoomText))]
+    public partial double Zoom { get; set; } = 1;
+
+    public string ZoomText => LayoutZoom.Text(Zoom);
+
+    partial void OnZoomChanged(double value)
+    {
+        var clamped = LayoutZoom.Clamp(value);
+        if (clamped != value) Zoom = clamped;
+    }
+
+    /// <summary>Ctrl＋滾輪。</summary>
+    public void ZoomStep(bool zoomIn) => Zoom = LayoutZoom.Step(Zoom, zoomIn);
+
+    /// <summary>「符合視窗」：可視範圍與每公尺像素數由畫面提供。</summary>
+    public void FitZoom(double viewportWidth, double viewportHeight, double pixelsPerMeter) =>
+        Zoom = LayoutZoom.Fit(viewportWidth, viewportHeight, CanvasWidth * pixelsPerMeter, CanvasHeight * pixelsPerMeter);
+
     /// <summary>沒有 Layout 或沒有狀態規則時的說明；可以回放時為 null。</summary>
     [ObservableProperty]
     public partial string? Message { get; private set; } = "請開啟案件。";
@@ -192,6 +223,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
         var byId = layout.Elements.ToDictionary(e => e.Id, StringComparer.Ordinal);
         Elements.Clear();
         foreach (var e in layout.Elements) Elements.Add(new PlaybackElementViewModel(e, byId));
+        (CanvasWidth, CanvasHeight) = LayoutGeometry.CanvasSize(layout.Elements);
         SelectedElement = null;
         Message = hasStateRules ? null : "廠別設定的解析規則中，只有在席等少數狀態變化；命令、搬送機、警報等需要在規則中設定「效果」才能推導。";
         SetMoment(0);

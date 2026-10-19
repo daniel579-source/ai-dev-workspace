@@ -125,6 +125,37 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
 
     public bool HasSelection => SelectedElement is not null;
 
+    /// <summary>畫布大小（公尺）：元素範圍再加 20 公尺，最小 60 × 40（ADR-0006 第 11 點）。不寫進設定檔。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanvasSizeText))]
+    public partial double CanvasWidth { get; private set; } = LayoutGeometry.MinCanvasWidth;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanvasSizeText))]
+    public partial double CanvasHeight { get; private set; } = LayoutGeometry.MinCanvasHeight;
+
+    public string CanvasSizeText => $"{CanvasWidth:0} × {CanvasHeight:0} 公尺";
+
+    /// <summary>畫面縮放（1 = 100%）；只改變顯示。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ZoomText))]
+    public partial double Zoom { get; set; } = 1;
+
+    public string ZoomText => LayoutZoom.Text(Zoom);
+
+    partial void OnZoomChanged(double value)
+    {
+        var clamped = LayoutZoom.Clamp(value);
+        if (clamped != value) Zoom = clamped;
+    }
+
+    /// <summary>Ctrl＋滾輪。</summary>
+    public void ZoomStep(bool zoomIn) => Zoom = LayoutZoom.Step(Zoom, zoomIn);
+
+    /// <summary>「符合視窗」：可視範圍與每公尺像素數由畫面提供。</summary>
+    public void FitZoom(double viewportWidth, double viewportHeight, double pixelsPerMeter) =>
+        Zoom = LayoutZoom.Fit(viewportWidth, viewportHeight, CanvasWidth * pixelsPerMeter, CanvasHeight * pixelsPerMeter);
+
     /// <summary>屬性面板中輸入、準備加入的別名。</summary>
     [ObservableProperty]
     public partial string NewAlias { get; set; } = "";
@@ -300,6 +331,14 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             or nameof(LayoutElementViewModel.H) or nameof(LayoutElementViewModel.From) or nameof(LayoutElementViewModel.To)
             or nameof(LayoutElementViewModel.Name) or nameof(LayoutElementViewModel.FromPoint) or nameof(LayoutElementViewModel.ToPoint))
             RefreshEndpoints();
+        else if (e.PropertyName is nameof(LayoutElementViewModel.Rotation))
+            RefreshCanvasSize();
+    }
+
+    /// <summary>依元素範圍重算畫布大小：拖到靠近邊緣時跟著變大。</summary>
+    void RefreshCanvasSize()
+    {
+        (CanvasWidth, CanvasHeight) = LayoutGeometry.CanvasSize(Elements.Select(e => e.ToModel()));
     }
 
     LayoutElementViewModel? Find(string? id) => id is null ? null : Elements.FirstOrDefault(e => e.Id == id && e.HasGeometry);
@@ -334,6 +373,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             if (c.To is { } t && byId.TryGetValue(t, out var b))
                 (c.LineX2, c.LineY2) = b.Type == LayoutElementType.Vehicle && c.ToPoint is { } q ? (q.X, q.Y) : (b.CenterX, b.CenterY);
         }
+        RefreshCanvasSize();
         var endpoints = Elements.Where(e => LayoutElement.CanBeConveyorEnd(e.Type)).ToList();
         if (!endpoints.SequenceEqual(ConveyorEndpoints))
         {

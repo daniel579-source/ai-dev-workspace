@@ -85,6 +85,20 @@ public partial class LayoutEditorWindow : Window
         return null;
     }
 
+    // ---- 縮放（ADR-0006 第 11 點） ----
+
+    void CanvasScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.Control) return;
+        _vm.ZoomStep(e.Delta > 0);
+        e.Handled = true;
+    }
+
+    void ZoomFit_Click(object sender, RoutedEventArgs e) =>
+        _vm.FitZoom(CanvasScroll.ViewportWidth - 16, CanvasScroll.ViewportHeight - 16, MetersToPixelsConverter.PixelsPerMeter);
+
+    void ZoomReset_Click(object sender, RoutedEventArgs e) => _vm.Zoom = 1;
+
     /// <summary>回到編輯器時重新列出可以比對的案件。</summary>
     void Window_Activated(object? sender, EventArgs e) => _vm.RefreshCaseChoices();
 

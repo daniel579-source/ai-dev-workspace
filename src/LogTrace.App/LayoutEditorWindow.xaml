@@ -128,11 +128,27 @@
                     </ListBox>
                 </DockPanel>
             </Border>
-            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#F8FAFC">
-                <Canvas x:Name="LayoutCanvas" Width="1920" Height="1280" Background="White" Margin="8" AllowDrop="True" Drop="Canvas_Drop"
+            <Border DockPanel.Dock="Top" Padding="6,3" BorderBrush="#DDD" BorderThickness="0,0,0,1">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="縮放" VerticalAlignment="Center" Foreground="#555" />
+                    <TextBlock Text="{Binding ZoomText}" VerticalAlignment="Center" Width="44" TextAlignment="Right" AutomationProperties.AutomationId="EditorZoomText" />
+                    <Button Content="符合視窗" Padding="8,1" Margin="8,0,0,0" Click="ZoomFit_Click" AutomationProperties.AutomationId="EditorZoomFit" />
+                    <Button Content="100%" Padding="8,1" Margin="4,0,0,0" Click="ZoomReset_Click" />
+                    <TextBlock Text="{Binding CanvasSizeText, StringFormat=畫布 {0}}" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#777" />
+                    <TextBlock Text="Ctrl＋滾輪縮放" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#999" />
+                </StackPanel>
+            </Border>
+            <ScrollViewer x:Name="CanvasScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#F8FAFC"
+                          PreviewMouseWheel="CanvasScroll_PreviewMouseWheel">
+                <!-- ADR-0006 第 11 點：畫布依元素範圍加大；縮放用 LayoutTransform，滑鼠位置仍以畫布座標計算 -->
+                <Canvas x:Name="LayoutCanvas" Width="{Binding CanvasWidth, Converter={StaticResource Px}}" Height="{Binding CanvasHeight, Converter={StaticResource Px}}"
+                        Background="White" Margin="8" AllowDrop="True" Drop="Canvas_Drop"
                         MouseLeftButtonDown="Canvas_MouseLeftButtonDown" MouseMove="Canvas_MouseMove" MouseLeftButtonUp="Canvas_MouseLeftButtonUp"
                         AutomationProperties.AutomationId="LayoutCanvas">
-                    <Rectangle Width="1920" Height="1280" IsHitTestVisible="False">
+                    <Canvas.LayoutTransform>
+                        <ScaleTransform ScaleX="{Binding Zoom}" ScaleY="{Binding Zoom}" />
+                    </Canvas.LayoutTransform>
+                    <Rectangle Width="{Binding CanvasWidth, Converter={StaticResource Px}}" Height="{Binding CanvasHeight, Converter={StaticResource Px}}" IsHitTestVisible="False">
                         <Rectangle.Fill>
                             <DrawingBrush TileMode="Tile" Viewport="0,0,32,32" ViewportUnits="Absolute">
                                 <DrawingBrush.Drawing>
@@ -148,7 +164,7 @@
                     <ItemsControl ItemsSource="{Binding Elements}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <Canvas Width="1920" Height="1280" />
+                                <Canvas Width="{Binding CanvasWidth, Converter={StaticResource Px}}" Height="{Binding CanvasHeight, Converter={StaticResource Px}}" />
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemContainerStyle>

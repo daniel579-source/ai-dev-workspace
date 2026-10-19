@@ -181,6 +181,21 @@ public sealed class PlaybackViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task 回放畫面的畫布依元素範圍調整大小_也可以縮放()
+    {
+        await OpenPrototypeCase();
+        var plant = Engine.Plants.PlantConfigFile.Load(Path.Combine(TempFolder.Fixture("playback-prototype"), "plant.json"));
+
+        Assert.Equal(Engine.Plants.LayoutGeometry.CanvasSize(plant.Layout.Elements), (P.CanvasWidth, P.CanvasHeight));
+        Assert.True(P.CanvasWidth >= 60 && P.CanvasHeight >= 40);
+
+        P.ZoomStep(zoomIn: false);
+        Assert.Equal(0.833, P.Zoom);
+        P.FitZoom(P.CanvasWidth * 16, P.CanvasHeight * 32, pixelsPerMeter: 32);
+        Assert.Equal(0.5, P.Zoom);
+    }
+
+    [Fact]
     public void 輸送線連到搬送機時_回放畫面畫到交接點_其他端畫到中心()
     {
         var st = new Engine.Plants.LayoutElement { Id = "st-1", Type = Engine.Plants.LayoutElementType.Station, X = 1, Y = 1, W = 2, H = 2 };

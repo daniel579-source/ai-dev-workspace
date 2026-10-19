@@ -398,11 +398,25 @@
                                         </TextBlock>
                                     </StackPanel>
                                 </Border>
-                                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#F8FAFC">
+                                <Border DockPanel.Dock="Top" Padding="6,3" BorderBrush="#DDD" BorderThickness="0,0,0,1">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="縮放" VerticalAlignment="Center" Foreground="#555" />
+                                        <TextBlock Text="{Binding ZoomText}" VerticalAlignment="Center" Width="44" TextAlignment="Right" AutomationProperties.AutomationId="PlaybackZoomText" />
+                                        <Button Content="符合視窗" Padding="8,1" Margin="8,0,0,0" Click="PlaybackZoomFit_Click" AutomationProperties.AutomationId="PlaybackZoomFit" />
+                                        <Button Content="100%" Padding="8,1" Margin="4,0,0,0" Click="PlaybackZoomReset_Click" />
+                                        <TextBlock Text="{Binding CanvasSizeText, StringFormat=畫布 {0}}" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#777" />
+                                        <TextBlock Text="Ctrl＋滾輪縮放" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#999" />
+                                    </StackPanel>
+                                </Border>
+                                <ScrollViewer x:Name="PlaybackScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#F8FAFC"
+                                              PreviewMouseWheel="PlaybackScroll_PreviewMouseWheel">
                                     <ItemsControl ItemsSource="{Binding Elements}" Margin="8" AutomationProperties.AutomationId="PlaybackLayout">
+                                        <ItemsControl.LayoutTransform>
+                                            <ScaleTransform ScaleX="{Binding Zoom}" ScaleY="{Binding Zoom}" />
+                                        </ItemsControl.LayoutTransform>
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>
-                                                <Canvas Width="1280" Height="800" Background="White" />
+                                                <Canvas Width="{Binding CanvasWidth, Converter={StaticResource Px}}" Height="{Binding CanvasHeight, Converter={StaticResource Px}}" Background="White" />
                                             </ItemsPanelTemplate>
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemContainerStyle>

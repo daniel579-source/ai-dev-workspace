@@ -46,6 +46,52 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     }
 
     [Fact]
+    public void 畫布依元素範圍自動加大_拖到靠近邊緣時跟著變大_大小不寫進設定檔()
+    {
+        Assert.Equal((60.0, 40.0), (_vm.CanvasWidth, _vm.CanvasHeight)); // 空白時為最小值
+        var e = Add(LayoutElementType.Station);
+        (e.X, e.Y) = (50, 30);
+
+        _vm.BeginDrag(e);
+        _vm.DragMoveBy(30, 15); // 拖到原本畫布的外面
+        _vm.EndDrag();
+
+        Assert.Equal((80.0, 45.0), (e.X, e.Y));
+        Assert.Equal((80 + e.W + 20, 45 + e.H + 20), (_vm.CanvasWidth, _vm.CanvasHeight));
+        Assert.Equal($"{_vm.CanvasWidth:0} × {_vm.CanvasHeight:0} 公尺", _vm.CanvasSizeText);
+
+        _vm.PlantName = "範例廠";
+        _vm.SaveCommand.Execute(null);
+        Assert.False(_vm.IsDirty, _vm.Status);
+        Assert.DoesNotContain("canvas", File.ReadAllText(_vm.FilePath!), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal((102.0, 67.0), (_vm.CanvasWidth, _vm.CanvasHeight)); // 重新開啟時依元素範圍算出
+
+        _vm.Elements.Single().X = 1; // 移回來：寬度縮回最小值
+        Assert.Equal((60.0, 67.0), (_vm.CanvasWidth, _vm.CanvasHeight));
+    }
+
+    [Fact]
+    public void 縮放_Ctrl滾輪一級為1點2倍_有上下限_符合視窗_不影響吸附()
+    {
+        _vm.ZoomStep(zoomIn: true);
+        Assert.Equal(1.2, _vm.Zoom);
+        Assert.Equal("120%", _vm.ZoomText);
+        for (var i = 0; i < 50; i++) _vm.ZoomStep(zoomIn: false);
+        Assert.Equal(LayoutZoom.Min, _vm.Zoom);
+        _vm.Zoom = 99;
+        Assert.Equal(LayoutZoom.Max, _vm.Zoom);
+
+        _vm.FitZoom(960, 1000, pixelsPerMeter: 32); // 畫布 60 × 40 公尺 = 1920 × 1280 像素
+        Assert.Equal(0.5, _vm.Zoom);
+
+        var e = Add(LayoutElementType.Station);
+        (e.X, e.Y) = (3, 4);
+        _vm.BeginDrag(e);
+        _vm.DragMoveBy(1.3, -0.74); // 拖曳位移以公尺計，縮放後吸附仍為 0.5 公尺
+        Assert.Equal((4.5, 3.5), (e.X, e.Y));
+    }
+
+    [Fact]
     public void 沒有兩個站點或對接設備時_不能加輸送線()
     {
         Add(LayoutElementType.Station);

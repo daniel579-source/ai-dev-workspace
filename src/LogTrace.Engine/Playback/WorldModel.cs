@@ -189,6 +189,9 @@ public sealed class WorldModel
             case EffectKinds.StationMode when Element(FieldKinds.Station, LayoutElementType.Station) is { } st:
                 (StationOf(w, st).Mode, StationOf(w, st).ModeCause) = (x.Get(FieldKinds.StationMode), seq);
                 break;
+            case EffectKinds.StationStatus when Element(FieldKinds.Station, LayoutElementType.Station) is { } st && x.Get(FieldKinds.StationStatus) is { } status:
+                (StationOf(w, st).Status, StationOf(w, st).StatusCause) = (status.Trim(), seq);
+                break;
 
             case EffectKinds.PalletRead when x.Get(FieldKinds.Pallet) is { } id:
             {

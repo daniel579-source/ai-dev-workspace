@@ -20,6 +20,8 @@ public static class FieldKinds
     public const string Signal = "signal";
     public const string SignalValue = "signalValue";
     public const string StationMode = "stationMode";
+    /// <summary>站點的運轉狀態（例如自動、手動），照 LOG 的文字（ADR-0005 第 3 點，#70）。</summary>
+    public const string StationStatus = "stationStatus";
     public const string Alarm = "alarm";
     public const string AlarmCode = "alarmCode";
     public const string Online = "online";
@@ -31,7 +33,7 @@ public static class FieldKinds
         (Station, "站點"), (Vehicle, "搬送機"), (Dock, "對接設備"), (Storage, "儲位"),
         (Command, "命令"), (CommandType, "命令類型"), (Segment, "段"), (Source, "來源"), (Destination, "目的地"),
         (Pallet, "棧板"), (Bin, "桶"),
-        (Signal, "訊號"), (SignalValue, "訊號值"), (StationMode, "站點模式"),
+        (Signal, "訊號"), (SignalValue, "訊號值"), (StationMode, "站點模式"), (StationStatus, "運轉狀態"),
         (Alarm, "警報"), (AlarmCode, "警報代碼"), (Online, "連線"), (Mode, "模式"),
     ];
 
@@ -51,6 +53,8 @@ public static class EffectKinds
 {
     public const string Signal = "signal";
     public const string StationMode = "stationMode";
+    /// <summary>站點的運轉狀態（#70）。</summary>
+    public const string StationStatus = "stationStatus";
     public const string PalletRead = "palletRead";
     public const string CommandCreated = "commandCreated";
     public const string SegmentDispatched = "segmentDispatched";
@@ -70,6 +74,7 @@ public static class EffectKinds
     [
         (Signal, "站點訊號 ON／OFF（在席訊號決定在席燈）", [FieldKinds.Station, FieldKinds.Signal, FieldKinds.SignalValue]),
         (StationMode, "站點模式", [FieldKinds.Station, FieldKinds.StationMode]),
+        (StationStatus, "站點運轉狀態（自動／手動等）", [FieldKinds.Station, FieldKinds.StationStatus]),
         (PalletRead, "在站點讀到棧板（與桶）", [FieldKinds.Station, FieldKinds.Pallet]),
         (CommandCreated, "建立命令", [FieldKinds.Command]),
         (SegmentDispatched, "命令的一段派給搬送機", [FieldKinds.Command, FieldKinds.Vehicle, FieldKinds.Destination]),

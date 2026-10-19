@@ -196,6 +196,42 @@ public sealed class PlaybackViewModelTests : IDisposable
     }
 
     [Fact]
+    public void 站點運轉狀態_詳細資訊與設備狀態表顯示_不是自動時Layout加小標記_不影響異常中()
+    {
+        var layout = new Engine.Plants.LayoutSection
+        {
+            Elements =
+            [
+                new() { Id = "st-1", Type = Engine.Plants.LayoutElementType.Station, Name = "入庫口1", Aliases = ["A-01"], X = 1, Y = 1, W = 2, H = 2 },
+                new() { Id = "st-2", Type = Engine.Plants.LayoutElementType.Station, Name = "入庫口2", Aliases = ["A-02"], X = 5, Y = 1, W = 2, H = 2 },
+            ],
+        };
+        static Engine.Parsing.EventEffect E(long seq, string station, string status) =>
+            new(seq, Engine.Parsing.EffectKinds.StationStatus, new Dictionary<string, IReadOnlyList<string>>
+            {
+                [Engine.Parsing.FieldKinds.Station] = [station], [Engine.Parsing.FieldKinds.StationStatus] = [status],
+            });
+        var world = new Engine.Playback.WorldModel([E(1, "A-01", "自動"), E(2, "A-02", "手動"), E(3, "A-01", "異常")], layout, "在席");
+        var p = new PlaybackViewModel();
+
+        p.Load(world, layout, [], hasStateRules: true);
+        p.SetMoment(2);
+
+        Assert.Null(p.Elements.Single(e => e.Id == "st-1").StatusBadge); // 自動：不加標記
+        Assert.Equal("手", p.Elements.Single(e => e.Id == "st-2").StatusBadge);
+        p.SelectElementCommand.Execute(p.Elements.Single(e => e.Id == "st-2"));
+        var line = p.Detail.Single(d => d.Label == "運轉狀態");
+        Assert.Equal(("手動", 2L), (line.Value, line.Cause));
+        Assert.Contains("運轉 手動", p.Equipment.Single(r => r.Id == "st-2").State);
+
+        p.SetMoment(3);
+        var st1 = p.Elements.Single(e => e.Id == "st-1");
+        Assert.Equal("異", st1.StatusBadge);
+        Assert.NotEqual(ElementLook.Alarm, st1.Look); // 異常中只由警報決定
+        Assert.False(p.Equipment.Single(r => r.Id == "st-1").IsAbnormal);
+    }
+
+    [Fact]
     public void 輸送線連到搬送機時_回放畫面畫到交接點_其他端畫到中心()
     {
         var st = new Engine.Plants.LayoutElement { Id = "st-1", Type = Engine.Plants.LayoutElementType.Station, X = 1, Y = 1, W = 2, H = 2 };

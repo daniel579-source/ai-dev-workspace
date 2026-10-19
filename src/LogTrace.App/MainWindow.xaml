@@ -489,6 +489,19 @@
                                                             </StackPanel>
                                                             <TextBlock Text="{Binding PresenceLight}" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,3,0"
                                                                        IsHitTestVisible="False" />
+                                                            <!-- 運轉狀態不是自動時的小標記（ADR-0005 第 3 點，#70） -->
+                                                            <TextBlock Text="{Binding StatusBadge}" FontSize="10" Foreground="White" Background="#7C3AED" Padding="2,0"
+                                                                       HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="2,0,0,2" ToolTip="運轉狀態不是自動（點開站點看詳細）">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding StatusBadge}" Value="{x:Null}">
+                                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
                                                             <TextBlock x:Name="Warn" Text="⚠" Foreground="#B45309" FontSize="12" HorizontalAlignment="Left" VerticalAlignment="Top"
                                                                        Margin="3,0,0,0" Visibility="Collapsed" IsHitTestVisible="False" ToolTip="不一致：命令與在席訊號矛盾" />
                                                         </Grid>

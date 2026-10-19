@@ -108,6 +108,12 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     [ObservableProperty]
     public partial string? PresenceLight { get; set; }
 
+    /// <summary>
+    /// 站點的運轉狀態不是「自動」時顯示的小標記（運轉狀態的第一個字，ADR-0005 第 3 點）；未知、自動或其他元素為 null。
+    /// </summary>
+    [ObservableProperty]
+    public partial string? StatusBadge { get; set; }
+
     /// <summary>命令與在席訊號矛盾（ADR-0005 第 3 點）。</summary>
     [ObservableProperty]
     public partial bool IsInconsistent { get; set; }
@@ -261,6 +267,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
                 w.Stations.TryGetValue(el.Id, out var s);
                 var pallets = w.PalletsAt(LocationKind.Station, el.Id).Select(p => p.Id).ToList();
                 el.PresenceLight = s?.Presence switch { true => "●", false => "○", null => "◌" };
+                el.StatusBadge = s?.Status is { Length: > 0 } status && status != NormalStationStatus ? status[..1] : null;
                 el.IsInconsistent = w.IsInconsistent(el.Id);
                 el.Summary = pallets.Count > 0 ? string.Join("、", pallets) : null;
                 el.Look = w.Alarms.ContainsKey(el.Id) ? ElementLook.Alarm
@@ -303,6 +310,9 @@ public sealed partial class PlaybackViewModel : ObservableObject
 
     Dictionary<string, string> _stationModeNames = [];
 
+    /// <summary>運轉狀態的正常值：不是這個值時在 Layout 上加小標記（以文字比對，ADR-0005 第 3 點）。</summary>
+    public const string NormalStationStatus = "自動";
+
     /// <summary>站點模式：廠別設定有名稱時顯示名稱，沒有時直接顯示代號（ADR-0005 第 3 點）。</summary>
     public string StationModeText(string? code) =>
         code is null ? "未知" : _stationModeNames.TryGetValue(code, out var name) ? name : code;
@@ -322,6 +332,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
                 w.Stations.TryGetValue(el.Id, out var s);
                 Detail.Add(Line("在席", s?.Presence switch { true => "ON", false => "OFF", null => "未知" }, s?.PresenceCause));
                 Detail.Add(Line("站點模式", StationModeText(s?.Mode), s?.ModeCause));
+                Detail.Add(Line("運轉狀態", s?.Status ?? "未知", s?.StatusCause));
                 foreach (var (name, (on, cause)) in s?.Signals ?? []) Detail.Add(Line(name, on ? "ON" : "OFF", cause));
                 foreach (var p in w.PalletsAt(LocationKind.Station, el.Id))
                     Detail.Add(Line("貨物", PalletText(p), p.LocationCause));
@@ -438,6 +449,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
                 w.Stations.TryGetValue(e.Id, out var s);
                 parts.Add("在席 " + (s?.Presence switch { true => "ON", false => "OFF", null => "未知" }));
                 if (s?.Mode is { } mode) parts.Add("模式 " + StationModeText(mode)); // 模式未知時不顯示
+                if (s?.Status is { } status) parts.Add("運轉 " + status); // 運轉狀態未知時不顯示
                 var pallets = w.PalletsAt(LocationKind.Station, e.Id).Select(p => p.Id).ToList();
                 if (pallets.Count > 0) parts.Add("貨物 " + string.Join("、", pallets));
                 if (e.IsInconsistent) parts.Add("不一致");

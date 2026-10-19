@@ -84,11 +84,11 @@ public sealed class PlantConfigFileTests : IDisposable
     public void 讀到較新的格式版本時_明確提示()
     {
         var path = PathOf("新版.json");
-        File.WriteAllText(path, """{ "formatVersion": 2, "plant": "虛構", "revision": 1, "layout": { "elements": [] } }""");
+        File.WriteAllText(path, """{ "formatVersion": 3, "plant": "虛構", "revision": 1, "layout": { "elements": [] } }""");
 
         var ex = Assert.Throws<PlantConfigFormatException>(() => PlantConfigFile.Load(path));
 
-        Assert.Contains("格式版本是 2", ex.Message);
+        Assert.Contains("格式版本是 3", ex.Message);
         Assert.Contains("較新版的 LogTrace", ex.Message);
     }
 

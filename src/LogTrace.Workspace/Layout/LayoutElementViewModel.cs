@@ -17,7 +17,7 @@ public sealed partial class PropertyItemViewModel(string key, string value) : Ob
 
 /// <summary>
 /// Layout 編輯器中的一個元素。單位為公尺；X、Y 為未旋轉時左上角的位置，W 為寬、H 為深，旋轉以中心點為準。
-/// 輸送線沒有位置與尺寸，畫面上以 Line* 連接兩端元素的中心。
+/// 輸送線沒有位置與尺寸，畫面上以 Line* 連接兩端元素的中心；連到搬送機的那一端改畫到交接點。
 /// </summary>
 public sealed partial class LayoutElementViewModel : ObservableObject
 {
@@ -41,6 +41,9 @@ public sealed partial class LayoutElementViewModel : ObservableObject
         LevelHeight = e.LevelHeight ?? 0;
         From = e.From;
         To = e.To;
+        Bidirectional = e.Bidirectional == true;
+        FromPoint = e.FromPoint;
+        ToPoint = e.ToPoint;
         Aliases = new ObservableCollection<string>(e.Aliases ?? []);
         Props = new ObservableCollection<PropertyItemViewModel>((e.Props ?? []).Select(p => new PropertyItemViewModel(p.Key, p.Value)));
         Aliases.CollectionChanged += (_, _) => OnPropertyChanged(nameof(AliasesText));
@@ -120,6 +123,28 @@ public sealed partial class LayoutElementViewModel : ObservableObject
     [ObservableProperty]
     public partial string? To { get; set; }
 
+    /// <summary>輸送線是否雙向；否則方向為起點 → 終點。</summary>
+    [ObservableProperty]
+    public partial bool Bidirectional { get; set; }
+
+    /// <summary>起點是搬送機時的交接點（公尺）。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFromPoint), nameof(TransferPointsText))]
+    public partial LayoutPoint? FromPoint { get; set; }
+
+    /// <summary>終點是搬送機時的交接點（公尺）。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasToPoint), nameof(TransferPointsText))]
+    public partial LayoutPoint? ToPoint { get; set; }
+
+    public bool HasFromPoint => FromPoint is not null;
+    public bool HasToPoint => ToPoint is not null;
+
+    /// <summary>屬性面板顯示的交接點；沒有連到搬送機時為 null。</summary>
+    public string? TransferPointsText =>
+        FromPoint is null && ToPoint is null ? null
+        : string.Join("　", new[] { FromPoint is { } f ? $"起點 ({f.X:0.##}, {f.Y:0.##})" : null, ToPoint is { } t ? $"終點 ({t.X:0.##}, {t.Y:0.##})" : null }.OfType<string>());
+
     public ObservableCollection<string> Aliases { get; }
     public ObservableCollection<PropertyItemViewModel> Props { get; }
 
@@ -145,7 +170,12 @@ public sealed partial class LayoutElementViewModel : ObservableObject
 
     public LayoutElement ToModel()
     {
-        if (IsConveyor) return new LayoutElement { Id = Id, Type = Type, Name = string.IsNullOrWhiteSpace(Name) ? null : Name, From = From, To = To, Props = PropsModel(), Extra = _extra };
+        if (IsConveyor)
+            return new LayoutElement
+            {
+                Id = Id, Type = Type, Name = string.IsNullOrWhiteSpace(Name) ? null : Name, From = From, To = To,
+                Bidirectional = Bidirectional ? true : null, FromPoint = FromPoint, ToPoint = ToPoint, Props = PropsModel(), Extra = _extra,
+            };
         return new LayoutElement
         {
             Id = Id,

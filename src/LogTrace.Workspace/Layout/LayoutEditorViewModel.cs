@@ -25,6 +25,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     IReadOnlyList<(string Kind, string Value, long Count)> _caseIds = [];
     PlantConfigDocument _document = new();
     (LayoutElementViewModel Element, double X, double Y, double W, double H)? _drag;
+    (LayoutElementViewModel Conveyor, bool From)? _pointDrag;
 
     /// <param name="cases">「載入案件比對」可以選的案件；null 時不提供。</param>
     public LayoutEditorViewModel(PlantConfigLibrary library, IUserInteraction ui, CaseLibrary? cases = null)
@@ -50,7 +51,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
 
     public ObservableCollection<LayoutElementViewModel> Elements { get; } = [];
 
-    /// <summary>輸送線兩端可以選的元素（站點與對接設備）。</summary>
+    /// <summary>輸送線兩端可以選的元素（站點、對接設備、搬送機）。</summary>
     public ObservableCollection<LayoutElementViewModel> ConveyorEndpoints { get; } = [];
 
     [ObservableProperty]
@@ -288,13 +289,38 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         if (e.PropertyName is nameof(LayoutElementViewModel.HasIssue) or nameof(LayoutElementViewModel.IsSelected)
             or nameof(LayoutElementViewModel.AliasesText) or nameof(LayoutElementViewModel.LineX1) or nameof(LayoutElementViewModel.LineY1)
             or nameof(LayoutElementViewModel.LineX2) or nameof(LayoutElementViewModel.LineY2)
-            or nameof(LayoutElementViewModel.CenterX) or nameof(LayoutElementViewModel.CenterY))
+            or nameof(LayoutElementViewModel.CenterX) or nameof(LayoutElementViewModel.CenterY)
+            or nameof(LayoutElementViewModel.HasFromPoint) or nameof(LayoutElementViewModel.HasToPoint)
+            or nameof(LayoutElementViewModel.TransferPointsText))
             return;
         IsDirty = true;
+        if (sender is LayoutElementViewModel { IsConveyor: true } c && e.PropertyName is nameof(LayoutElementViewModel.From) or nameof(LayoutElementViewModel.To))
+            ResetTransferPoint(c, e.PropertyName == nameof(LayoutElementViewModel.From));
         if (e.PropertyName is nameof(LayoutElementViewModel.X) or nameof(LayoutElementViewModel.Y) or nameof(LayoutElementViewModel.W)
             or nameof(LayoutElementViewModel.H) or nameof(LayoutElementViewModel.From) or nameof(LayoutElementViewModel.To)
-            or nameof(LayoutElementViewModel.Name))
+            or nameof(LayoutElementViewModel.Name) or nameof(LayoutElementViewModel.FromPoint) or nameof(LayoutElementViewModel.ToPoint))
             RefreshEndpoints();
+    }
+
+    LayoutElementViewModel? Find(string? id) => id is null ? null : Elements.FirstOrDefault(e => e.Id == id && e.HasGeometry);
+
+    /// <summary>
+    /// 輸送線的一端改了：連到搬送機時，交接點預設為搬送機圖示上最靠近另一端的邊緣點；不是搬送機時清除交接點（ADR-0006 第 7 點）。
+    /// </summary>
+    void ResetTransferPoint(LayoutElementViewModel conveyor, bool from)
+    {
+        var end = Find(from ? conveyor.From : conveyor.To);
+        LayoutPoint? point = null;
+        if (end?.Type == LayoutElementType.Vehicle)
+        {
+            var other = Find(from ? conveyor.To : conveyor.From);
+            var otherPoint = from ? conveyor.ToPoint : conveyor.FromPoint;
+            var (tx, ty) = other?.Type == LayoutElementType.Vehicle && otherPoint is { } op ? (op.X, op.Y)
+                : other is not null ? (other.CenterX, other.CenterY) : (end.CenterX, end.CenterY);
+            point = LayoutGeometry.NearestEdgePoint(end.X, end.Y, end.W, end.H, end.Rotation, tx, ty);
+        }
+        if (from) conveyor.FromPoint = point;
+        else conveyor.ToPoint = point;
     }
 
     /// <summary>更新輸送線兩端的位置，以及可以當作輸送線兩端的元素。</summary>
@@ -303,10 +329,12 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         var byId = Elements.Where(e => e.HasGeometry).ToDictionary(e => e.Id);
         foreach (var c in Elements.Where(e => e.IsConveyor))
         {
-            if (c.From is { } f && byId.TryGetValue(f, out var a)) (c.LineX1, c.LineY1) = (a.CenterX, a.CenterY);
-            if (c.To is { } t && byId.TryGetValue(t, out var b)) (c.LineX2, c.LineY2) = (b.CenterX, b.CenterY);
+            if (c.From is { } f && byId.TryGetValue(f, out var a))
+                (c.LineX1, c.LineY1) = a.Type == LayoutElementType.Vehicle && c.FromPoint is { } p ? (p.X, p.Y) : (a.CenterX, a.CenterY);
+            if (c.To is { } t && byId.TryGetValue(t, out var b))
+                (c.LineX2, c.LineY2) = b.Type == LayoutElementType.Vehicle && c.ToPoint is { } q ? (q.X, q.Y) : (b.CenterX, b.CenterY);
         }
-        var endpoints = Elements.Where(e => e.Type is LayoutElementType.Station or LayoutElementType.Dock).ToList();
+        var endpoints = Elements.Where(e => LayoutElement.CanBeConveyorEnd(e.Type)).ToList();
         if (!endpoints.SequenceEqual(ConveyorEndpoints))
         {
             ConveyorEndpoints.Clear();
@@ -333,10 +361,18 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             var ends = ConveyorEndpoints.ToList();
             if (ends.Count < 2)
             {
-                Status = "輸送線需要至少兩個站點或對接設備。";
+                Status = "輸送線需要至少兩個站點、對接設備或搬送機。";
                 return;
             }
             model = new LayoutElement { Id = id, Type = type, Name = $"輸送線 {id[(id.IndexOf('-') + 1)..]}", From = ends[0].Id, To = ends[1].Id };
+            var conveyor = new LayoutElementViewModel(model);
+            ResetTransferPoint(conveyor, from: true);
+            ResetTransferPoint(conveyor, from: false);
+            Attach(conveyor);
+            SelectedElement = conveyor;
+            IsDirty = true;
+            Status = $"已新增{conveyor.TypeLabel}。";
+            return;
         }
         else
         {
@@ -406,7 +442,27 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         d.Element.H = Math.Max(Snap, SnapTo(d.H + dy));
     }
 
-    public void EndDrag() => _drag = null;
+    public void EndDrag()
+    {
+        _drag = null;
+        _pointDrag = null;
+    }
+
+    /// <summary>開始拖曳輸送線的交接點（連到搬送機的那一端）。</summary>
+    public void BeginTransferPointDrag(LayoutElementViewModel conveyor, bool from)
+    {
+        SelectedElement = conveyor;
+        if ((from ? conveyor.FromPoint : conveyor.ToPoint) is not null) _pointDrag = (conveyor, from);
+    }
+
+    /// <summary>把交接點移到 (x, y)（公尺），吸附到格線，不小於 0。</summary>
+    public void DragTransferPointTo(double x, double y)
+    {
+        if (_pointDrag is not { } d) return;
+        var p = new LayoutPoint(Math.Max(0, SnapTo(x)), Math.Max(0, SnapTo(y)));
+        if (d.From) d.Conveyor.FromPoint = p;
+        else d.Conveyor.ToPoint = p;
+    }
 
     /// <summary>旋轉到指定角度（只允許 0、90、180、270）。</summary>
     [RelayCommand(CanExecute = nameof(CanEditSelection))]

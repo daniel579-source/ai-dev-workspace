@@ -16,6 +16,7 @@ public partial class LayoutEditorWindow : Window
     readonly LayoutEditorViewModel _vm;
     Point? _dragStart;
     bool _resizing;
+    bool _movingPoint;
 
     public LayoutEditorWindow(LayoutEditorViewModel vm)
     {
@@ -32,6 +33,15 @@ public partial class LayoutEditorWindow : Window
     void Canvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         var hit = e.OriginalSource as FrameworkElement;
+        if (hit is { Tag: "fromPoint" or "toPoint", DataContext: LayoutElementViewModel conveyor })
+        {
+            _vm.BeginTransferPointDrag(conveyor, hit.Tag is "fromPoint");
+            _movingPoint = true;
+            _dragStart = e.GetPosition(LayoutCanvas);
+            LayoutCanvas.CaptureMouse();
+            e.Handled = true;
+            return;
+        }
         var element = FindElement(hit);
         if (element is null)
         {
@@ -49,6 +59,11 @@ public partial class LayoutEditorWindow : Window
     {
         if (_dragStart is not { } start) return;
         var p = e.GetPosition(LayoutCanvas);
+        if (_movingPoint)
+        {
+            _vm.DragTransferPointTo(p.X / MetersToPixelsConverter.PixelsPerMeter, p.Y / MetersToPixelsConverter.PixelsPerMeter);
+            return;
+        }
         double dx = (p.X - start.X) / MetersToPixelsConverter.PixelsPerMeter, dy = (p.Y - start.Y) / MetersToPixelsConverter.PixelsPerMeter;
         if (_resizing) _vm.DragResizeBy(dx, dy);
         else _vm.DragMoveBy(dx, dy);
@@ -58,6 +73,7 @@ public partial class LayoutEditorWindow : Window
     {
         if (_dragStart is null) return;
         _dragStart = null;
+        _movingPoint = false;
         _vm.EndDrag();
         LayoutCanvas.ReleaseMouseCapture();
     }

@@ -35,10 +35,11 @@ public sealed class LayoutEditorViewModelTests : IDisposable
             Assert.Equal(type, e.Type);
             Assert.True(e.W > 0 && e.H > 0);
         }
-        var conveyor = Add(LayoutElementType.Conveyor); // 已有站點與對接設備，可以加輸送線
+        var conveyor = Add(LayoutElementType.Conveyor); // 已有站點、搬送機與對接設備，可以加輸送線
 
         Assert.Equal(LayoutElementType.Conveyor, conveyor.Type);
-        Assert.Equal(["st-1", "eq-1"], new[] { conveyor.From!, conveyor.To! });
+        Assert.Equal(["st-1", "vh-1"], new[] { conveyor.From!, conveyor.To! });
+        Assert.NotNull(conveyor.ToPoint); // 連到搬送機的那一端有交接點
         Assert.Equal(7, _vm.Elements.Count);
         Assert.Equal(7, _vm.Elements.Select(e => e.Id).Distinct().Count());
         Assert.True(_vm.IsDirty);
@@ -135,6 +136,72 @@ public sealed class LayoutEditorViewModelTests : IDisposable
 
         Assert.Equal((a.CenterX, a.CenterY), (cv.LineX1, cv.LineY1));
         Assert.Equal((b.CenterX, b.CenterY), (cv.LineX2, cv.LineY2));
+    }
+
+    [Fact]
+    public void 輸送線連到搬送機_交接點在搬送機邊緣_線畫到交接點_改回站點時清除()
+    {
+        var st = Add(LayoutElementType.Station);
+        (st.X, st.Y) = (1, 1);
+        var vh = Add(LayoutElementType.Vehicle);
+        (vh.X, vh.Y, vh.W, vh.H) = (10, 1, 2.5, 1.2);
+        var st2 = Add(LayoutElementType.Station);
+        var cv = Add(LayoutElementType.Conveyor);
+        Assert.Equal(["st-1", "vh-1"], new[] { cv.From!, cv.To! });
+
+        Assert.Equal(new LayoutPoint(10, 2), cv.ToPoint); // 站點中心 (2, 2) 在左邊：搬送機的左邊緣
+        Assert.Null(cv.FromPoint);
+        Assert.Equal((10.0, 2.0), (cv.LineX2, cv.LineY2));
+        Assert.Equal((st.CenterX, st.CenterY), (cv.LineX1, cv.LineY1));
+
+        cv.To = st2.Id;
+        Assert.Null(cv.ToPoint);
+        Assert.Equal((st2.CenterX, st2.CenterY), (cv.LineX2, cv.LineY2));
+
+        cv.From = vh.Id; // 起點改成搬送機
+        Assert.NotNull(cv.FromPoint);
+        Assert.Equal((cv.FromPoint!.X, cv.FromPoint.Y), (cv.LineX1, cv.LineY1));
+    }
+
+    [Fact]
+    public void 拖曳交接點_吸附到半公尺_搬送機移動時交接點不動_存檔讀回不變()
+    {
+        Add(LayoutElementType.Station);
+        var vh = Add(LayoutElementType.Vehicle);
+        (vh.X, vh.Y) = (10, 1);
+        var cv = Add(LayoutElementType.Conveyor);
+        cv.Bidirectional = true;
+
+        _vm.BeginTransferPointDrag(cv, from: false);
+        _vm.DragTransferPointTo(11.3, 0.8);
+        _vm.EndDrag();
+        Assert.Equal(new LayoutPoint(11.5, 1), cv.ToPoint);
+        Assert.Equal((11.5, 1.0), (cv.LineX2, cv.LineY2));
+
+        _vm.BeginDrag(vh);
+        _vm.DragMoveBy(3, 3);
+        _vm.EndDrag();
+        Assert.Equal(new LayoutPoint(11.5, 1), cv.ToPoint);
+
+        _vm.PlantName = "範例廠";
+        _vm.SaveCommand.Execute(null);
+        Assert.False(_vm.IsDirty, _vm.Status);
+        var saved = PlantConfigFile.Load(_vm.FilePath!).Layout.Elements.Single(e => e.Id == cv.Id);
+        Assert.True(saved.Bidirectional);
+        Assert.Equal(new LayoutPoint(11.5, 1), saved.ToPoint);
+    }
+
+    [Fact]
+    public void 刪除搬送機時_連到它的輸送線一起刪除()
+    {
+        Add(LayoutElementType.Station);
+        var vh = Add(LayoutElementType.Vehicle);
+        Add(LayoutElementType.Conveyor);
+
+        _vm.SelectedElement = vh;
+        _vm.DeleteSelectedCommand.Execute(null);
+
+        Assert.DoesNotContain(_vm.Elements, e => e.IsConveyor);
     }
 
     [Fact]

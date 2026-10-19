@@ -14,7 +14,7 @@ public enum LayoutElementType
     Vehicle,
     /// <summary>對接設備（有 LOG 意義，可以有別名）。</summary>
     Dock,
-    /// <summary>輸送線（輔助）：只表示兩個站點或對接設備之間的方向。</summary>
+    /// <summary>輸送線（輔助）：表示兩個站點、對接設備或搬送機之間的貨物流向，單向或雙向（ADR-0006 第 1 點）。</summary>
     Conveyor,
     /// <summary>區域（輔助）。</summary>
     Area,
@@ -55,6 +55,13 @@ public sealed class LayoutElement
     public string? From { get; set; }
     public string? To { get; set; }
 
+    /// <summary>輸送線是否雙向；null（不寫出）表示單向，方向為 from → to。</summary>
+    public bool? Bidirectional { get; set; }
+
+    /// <summary>輸送線連到搬送機時，那一端的交接點（公尺）；線畫到交接點，不畫到搬送機中心（ADR-0006 第 7 點）。</summary>
+    public LayoutPoint? FromPoint { get; set; }
+    public LayoutPoint? ToPoint { get; set; }
+
     /// <summary>自訂屬性（ADR-0006 第 6 點）：鍵＝值，值一律是文字；保持輸入順序。</summary>
     public List<KeyValuePair<string, string>>? Props { get; set; }
 
@@ -64,6 +71,39 @@ public sealed class LayoutElement
 
     public static bool CanHaveAliases(LayoutElementType type) =>
         type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Dock;
+
+    /// <summary>可以當作輸送線兩端的元素：站點、對接設備、搬送機。</summary>
+    public static bool CanBeConveyorEnd(LayoutElementType type) =>
+        type is LayoutElementType.Station or LayoutElementType.Dock or LayoutElementType.Vehicle;
+}
+
+/// <summary>Layout 上的一個點（公尺）。</summary>
+public sealed record LayoutPoint(double X, double Y);
+
+/// <summary>Layout 的幾何計算。</summary>
+public static class LayoutGeometry
+{
+    /// <summary>元素在畫面上的範圍（考慮旋轉：90、270 度時寬與深對調，中心不變）。</summary>
+    public static (double Left, double Top, double Right, double Bottom) Bounds(double x, double y, double w, double h, int rotation)
+    {
+        var (cx, cy) = (x + w / 2, y + h / 2);
+        var (hw, hh) = rotation is 90 or 270 ? (h / 2, w / 2) : (w / 2, h / 2);
+        return (cx - hw, cy - hh, cx + hw, cy + hh);
+    }
+
+    /// <summary>元素邊緣上離 (tx, ty) 最近的點：在外面時取最近的邊緣點，在裡面時投影到最近的一邊。</summary>
+    public static LayoutPoint NearestEdgePoint(double x, double y, double w, double h, int rotation, double tx, double ty)
+    {
+        var (l, t, r, b) = Bounds(x, y, w, h, rotation);
+        var (px, py) = (Math.Clamp(tx, l, r), Math.Clamp(ty, t, b));
+        if (px > l && px < r && py > t && py < b)
+        {
+            // 在裡面：移到最近的一邊
+            var d = new[] { (px - l, 0), (r - px, 1), (py - t, 2), (b - py, 3) }.MinBy(v => v.Item1).Item2;
+            (px, py) = d switch { 0 => (l, py), 1 => (r, py), 2 => (px, t), _ => (px, b) };
+        }
+        return new LayoutPoint(Math.Round(px, 3), Math.Round(py, 3));
+    }
 }
 
 /// <summary>Layout 區段（ADR-0006 第 7 點）。</summary>
@@ -88,8 +128,15 @@ public sealed class LayoutSection
 /// </summary>
 public sealed class PlantConfigDocument
 {
-    /// <summary>程式能讀寫的格式版本。</summary>
-    public const int CurrentFormatVersion = 1;
+    /// <summary>
+    /// 程式能讀寫的格式版本。2：輸送線的 bidirectional 與交接點（#63）。
+    /// 存檔時只有用到版本 2 的功能才寫 2，其他仍寫 1，讓舊版程式照常開啟（ADR-0006 第 7 點）。
+    /// </summary>
+    public const int CurrentFormatVersion = 2;
+
+    /// <summary>這份設定需要的格式版本：有雙向或連到搬送機（有交接點）的輸送線時為 2，否則為 1。</summary>
+    public int RequiredFormatVersion() =>
+        Layout.Elements.Any(e => e.Type == LayoutElementType.Conveyor && (e.Bidirectional == true || e.FromPoint is not null || e.ToPoint is not null)) ? 2 : 1;
 
     public int FormatVersion { get; set; } = CurrentFormatVersion;
     public string Plant { get; set; } = "";

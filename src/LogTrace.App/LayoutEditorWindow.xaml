@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:LogTrace.App"
-        Title="{Binding Title}" Width="1280" Height="860" Activated="Window_Activated"
+        Title="{Binding Title}" Width="1280" Height="860" Activated="Window_Activated" PreviewKeyDown="Window_PreviewKeyDown"
         AutomationProperties.AutomationId="LayoutEditor">
     <!-- ADR-0006 第 9 點：三欄式——左邊廠別設定、工具箱與元素清單，中間畫布，右邊屬性 -->
     <Window.Resources>
@@ -135,14 +135,14 @@
                     <Button Content="符合視窗" Padding="8,1" Margin="8,0,0,0" Click="ZoomFit_Click" AutomationProperties.AutomationId="EditorZoomFit" />
                     <Button Content="100%" Padding="8,1" Margin="4,0,0,0" Click="ZoomReset_Click" />
                     <TextBlock Text="{Binding CanvasSizeText, StringFormat=畫布 {0}}" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#777" />
-                    <TextBlock Text="Ctrl＋滾輪縮放" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#999" />
+                    <TextBlock Text="Ctrl＋滾輪縮放　空白處拖曳框選　Ctrl＋點選加選　Ctrl+C／Ctrl+V／Del／Ctrl+Z" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#999" />
                 </StackPanel>
             </Border>
             <ScrollViewer x:Name="CanvasScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#F8FAFC"
                           PreviewMouseWheel="CanvasScroll_PreviewMouseWheel">
                 <!-- ADR-0006 第 11 點：畫布依元素範圍加大；縮放用 LayoutTransform，滑鼠位置仍以畫布座標計算 -->
                 <Canvas x:Name="LayoutCanvas" Width="{Binding CanvasWidth, Converter={StaticResource Px}}" Height="{Binding CanvasHeight, Converter={StaticResource Px}}"
-                        Background="White" Margin="8" AllowDrop="True" Drop="Canvas_Drop"
+                        Background="White" Margin="8" AllowDrop="True" Drop="Canvas_Drop" Focusable="True" FocusVisualStyle="{x:Null}"
                         MouseLeftButtonDown="Canvas_MouseLeftButtonDown" MouseMove="Canvas_MouseMove" MouseLeftButtonUp="Canvas_MouseLeftButtonUp"
                         AutomationProperties.AutomationId="LayoutCanvas">
                     <Canvas.LayoutTransform>
@@ -259,6 +259,9 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                    <!-- 框選的範圍（ADR-0006 第 10 點） -->
+                    <Rectangle x:Name="SelectionBox" Visibility="Collapsed" IsHitTestVisible="False" Stroke="#2563EB" StrokeThickness="1"
+                               StrokeDashArray="4 2" Fill="#202563EB" />
                 </Canvas>
             </ScrollViewer>
             </DockPanel>
@@ -268,7 +271,8 @@
             <TabItem Header="元素屬性" AutomationProperties.AutomationId="ElementTab">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="10" DataContext="{Binding SelectedElement}">
-                    <TextBlock Text="點選畫布上的元素即可編輯屬性；拖曳移動，拖右下角的橘色方塊調整大小。" TextWrapping="Wrap" Foreground="#777">
+                    <TextBlock Text="{Binding DataContext.SelectionHint, RelativeSource={RelativeSource AncestorType=Window}}" TextWrapping="Wrap" Foreground="#777"
+                               AutomationProperties.AutomationId="SelectionHint">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Visibility" Value="Collapsed" />

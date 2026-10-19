@@ -24,7 +24,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     readonly CaseLibrary? _cases;
     IReadOnlyList<(string Kind, string Value, long Count)> _caseIds = [];
     PlantConfigDocument _document = new();
-    (LayoutElementViewModel Element, double X, double Y, double W, double H)? _drag;
+    List<(LayoutElementViewModel Element, double X, double Y, double W, double H)>? _drag;
+    LayoutElementViewModel? _dragPrimary;
     (LayoutElementViewModel Conveyor, bool From)? _pointDrag;
 
     /// <param name="cases">「載入案件比對」可以選的案件；null 時不提供。</param>
@@ -37,6 +38,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         {
             RefreshEndpoints();
             RefreshUnmapped();
+            Commit(null);
         };
         RefreshConfigs();
         RefreshCaseChoices();
@@ -164,8 +166,9 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
 
     partial void OnSelectedElementChanged(LayoutElementViewModel? oldValue, LayoutElementViewModel? newValue)
     {
-        if (oldValue is not null) oldValue.IsSelected = false;
-        if (newValue is not null) newValue.IsSelected = true;
+        if (_selecting) return;
+        foreach (var e in Elements) e.IsSelected = e == newValue;
+        OnSelectionChanged();
     }
 
     partial void OnPlantNameChanged(string value) => IsDirty = true;
@@ -181,11 +184,20 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
 
     void Load(PlantConfigDocument doc, string? path)
     {
-        foreach (var e in Elements) Detach(e);
-        _document = doc;
-        SelectedElement = null;
-        Elements.Clear();
-        foreach (var e in doc.Layout.Elements) Attach(new LayoutElementViewModel(e));
+        _suppressUndo++;
+        try
+        {
+            foreach (var e in Elements) Detach(e);
+            _document = doc;
+            SelectedElement = null;
+            Elements.Clear();
+            foreach (var e in doc.Layout.Elements) Attach(new LayoutElementViewModel(e));
+        }
+        finally
+        {
+            _suppressUndo--;
+        }
+        ResetUndo();
         PlantName = doc.Plant;
         StorageCodeRule = doc.Layout.StorageCodeRule ?? "";
         ModuleOrderText = string.Join(Environment.NewLine, doc.ModuleOrder);
@@ -298,7 +310,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         e.PropertyChanged += OnElementChanged;
         e.Aliases.CollectionChanged += OnElementCollectionChanged;
         e.Props.CollectionChanged += OnElementCollectionChanged;
-        foreach (var p in e.Props) p.PropertyChanged += (_, _) => IsDirty = true;
+        foreach (var p in e.Props) WatchProperty(p);
         Elements.Add(e);
     }
 
@@ -313,7 +325,16 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     {
         IsDirty = true;
         RefreshUnmapped();
+        Commit(null);
     }
+
+    /// <summary>自訂屬性的鍵或值改變：同一列連續輸入合併成一個復原步驟。</summary>
+    void WatchProperty(PropertyItemViewModel item) =>
+        item.PropertyChanged += (_, _) =>
+        {
+            IsDirty = true;
+            Commit("prop:" + System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(item));
+        };
 
     void OnElementChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -325,13 +346,27 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             or nameof(LayoutElementViewModel.TransferPointsText))
             return;
         IsDirty = true;
-        if (sender is LayoutElementViewModel { IsConveyor: true } c && e.PropertyName is nameof(LayoutElementViewModel.From) or nameof(LayoutElementViewModel.To))
-            ResetTransferPoint(c, e.PropertyName == nameof(LayoutElementViewModel.From));
-        if (e.PropertyName is nameof(LayoutElementViewModel.X) or nameof(LayoutElementViewModel.Y) or nameof(LayoutElementViewModel.W)
+        _suppressUndo++; // 連帶的變更（交接點、線端）和這次修改算同一步
+        try
+        {
+            if (sender is LayoutElementViewModel { IsConveyor: true } c && e.PropertyName is nameof(LayoutElementViewModel.From) or nameof(LayoutElementViewModel.To))
+                ResetTransferPoint(c, e.PropertyName == nameof(LayoutElementViewModel.From));
+            RefreshAfterChange(e.PropertyName);
+        }
+        finally
+        {
+            _suppressUndo--;
+        }
+        if (sender is LayoutElementViewModel changed) Commit($"{changed.Id}.{e.PropertyName}");
+    }
+
+    void RefreshAfterChange(string? propertyName)
+    {
+        if (propertyName is nameof(LayoutElementViewModel.X) or nameof(LayoutElementViewModel.Y) or nameof(LayoutElementViewModel.W)
             or nameof(LayoutElementViewModel.H) or nameof(LayoutElementViewModel.From) or nameof(LayoutElementViewModel.To)
             or nameof(LayoutElementViewModel.Name) or nameof(LayoutElementViewModel.FromPoint) or nameof(LayoutElementViewModel.ToPoint))
             RefreshEndpoints();
-        else if (e.PropertyName is nameof(LayoutElementViewModel.Rotation))
+        else if (propertyName is nameof(LayoutElementViewModel.Rotation))
             RefreshCanvasSize();
     }
 
@@ -437,37 +472,270 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
 
     bool CanEditSelection() => SelectedElement is not null;
 
-    /// <summary>刪除選取的元素；連到它的輸送線一起刪除。</summary>
-    [RelayCommand(CanExecute = nameof(CanEditSelection))]
+    bool HasAnySelection() => Elements.Any(e => e.IsSelected);
+
+    /// <summary>刪除所有選取的元素（Del）；連到它們的輸送線一起刪除（ADR-0006 第 10 點）。</summary>
+    [RelayCommand(CanExecute = nameof(HasAnySelection))]
     void DeleteSelected()
     {
-        var e = SelectedElement!;
-        var removed = Elements.Where(x => x == e || (x.IsConveyor && (x.From == e.Id || x.To == e.Id))).ToList();
-        SelectedElement = null;
-        foreach (var x in removed)
+        var selected = Selection;
+        if (selected.Count == 0) return;
+        var ids = selected.Where(e => e.HasGeometry).Select(e => e.Id).ToHashSet();
+        var removed = Elements.Where(x => x.IsSelected || (x.IsConveyor && (ids.Contains(x.From ?? "") || ids.Contains(x.To ?? "")))).ToList();
+        SetSelection([]);
+        Batch(() =>
         {
-            Detach(x);
-            Elements.Remove(x);
-        }
+            foreach (var x in removed)
+            {
+                Detach(x);
+                Elements.Remove(x);
+            }
+        });
         IsDirty = true;
-        Status = removed.Count > 1 ? $"已刪除「{e.Name}」與連到它的 {removed.Count - 1} 條輸送線。" : $"已刪除「{e.Name}」。";
+        var extra = removed.Count - selected.Count;
+        var what = selected.Count == 1 ? $"「{selected[0].Name}」" : $" {selected.Count} 個元素";
+        Status = extra > 0 ? $"已刪除{what}與連到的 {extra} 條輸送線。" : $"已刪除{what}。";
+    }
+
+    // ---- 選取（ADR-0006 第 10 點）：IsSelected 標示所有選取的元素；只選一個時 SelectedElement 為它，屬性面板才顯示 ----
+
+    bool _selecting;
+
+    /// <summary>目前選取的元素（依清單順序）。</summary>
+    public IReadOnlyList<LayoutElementViewModel> Selection => Elements.Where(e => e.IsSelected).ToList();
+
+    public int SelectionCount => Elements.Count(e => e.IsSelected);
+
+    /// <summary>屬性面板沒有顯示單一元素時的說明。</summary>
+    public string SelectionHint => SelectionCount > 1
+        ? $"已選取 {SelectionCount} 個元素：拖曳一起移動，Del 刪除，Ctrl+C 複製。屬性面板只在選取一個元素時顯示。"
+        : "點選畫布上的元素即可編輯屬性；拖曳移動，拖右下角的橘色方塊調整大小。在空白處拖曳可以框選，Ctrl＋點選加選或取消選取。";
+
+    void SetSelection(IEnumerable<LayoutElementViewModel> items)
+    {
+        var set = items.ToHashSet();
+        _selecting = true;
+        try
+        {
+            foreach (var e in Elements) e.IsSelected = set.Contains(e);
+            SelectedElement = set.Count == 1 ? set.First() : null;
+        }
+        finally
+        {
+            _selecting = false;
+        }
+        OnSelectionChanged();
+    }
+
+    void OnSelectionChanged()
+    {
+        _lastEditKey = null; // 換了選取後的修改另算一步
+        OnPropertyChanged(nameof(SelectionCount));
+        OnPropertyChanged(nameof(SelectionHint));
+        DeleteSelectedCommand.NotifyCanExecuteChanged();
+        CopyCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>Ctrl＋點選：加選或取消選取。</summary>
+    public void ToggleSelect(LayoutElementViewModel element) =>
+        SetSelection(element.IsSelected ? Selection.Where(e => e != element) : Selection.Append(element));
+
+    /// <summary>
+    /// 框選（公尺）：框碰到的元素就算選到，碰到的輸送線也算。add 為 true（按住 Ctrl）時加到原本的選取。
+    /// </summary>
+    public void SelectInRect(double x1, double y1, double x2, double y2, bool add)
+    {
+        var rect = (Math.Min(x1, x2), Math.Min(y1, y2), Math.Max(x1, x2), Math.Max(y1, y2));
+        var hits = Elements.Where(e => e.HasGeometry
+            ? LayoutGeometry.RectsTouch(LayoutGeometry.Bounds(e.X, e.Y, e.W, e.H, e.Rotation), rect)
+            : LayoutGeometry.SegmentTouchesRect(e.LineX1, e.LineY1, e.LineX2, e.LineY2, rect)).ToList();
+        SetSelection(add ? Selection.Concat(hits) : hits);
+        if (SelectionCount > 1) Status = $"已選取 {SelectionCount} 個元素：拖曳一起移動，Del 刪除，Ctrl+C 複製。";
+    }
+
+    // ---- 剪貼簿（編輯器內部，不用 Windows 剪貼簿） ----
+
+    string? _clipboard;
+
+    /// <summary>
+    /// 複製選取的元素（Ctrl+C）。連到選取元素的輸送線一起複製：兩端都被選取時貼上後改連到新元素，
+    /// 只有一端被選取時另一端連回原本的元素。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(HasAnySelection))]
+    void Copy()
+    {
+        var shapes = Selection.Where(e => e.HasGeometry).ToList();
+        var ids = shapes.Select(e => e.Id).ToHashSet();
+        var conveyors = Elements.Where(e => e.IsConveyor && (e.IsSelected || ids.Contains(e.From ?? "") || ids.Contains(e.To ?? ""))).ToList();
+        _clipboard = PlantConfigFile.SerializeElements(shapes.Concat(conveyors).Select(e => e.ToModel()));
+        Status = $"已複製 {shapes.Count + conveyors.Count} 個元素。";
+    }
+
+    /// <summary>
+    /// 貼上（Ctrl+V）：產生新的 id，名稱、尺寸、旋轉、自訂屬性與別名照抄（別名重複由存檔前檢查擋下）。
+    /// 以 (x, y)（公尺，滑鼠目前位置）當作整組的左上角；滑鼠不在畫布上（null）時放在原位置往右下 1 公尺。貼上後選取新元素。
+    /// </summary>
+    public void Paste(double? x, double? y)
+    {
+        if (_clipboard is null)
+        {
+            Status = "剪貼簿是空的：先選取元素再按 Ctrl+C。";
+            return;
+        }
+        var items = PlantConfigFile.DeserializeElements(_clipboard);
+        var shapes = items.Where(e => e.Type != LayoutElementType.Conveyor).ToList();
+        double dx = 1, dy = 1;
+        if (shapes.Count == 0) (dx, dy) = (0, 0);
+        else if (x is { } px && y is { } py)
+        {
+            var bounds = shapes.Select(e => LayoutGeometry.Bounds(e.X ?? 0, e.Y ?? 0, e.W ?? 0, e.H ?? 0, e.Rotation ?? 0)).ToList();
+            dx = Math.Max(0, SnapTo(px)) - bounds.Min(b => b.Left);
+            dy = Math.Max(0, SnapTo(py)) - bounds.Min(b => b.Top);
+        }
+        LayoutPoint? Shift(LayoutPoint? p) => p is null ? null : new(p.X + dx, p.Y + dy);
+        var map = new Dictionary<string, string>();
+        var added = new List<LayoutElementViewModel>();
+        Batch(() =>
+        {
+            foreach (var e in shapes)
+            {
+                map[e.Id] = e.Id = NextId(e.Type);
+                (e.X, e.Y) = (e.X + dx, e.Y + dy);
+                added.Add(AttachNew(e));
+            }
+            foreach (var c in items.Where(e => e.Type == LayoutElementType.Conveyor))
+            {
+                // 端點在剪貼簿中時改連到新元素，交接點跟著平移；否則連回原本的元素
+                if (c.From is { } f && map.TryGetValue(f, out var nf)) (c.From, c.FromPoint) = (nf, Shift(c.FromPoint));
+                if (c.To is { } t && map.TryGetValue(t, out var nt)) (c.To, c.ToPoint) = (nt, Shift(c.ToPoint));
+                if (Find(c.From) is null || Find(c.To) is null) continue; // 原本的元素已經刪除
+                c.Id = NextId(LayoutElementType.Conveyor);
+                added.Add(AttachNew(c));
+            }
+        });
+        IsDirty = true;
+        SetSelection(added);
+        Status = $"已貼上 {added.Count} 個元素；別名照抄，重複的別名存檔前會提示。";
+    }
+
+    LayoutElementViewModel AttachNew(LayoutElement model)
+    {
+        var vm = new LayoutElementViewModel(model);
+        Attach(vm);
+        return vm;
+    }
+
+    // ---- 復原（Ctrl+Z）：只包含 Layout 元素；最多 50 步，存檔或關閉後清空 ----
+
+    public const int MaxUndoSteps = 50;
+
+    readonly List<string> _undo = [];
+    string _undoBaseline = "[]";
+    string? _lastEditKey;
+    int _suppressUndo;
+
+    public int UndoCount => _undo.Count;
+
+    string Snapshot() => PlantConfigFile.SerializeElements(Elements.Select(e => e.ToModel()));
+
+    /// <summary>
+    /// 記錄一次修改：把修改前的狀態放進復原堆疊。key 相同的連續修改（同一欄位連續輸入）合併成一步；
+    /// 拖曳中不記錄，放開時記成一步。
+    /// </summary>
+    void Commit(string? key)
+    {
+        if (_suppressUndo > 0 || _drag is not null || _pointDrag is not null) return;
+        var now = Snapshot();
+        if (now == _undoBaseline) return;
+        if (key is null || key != _lastEditKey)
+        {
+            _undo.Add(_undoBaseline);
+            if (_undo.Count > MaxUndoSteps) _undo.RemoveAt(0);
+            UndoCommand.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(UndoCount));
+        }
+        _undoBaseline = now;
+        _lastEditKey = key;
+    }
+
+    /// <summary>多個變更算一步。</summary>
+    void Batch(Action action)
+    {
+        _suppressUndo++;
+        try
+        {
+            action();
+        }
+        finally
+        {
+            _suppressUndo--;
+        }
+        Commit(null);
+    }
+
+    void ResetUndo()
+    {
+        _undo.Clear();
+        _undoBaseline = Snapshot();
+        _lastEditKey = null;
+        UndoCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(UndoCount));
+    }
+
+    bool CanUndo() => _undo.Count > 0;
+
+    [RelayCommand(CanExecute = nameof(CanUndo))]
+    void Undo()
+    {
+        var state = _undo[^1];
+        _undo.RemoveAt(_undo.Count - 1);
+        var selected = Selection.Select(e => e.Id).ToHashSet();
+        SetSelection([]);
+        _suppressUndo++;
+        try
+        {
+            foreach (var e in Elements) Detach(e);
+            Elements.Clear();
+            foreach (var m in PlantConfigFile.DeserializeElements(state)) Attach(new LayoutElementViewModel(m));
+        }
+        finally
+        {
+            _suppressUndo--;
+        }
+        _undoBaseline = state;
+        _lastEditKey = null;
+        SetSelection(Elements.Where(e => selected.Contains(e.Id)));
+        IsDirty = true;
+        UndoCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(UndoCount));
+        Status = _undo.Count > 0 ? $"已復原；還可以復原 {_undo.Count} 步。" : "已復原；沒有可以再復原的步驟。";
     }
 
     public static double SnapTo(double value) => Math.Round(value / Snap, MidpointRounding.AwayFromZero) * Snap;
 
-    /// <summary>開始拖曳（移動或調整大小）：記下元素原本的位置與尺寸。</summary>
+    /// <summary>
+    /// 開始拖曳（移動或調整大小）：記下元素原本的位置與尺寸。拖曳已選取的元素之一時，所有選取的元素一起移動；
+    /// 拖曳沒有選取的元素時，改為只選取它。
+    /// </summary>
     public void BeginDrag(LayoutElementViewModel element)
     {
-        SelectedElement = element;
-        _drag = (element, element.X, element.Y, element.W, element.H);
+        if (!element.IsSelected) SelectedElement = element;
+        IReadOnlyList<LayoutElementViewModel> group = SelectionCount > 1 ? Selection : [element];
+        _drag = group.Where(e => e.HasGeometry).Select(e => (e, e.X, e.Y, e.W, e.H)).ToList();
+        _dragPrimary = element;
     }
 
-    /// <summary>移動：從開始拖曳的位置加上位移（公尺），吸附到格線，不超出畫布左上角。</summary>
+    /// <summary>移動：從開始拖曳的位置加上位移（公尺），吸附到格線，整組不超出畫布左上角。</summary>
     public void DragMoveBy(double dx, double dy)
     {
-        if (_drag is not { } d || !d.Element.HasGeometry) return;
-        d.Element.X = Math.Max(0, SnapTo(d.X + dx));
-        d.Element.Y = Math.Max(0, SnapTo(d.Y + dy));
+        if (_drag is not { Count: > 0 } group) return;
+        dx = Math.Max(dx, -group.Min(d => d.X));
+        dy = Math.Max(dy, -group.Min(d => d.Y));
+        foreach (var d in group)
+        {
+            d.Element.X = Math.Max(0, SnapTo(d.X + dx));
+            d.Element.Y = Math.Max(0, SnapTo(d.Y + dy));
+        }
     }
 
     /// <summary>
@@ -476,7 +744,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     /// </summary>
     public void DragResizeBy(double dx, double dy)
     {
-        if (_drag is not { } d || !d.Element.HasGeometry) return;
+        if (_drag?.FirstOrDefault(x => x.Element == _dragPrimary) is not { Element: not null } d) return;
         if (d.Element.Rotation is 90 or 270) (dx, dy) = (dy, dx);
         d.Element.W = Math.Max(Snap, SnapTo(d.W + dx));
         d.Element.H = Math.Max(Snap, SnapTo(d.H + dy));
@@ -485,7 +753,9 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     public void EndDrag()
     {
         _drag = null;
+        _dragPrimary = null;
         _pointDrag = null;
+        Commit(null); // 整個拖曳算一步
     }
 
     /// <summary>開始拖曳輸送線的交接點（連到搬送機的那一端）。</summary>
@@ -702,7 +972,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         int n = 1;
         while (e.Props.Any(p => p.Key == $"屬性{n}")) n++;
         var item = new PropertyItemViewModel($"屬性{n}", "");
-        item.PropertyChanged += (_, _) => IsDirty = true;
+        WatchProperty(item);
         e.Props.Add(item);
     }
 

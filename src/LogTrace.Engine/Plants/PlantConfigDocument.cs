@@ -105,6 +105,29 @@ public static class LayoutGeometry
         return new LayoutPoint(Math.Round(px, 3), Math.Round(py, 3));
     }
 
+    /// <summary>兩個矩形是否碰到（含邊緣相接）。</summary>
+    public static bool RectsTouch((double Left, double Top, double Right, double Bottom) a, (double Left, double Top, double Right, double Bottom) b) =>
+        a.Left <= b.Right && b.Left <= a.Right && a.Top <= b.Bottom && b.Top <= a.Bottom;
+
+    /// <summary>線段是否碰到矩形（含端點在矩形內）；Liang–Barsky 裁切。</summary>
+    public static bool SegmentTouchesRect(double x1, double y1, double x2, double y2, (double Left, double Top, double Right, double Bottom) rect)
+    {
+        double t0 = 0, t1 = 1, dx = x2 - x1, dy = y2 - y1;
+        foreach (var (p, q) in new[] { (-dx, x1 - rect.Left), (dx, rect.Right - x1), (-dy, y1 - rect.Top), (dy, rect.Bottom - y1) })
+        {
+            if (p == 0)
+            {
+                if (q < 0) return false;
+                continue;
+            }
+            var u = q / p;
+            if (p < 0) t0 = Math.Max(t0, u);
+            else t1 = Math.Min(t1, u);
+            if (t0 > t1) return false;
+        }
+        return true;
+    }
+
     /// <summary>畫布在元素範圍外留的空白（公尺）。</summary>
     public const double CanvasMargin = 20;
     public const double MinCanvasWidth = 60;

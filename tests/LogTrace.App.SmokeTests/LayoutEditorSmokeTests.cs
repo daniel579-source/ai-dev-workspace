@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
+using FlaUI.Core.Input;
 using FlaUI.Core.Tools;
+using FlaUI.Core.WindowsAPI;
 using FlaUI.UIA3;
 using LogTrace.Tests.Support;
 
@@ -77,6 +79,26 @@ public sealed class LayoutEditorSmokeTests : IDisposable
             In(editor, "EditorZoomFit").AsButton().Invoke();
             Assert.True(Retry.WhileFalse(() => In(editor, "EditorZoomText").Name != "100%", TimeSpan.FromSeconds(5)).Result);
             Assert.True(int.Parse(In(editor, "EditorZoomText").Name.TrimEnd('%')) < 100);
+
+            // 點畫布上的元素後 Ctrl+C／Ctrl+V／Del／Ctrl+Z（ADR-0006 第 10 點）
+            int Count() => In(editor, "ElementList").FindAllChildren(cf.ByControlType(ControlType.ListItem)).Length;
+            bool Becomes(int n) => Retry.WhileFalse(() => Count() == n, TimeSpan.FromSeconds(5)).Result;
+            // 畫布（Canvas）不在 UI Automation 樹中：取元素清單以外、名稱相同的那一個
+            var listRect = In(editor, "ElementList").BoundingRectangle;
+            var shape = editor.FindAllDescendants(cf.ByName("新站點 1")).First(x => !listRect.Contains(x.BoundingRectangle.Center()));
+            Mouse.Click(shape.BoundingRectangle.Center());
+            Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_C);
+            Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_V);
+            Assert.True(Becomes(2), In(editor, "EditorStatus").Name);
+            Keyboard.Type(VirtualKeyShort.DELETE); // 刪除貼上後選取的新元素
+            Assert.True(Becomes(1), In(editor, "EditorStatus").Name);
+            Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_Z);
+            Assert.True(Becomes(2), In(editor, "EditorStatus").Name);
+            Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_Z); // 復原貼上
+            Assert.True(Becomes(1), In(editor, "EditorStatus").Name);
+            In(editor, "SaveConfig").AsButton().Invoke();
+            Assert.True(Retry.WhileFalse(() => In(editor, "EditorStatus").Name.Contains("修訂 2"), TimeSpan.FromSeconds(10)).Result,
+                In(editor, "EditorStatus").Name);
             editor.AsWindow().Close();
         }
         finally

@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using LogTrace.Engine.Plants;
@@ -17,6 +19,7 @@ public partial class LayoutEditorWindow : Window
     Point? _dragStart;
     bool _resizing;
     bool _movingPoint;
+    Point? _boxStart;
 
     public LayoutEditorWindow(LayoutEditorViewModel vm)
     {
@@ -32,6 +35,7 @@ public partial class LayoutEditorWindow : Window
 
     void Canvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        LayoutCanvas.Focus(); // 讓 Ctrl+C／Ctrl+V／Del／Ctrl+Z 作用在畫布，而不是之前輸入的文字框
         var hit = e.OriginalSource as FrameworkElement;
         if (hit is { Tag: "fromPoint" or "toPoint", DataContext: LayoutElementViewModel conveyor })
         {
@@ -45,7 +49,16 @@ public partial class LayoutEditorWindow : Window
         var element = FindElement(hit);
         if (element is null)
         {
-            _vm.SelectedElement = null;
+            // 空白處：開始框選（ADR-0006 第 10 點）
+            _boxStart = e.GetPosition(LayoutCanvas);
+            LayoutCanvas.CaptureMouse();
+            e.Handled = true;
+            return;
+        }
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            _vm.ToggleSelect(element);
+            e.Handled = true;
             return;
         }
         _vm.BeginDrag(element);
@@ -57,6 +70,16 @@ public partial class LayoutEditorWindow : Window
 
     void Canvas_MouseMove(object sender, MouseEventArgs e)
     {
+        if (_boxStart is { } box)
+        {
+            var q = e.GetPosition(LayoutCanvas);
+            Canvas.SetLeft(SelectionBox, Math.Min(box.X, q.X));
+            Canvas.SetTop(SelectionBox, Math.Min(box.Y, q.Y));
+            SelectionBox.Width = Math.Abs(q.X - box.X);
+            SelectionBox.Height = Math.Abs(q.Y - box.Y);
+            SelectionBox.Visibility = Visibility.Visible;
+            return;
+        }
         if (_dragStart is not { } start) return;
         var p = e.GetPosition(LayoutCanvas);
         if (_movingPoint)
@@ -71,6 +94,23 @@ public partial class LayoutEditorWindow : Window
 
     void Canvas_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        if (_boxStart is { } box)
+        {
+            _boxStart = null;
+            SelectionBox.Visibility = Visibility.Collapsed;
+            LayoutCanvas.ReleaseMouseCapture();
+            var q = e.GetPosition(LayoutCanvas);
+            var add = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+            if (Math.Abs(q.X - box.X) < SystemParameters.MinimumHorizontalDragDistance
+                && Math.Abs(q.Y - box.Y) < SystemParameters.MinimumVerticalDragDistance)
+            {
+                if (!add) _vm.SelectedElement = null; // 點空白處：取消選取
+                return;
+            }
+            const double ppm = MetersToPixelsConverter.PixelsPerMeter;
+            _vm.SelectInRect(box.X / ppm, box.Y / ppm, q.X / ppm, q.Y / ppm, add);
+            return;
+        }
         if (_dragStart is null) return;
         _dragStart = null;
         _movingPoint = false;
@@ -98,6 +138,38 @@ public partial class LayoutEditorWindow : Window
         _vm.FitZoom(CanvasScroll.ViewportWidth - 16, CanvasScroll.ViewportHeight - 16, MetersToPixelsConverter.PixelsPerMeter);
 
     void ZoomReset_Click(object sender, RoutedEventArgs e) => _vm.Zoom = 1;
+
+    // ---- 鍵盤：Ctrl+C／Ctrl+V／Del／Ctrl+Z（ADR-0006 第 10 點）；在文字框中維持文字編輯的行為 ----
+
+    void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Keyboard.FocusedElement is TextBoxBase or PasswordBox or ComboBox { IsEditable: true }) return;
+        var ctrl = Keyboard.Modifiers == ModifierKeys.Control;
+        switch (e.Key)
+        {
+            case Key.C when ctrl:
+                _vm.CopyCommand.Execute(null);
+                break;
+            case Key.V when ctrl:
+                // 滑鼠在畫布上時以它為左上角；不在畫布上時放在原位置往右下 1 公尺
+                if (LayoutCanvas.IsMouseOver)
+                {
+                    var p = Mouse.GetPosition(LayoutCanvas);
+                    _vm.Paste(p.X / MetersToPixelsConverter.PixelsPerMeter, p.Y / MetersToPixelsConverter.PixelsPerMeter);
+                }
+                else _vm.Paste(null, null);
+                break;
+            case Key.Z when ctrl:
+                if (_vm.UndoCommand.CanExecute(null)) _vm.UndoCommand.Execute(null);
+                break;
+            case Key.Delete when Keyboard.Modifiers == ModifierKeys.None:
+                if (_vm.DeleteSelectedCommand.CanExecute(null)) _vm.DeleteSelectedCommand.Execute(null);
+                break;
+            default:
+                return;
+        }
+        e.Handled = true;
+    }
 
     /// <summary>回到編輯器時重新列出可以比對的案件。</summary>
     void Window_Activated(object? sender, EventArgs e) => _vm.RefreshCaseChoices();

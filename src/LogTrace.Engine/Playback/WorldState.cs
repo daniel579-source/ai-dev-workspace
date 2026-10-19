@@ -16,12 +16,16 @@ public sealed class StationState
     public string? Mode { get; set; }
     public long? ModeCause { get; set; }
 
+    /// <summary>運轉狀態（例如自動、手動），照 LOG 的文字；和站點模式分開（#70）。</summary>
+    public string? Status { get; set; }
+    public long? StatusCause { get; set; }
+
     /// <summary>其他訊號（取物可、置物可等）的 ON／OFF。</summary>
     public SortedDictionary<string, (bool On, long Cause)> Signals { get; } = new(StringComparer.Ordinal);
 
     public StationState Clone()
     {
-        var c = new StationState { Presence = Presence, PresenceCause = PresenceCause, Mode = Mode, ModeCause = ModeCause };
+        var c = new StationState { Presence = Presence, PresenceCause = PresenceCause, Mode = Mode, ModeCause = ModeCause, Status = Status, StatusCause = StatusCause };
         foreach (var (k, v) in Signals) c.Signals[k] = v;
         return c;
     }
@@ -165,7 +169,7 @@ public sealed class WorldState
         var sb = new StringBuilder();
         sb.Append("seq=").Append(Sequence).Append('\n');
         foreach (var (k, s) in Stations)
-            sb.Append($"st {k} p={s.Presence}@{s.PresenceCause} m={s.Mode}@{s.ModeCause} {string.Join(",", s.Signals.Select(x => $"{x.Key}={x.Value.On}@{x.Value.Cause}"))}\n");
+            sb.Append($"st {k} p={s.Presence}@{s.PresenceCause} m={s.Mode}@{s.ModeCause} r={s.Status}@{s.StatusCause} {string.Join(",", s.Signals.Select(x => $"{x.Key}={x.Value.On}@{x.Value.Cause}"))}\n");
         foreach (var (k, v) in Vehicles)
             sb.Append($"vh {k} c={v.Connection}@{v.ConnectionCause} m={v.Mode}@{v.ModeCause} w={v.Work}@{v.WorkCause} {v.Command}->{v.Destination}\n");
         foreach (var (k, a) in Alarms) sb.Append($"al {k} {a.Code}@{a.Cause}\n");

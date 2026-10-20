@@ -23,6 +23,7 @@
 ```powershell
 dotnet build LogTrace.slnx
 dotnet test LogTrace.slnx                                   # 含 FlaUI 冒煙測試，會開啟視窗
+                                                             # 執行前先關閉桌面上的 LogTrace，否則焦點被搶走，鍵盤與滑鼠的測試會失敗
 dotnet test LogTrace.slnx --filter "Category!=UI"           # 只跑不開視窗的測試
 dotnet run --project src/LogTrace.App                        # 案件（Cases\）與廠別設定檔（Plants\）預設放在 D:\LogTrace，設定與版面在 %LOCALAPPDATA%\LogTrace
 dotnet run --project src/LogTrace.App -- --data-root D:/temp/lt  # 設定、版面、案件、廠別設定都改用這個資料夾（不影響自己的資料，也不詢問搬移）

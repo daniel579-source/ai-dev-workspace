@@ -78,6 +78,126 @@ public sealed class PlantSelectionViewModelTests : IDisposable
         Assert.Equal(path, _vm.SelectedPlant!.Path);
     }
 
+    MainViewModel Reopen() => new(new SettingsStore(Path.Combine(_tmp.Path, "settings.json")), _ui, Path.Combine(_tmp.Path, "Cases"), _ => false);
+
+    [Fact]
+    public void 有廠別設定檔時_第一次使用預設選第一個設定檔()
+    {
+        SavePlant("乙廠");
+        SavePlant("甲廠");
+        _vm.RefreshPlants();
+        var first = _vm.Plants[1].Path; // 清單中的第一個設定檔（內建預設之後）
+
+        Assert.Equal(first, _vm.SelectedPlant!.Path);
+        using var reopened = Reopen();
+        Assert.Equal(first, reopened.SelectedPlant!.Path);
+    }
+
+    [Fact]
+    public void 建立案件後_重新開啟程式預設選上次所用的廠別()
+    {
+        SavePlant("甲廠");
+        SavePlant("乙廠");
+        _vm.RefreshPlants();
+        var path = _vm.Plants[2].Path; // 不是預設的第一個
+        _vm.SelectedPlant = _vm.Plants[2];
+        _vm.NewCaseName = "甲";
+        _vm.CreateCaseCommand.Execute(null);
+
+        using var reopened = Reopen();
+
+        Assert.Equal(path, reopened.SelectedPlant!.Path);
+    }
+
+    [Fact]
+    public void 上次所用的廠別設定檔已不存在時_改選第一個_都沒有時選內建預設()
+    {
+        SavePlant("甲廠");
+        SavePlant("乙廠");
+        _vm.RefreshPlants();
+        var (first, path) = (_vm.Plants[1].Path!, _vm.Plants[2].Path!); // 上次選清單中的第二個
+        _vm.SelectedPlant = _vm.Plants[2];
+        _vm.NewCaseName = "甲";
+        _vm.CreateCaseCommand.Execute(null);
+
+        File.Delete(path);
+        using (var reopened = Reopen())
+            Assert.Equal(first, reopened.SelectedPlant!.Path);
+
+        File.Delete(first);
+        using (var reopened = Reopen())
+            Assert.Same(PlantChoiceViewModel.BuiltIn, reopened.SelectedPlant);
+    }
+
+    [Fact]
+    public void 變更廠別設定存放位置後_依新位置的清單選擇()
+    {
+        SavePlant("甲廠");
+        _vm.RefreshPlants();
+        var other = Path.Combine(_tmp.Path, "其他位置");
+        var path = Path.Combine(other, "丙廠.json");
+        PlantConfigFile.Save(new PlantConfigDocument { Plant = "丙廠" }, path);
+        _ui.FolderResult = other;
+
+        _vm.ChangePlantsRootCommand.Execute(null);
+
+        Assert.Equal(path, _vm.SelectedPlant!.Path);
+    }
+
+    [Fact]
+    public void 有廠別設定檔卻選內建預設_先確認_選否不建立()
+    {
+        SavePlant("甲廠");
+        _vm.RefreshPlants();
+        _vm.SelectedPlant = PlantChoiceViewModel.BuiltIn;
+        _vm.NewCaseName = "甲";
+        _ui.ConfirmResult = false;
+
+        _vm.CreateCaseCommand.Execute(null);
+
+        Assert.Contains("不會有 Layout", _ui.LastConfirmMessage);
+        Assert.Null(_vm.CurrentCaseFolder);
+        Assert.Empty(_vm.Cases);
+        Assert.Contains("未建立案件", _vm.Status);
+
+        _vm.RefreshPlants(); // 刻意選的內建預設在重新列出時保留
+        Assert.Same(PlantChoiceViewModel.BuiltIn, _vm.SelectedPlant);
+    }
+
+    [Fact]
+    public void 有廠別設定檔卻選內建預設_確認後照常建立()
+    {
+        SavePlant("甲廠");
+        _vm.RefreshPlants();
+        _vm.SelectedPlant = PlantChoiceViewModel.BuiltIn;
+        _vm.NewCaseName = "甲";
+        _ui.ConfirmResult = true;
+
+        _vm.CreateCaseCommand.Execute(null);
+
+        Assert.Equal("內建預設", _vm.CurrentCasePlant);
+    }
+
+    [Fact]
+    public void 沒有廠別設定檔時_選內建預設不需要確認()
+    {
+        _vm.NewCaseName = "甲";
+
+        _vm.CreateCaseCommand.Execute(null);
+
+        Assert.Null(_ui.LastConfirmMessage);
+        Assert.Equal("內建預設", _vm.CurrentCasePlant);
+    }
+
+    [Fact]
+    public void 舊的程式設定沒有上次廠別的欄位_可以讀取()
+    {
+        var file = Path.Combine(_tmp.Path, "old-settings.json");
+        File.WriteAllText(file, """{ "CasesRoot": null, "RecentCases": [] }""");
+
+        Assert.Null(new SettingsStore(file).Load().LastPlant);
+    }
+
     [Fact]
     public void 廠別設定檔讀不了時_建立案件失敗並說明原因()
     {

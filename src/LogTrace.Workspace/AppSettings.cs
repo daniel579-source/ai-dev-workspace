@@ -61,6 +61,9 @@ public sealed record AppSettings
     /// <summary>廠別設定檔的存放位置；null 表示使用預設位置（ADR-0006 第 7 點）。</summary>
     public string? PlantsRoot { get; init; }
 
+    /// <summary>上次建立案件時所選的廠別設定檔；null 表示沒有記錄或選了內建預設（ADR-0002 第 7 點，#72）。</summary>
+    public string? LastPlant { get; init; }
+
     /// <summary>最近使用的案件資料夾，最近的在前。</summary>
     public IReadOnlyList<string> RecentCases { get; init; } = [];
 

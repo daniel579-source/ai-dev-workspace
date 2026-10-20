@@ -395,17 +395,27 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RefreshPlants();
     }
 
-    /// <summary>重新列出廠別設定檔（例如在 Layout 編輯器中新增或改名之後）；保留原本的選擇。</summary>
+    /// <summary>
+    /// 重新列出廠別設定檔（例如在 Layout 編輯器中新增或改名之後）；保留原本的選擇。
+    /// 沒有選擇（或原本的已不存在）時，選上次建立案件所用的廠別，再來是第一個廠別設定檔，都沒有才選內建預設（ADR-0002 第 7 點，#72）。
+    /// </summary>
     public void RefreshPlants()
     {
-        var selected = SelectedPlant?.Path;
+        var current = SelectedPlant;
+        var hadFiles = Plants.Count > 1; // 有設定檔時選了內建預設，視為刻意的選擇
         Plants.Clear();
         Plants.Add(PlantChoiceViewModel.BuiltIn);
         foreach (var path in new PlantConfigLibrary(_plantsRoot).List())
             Plants.Add(new PlantChoiceViewModel(Path.GetFileNameWithoutExtension(path), path));
-        SelectedPlant = Plants.FirstOrDefault(p => string.Equals(p.Path, selected, StringComparison.OrdinalIgnoreCase)) ?? Plants[0];
+        var keep = current is null ? null
+            : current.Path is null ? (hadFiles ? PlantChoiceViewModel.BuiltIn : null)
+            : FindPlant(current.Path);
+        SelectedPlant = keep ?? FindPlant(_settings.LastPlant) ?? Plants.Skip(1).FirstOrDefault() ?? Plants[0];
         CheckNewerPlant();
     }
+
+    PlantChoiceViewModel? FindPlant(string? path) =>
+        path is null ? null : Plants.FirstOrDefault(p => string.Equals(p.Path, path, StringComparison.OrdinalIgnoreCase));
 
     // ---- 廠別設定的新版（ADR-0006 第 8 點） ----
 
@@ -472,10 +482,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             var path = SelectedPlant!.Path;
+            // 有廠別設定檔卻選內建預設：先確認，避免建出沒有 Layout 的案件（ADR-0002 第 7 點，#72）
+            if (path is null && Plants.Count > 1 && !_ui.Confirm("建立案件",
+                    "存放位置有廠別設定檔，但這個案件選了「內建預設」：案件不會有 Layout，回放無法顯示站點與設備。\n\n仍要以內建預設建立嗎？"))
+            {
+                Status = "未建立案件。請在「廠別」選擇要使用的廠別設定。";
+                return;
+            }
             var doc = path is null ? null : PlantConfigFile.Load(path);
             var plant = doc?.ToPlantConfig() ?? PlantConfig.Default;
             CloseCurrent();
             var c = _library.Create(NewCaseName, plant, doc, path); // 保存廠別設定的快照（ADR-0006 第 8 點）
+            SaveSettings(_settings with { LastPlant = path });
             SetCurrent(c);
             Status = $"已建立案件「{c.Info.Name}」（廠別：{plant.Name}）。請選擇要匯入的 LOG（資料夾、7z 或 zip）。";
         }

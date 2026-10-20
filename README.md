@@ -14,7 +14,7 @@
 
 ## 目前開發階段
 
-> **技術驗證與第一階段實作**：規格見 issue #14，實作 ticket 為 #15～#29。技術驗證（#15）的程式與結果在 `validation/`。
+> **第一階段已實作完成，進行驗證與確認**：規格見 issue #14，實作 ticket 為 #15～#29 及後續的子 issue。技術驗證（#15）的程式與結果在 `validation/`。尚待工程師電腦量測與現場 LOG 樣本的項目由 #47 追蹤；需求與決策的對照見 `docs/requirements.md`（v0.2）。
 
 ## 建置與執行
 
@@ -58,6 +58,7 @@ dotnet test tests/LogTrace.App.SmokeTests --logger "console;verbosity=detailed"
 | [docs/requirements.md](docs/requirements.md) | 需求規格：背景、目標、FR／NFR、使用流程、驗收條件、待確認問題 |
 | [docs/architecture.md](docs/architecture.md) | 架構評估：資料流程、候選職責、候選架構方案、待決策事項 |
 | [docs/log-format-notes.md](docs/log-format-notes.md) | LOG 格式調查紀錄模板（每種設備或 LOG 來源各填一份） |
+| [docs/user-guide.md](docs/user-guide.md) | 使用說明（隨發佈版附上） |
 | `docs/adr/` | 架構決策的個別詳細紀錄（ADR）；索引與現行結論見 `docs/architecture.md` 第 10 章 |
 
 ## 第一階段功能範圍
@@ -71,15 +72,15 @@ dotnet test tests/LogTrace.App.SmokeTests --logger "console;verbosity=detailed"
 
 ## 技術選型
 
-已定案的決策見 `docs/architecture.md` 第 10 章的決策索引（ADR-0001～ADR-0011），例如：
+已定案的決策見 `docs/architecture.md` 第 10 章的決策索引（ADR-0001～ADR-0012 已接受；ADR-0013 知識庫與本機離線 LLM 為提議中，不在第一階段），例如：
 
 - **部署形態**：單機桌面程式（免安裝、離線、Windows 10／11 64 位元），見 ADR-0001。
-- **用戶端**：C# + .NET 10 + WPF + AvalonDock，self-contained 單一資料夾發佈，見 ADR-0007（待技術驗證）。
-- **儲存與索引**：SQLite 為主的混合方案，見 ADR-0011（待實測）。
+- **用戶端**：C# + .NET 10 + WPF + AvalonDock，self-contained 單一資料夾發佈，見 ADR-0007（已接受；事件清單的人工體感待確認，見 #47）。
+- **儲存與索引**：SQLite 為主的混合方案，見 ADR-0011（已接受；開發電腦實測達標，工程師電腦與冷快取待量測，見 #47）。
 
 ## 如何參與需求確認
 
-1. 閱讀 `docs/requirements.md` 第 10 節的「待確認問題」，依優先順序回覆。
+1. 第一階段的待確認問題已回答（見 `docs/requirements.md` 第 10 節）；目前尚待確認的項目集中在 #47。
 2. 若能提供 LOG 樣本，請依 `docs/log-format-notes.md` 模板填寫一份調查紀錄。
    - **請先去識別化**，也不要把真實 LOG 上傳到未經核准的外部服務。
 3. 對需求或架構有意見時，請直接在對應文件標註，或與專案負責人討論，並註明問題編號（如 `Q-003`、`FR-005`）。

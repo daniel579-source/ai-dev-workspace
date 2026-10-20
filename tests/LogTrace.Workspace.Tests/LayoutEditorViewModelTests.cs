@@ -46,6 +46,57 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     }
 
     [Fact]
+    public void 元素清單先依類型_同類型依名稱自然排序_名稱空白的在前_不改變畫布與存檔順序()
+    {
+        var dock = Add(LayoutElementType.Dock);
+        dock.Name = "出貨口";
+        var s10 = Add(LayoutElementType.Station);
+        s10.Name = "站點10";
+        var vehicle = Add(LayoutElementType.Vehicle);
+        var s2 = Add(LayoutElementType.Station);
+        s2.Name = "站點2";
+        var blank = Add(LayoutElementType.Station);
+        blank.Name = "";
+        var conveyor = Add(LayoutElementType.Conveyor);
+        var created = _vm.Elements.ToList();
+
+        Assert.Equal([blank, s2, s10, vehicle, dock, conveyor], _vm.ElementList);
+        Assert.Equal([blank, s2, s10, vehicle, dock], _vm.ConveyorEndpoints);
+        Assert.Equal(created, _vm.Elements); // 畫布上下層與存檔順序不變
+    }
+
+    [Fact]
+    public void 改名稱後重新排序_選取與輸送線兩端不變()
+    {
+        var a = Add(LayoutElementType.Station);
+        a.Name = "A-4";
+        var b = Add(LayoutElementType.Station);
+        b.Name = "A-12";
+        var conveyor = Add(LayoutElementType.Conveyor);
+        (conveyor.From, conveyor.To) = (a.Id, b.Id);
+        _vm.SelectedElement = b;
+
+        b.Name = "A-3";
+
+        Assert.Equal([b, a], _vm.ConveyorEndpoints);
+        Assert.Equal([b, a, conveyor], _vm.ElementList);
+        Assert.Same(b, _vm.SelectedElement);
+        Assert.Equal((a.Id, b.Id), (conveyor.From, conveyor.To));
+    }
+
+    [Theory]
+    [InlineData("站點2", "站點10")]
+    [InlineData("A-4", "A-12")]
+    [InlineData("a-1", "B-1")]
+    [InlineData("", "A")]
+    [InlineData("站點2", "站點2A")]
+    public void 自然排序(string first, string second)
+    {
+        Assert.True(LayoutElementTypes.NaturalCompare(first, second) < 0);
+        Assert.True(LayoutElementTypes.NaturalCompare(second, first) > 0);
+    }
+
+    [Fact]
     public void 畫布依元素範圍自動加大_拖到靠近邊緣時跟著變大_大小不寫進設定檔()
     {
         Assert.Equal((60.0, 40.0), (_vm.CanvasWidth, _vm.CanvasHeight)); // 空白時為最小值

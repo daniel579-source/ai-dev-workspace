@@ -10,6 +10,13 @@
         <local:ElementTypeLabelConverter x:Key="TypeLabel" />
         <local:FileNameConverter x:Key="FileName" />
         <BooleanToVisibilityConverter x:Key="Visible" />
+        <!-- 輸送線起點、終點選單的項目：類型＋名稱（和元素清單一樣） -->
+        <DataTemplate x:Key="EndpointItem">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="{Binding TypeLabel}" Foreground="#777" Width="56" />
+                <TextBlock Text="{Binding Name}" />
+            </StackPanel>
+        </DataTemplate>
         <Style x:Key="Field" TargetType="TextBlock">
             <Setter Property="Width" Value="76" />
             <Setter Property="VerticalAlignment" Value="Center" />
@@ -81,7 +88,7 @@
                 </ItemsControl>
 
                 <TextBlock DockPanel.Dock="Top" Text="元素清單" FontWeight="SemiBold" Margin="0,8,0,4" />
-                <ListBox ItemsSource="{Binding Elements}" SelectedItem="{Binding SelectedElement}" AutomationProperties.AutomationId="ElementList">
+                <ListBox ItemsSource="{Binding ElementList}" SelectedItem="{Binding SelectedElement}" AutomationProperties.AutomationId="ElementList">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal">
@@ -298,12 +305,12 @@
                             <DockPanel>
                                 <TextBlock Text="起點" Style="{StaticResource Field}" />
                                 <ComboBox ItemsSource="{Binding DataContext.ConveyorEndpoints, RelativeSource={RelativeSource AncestorType=Window}}"
-                                          SelectedValuePath="Id" DisplayMemberPath="Name" SelectedValue="{Binding From}" />
+                                          SelectedValuePath="Id" ItemTemplate="{StaticResource EndpointItem}" SelectedValue="{Binding From}" />
                             </DockPanel>
                             <DockPanel>
                                 <TextBlock Text="終點" Style="{StaticResource Field}" />
                                 <ComboBox ItemsSource="{Binding DataContext.ConveyorEndpoints, RelativeSource={RelativeSource AncestorType=Window}}"
-                                          SelectedValuePath="Id" DisplayMemberPath="Name" SelectedValue="{Binding To}" />
+                                          SelectedValuePath="Id" ItemTemplate="{StaticResource EndpointItem}" SelectedValue="{Binding To}" />
                             </DockPanel>
                             <CheckBox Content="雙向" IsChecked="{Binding Bidirectional}" Margin="0,4,0,0" AutomationProperties.AutomationId="ConveyorBidirectional" />
                             <TextBlock Text="{Binding TransferPointsText, StringFormat=交接點：{0}, TargetNullValue=''}" TextWrapping="Wrap" Margin="0,4,0,0" />

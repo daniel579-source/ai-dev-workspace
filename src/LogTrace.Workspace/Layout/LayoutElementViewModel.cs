@@ -211,6 +211,49 @@ public static class LayoutElementTypes
         LayoutElementType.Conveyor, LayoutElementType.Area, LayoutElementType.Label,
     ];
 
+    /// <summary>
+    /// 元素清單與下拉選單的顯示順序：先依類型（新增按鈕的順序），同類型再依名稱（自然排序）；
+    /// 名稱空白的排在同類型最前面，名稱相同時依 id。
+    /// </summary>
+    public static IComparer<LayoutElementViewModel> ListOrder { get; } = Comparer<LayoutElementViewModel>.Create((a, b) =>
+    {
+        int c = TypeRank(a.Type).CompareTo(TypeRank(b.Type));
+        if (c == 0) c = NaturalCompare(a.Name.Trim(), b.Name.Trim());
+        return c != 0 ? c : string.CompareOrdinal(a.Id, b.Id);
+    });
+
+    static int TypeRank(LayoutElementType type)
+    {
+        for (int i = 0; i < Addable.Count; i++)
+            if (Addable[i] == type) return i;
+        return int.MaxValue;
+    }
+
+    /// <summary>自然排序：連續的數字依數值比較（站點2 在 站點10 之前），其餘依目前語系、不分大小寫。</summary>
+    public static int NaturalCompare(string a, string b)
+    {
+        int i = 0, j = 0;
+        while (i < a.Length && j < b.Length)
+        {
+            int si = i, sj = j, c;
+            if (char.IsAsciiDigit(a[i]) && char.IsAsciiDigit(b[j]))
+            {
+                while (i < a.Length && char.IsAsciiDigit(a[i])) i++;
+                while (j < b.Length && char.IsAsciiDigit(b[j])) j++;
+                var (x, y) = (a[si..i].TrimStart('0'), b[sj..j].TrimStart('0'));
+                c = x.Length != y.Length ? x.Length.CompareTo(y.Length) : string.CompareOrdinal(x, y);
+            }
+            else
+            {
+                while (i < a.Length && !char.IsAsciiDigit(a[i])) i++;
+                while (j < b.Length && !char.IsAsciiDigit(b[j])) j++;
+                c = string.Compare(a[si..i], b[sj..j], StringComparison.CurrentCultureIgnoreCase);
+            }
+            if (c != 0) return c;
+        }
+        return (a.Length - i).CompareTo(b.Length - j);
+    }
+
     public static string Label(LayoutElementType type) => type switch
     {
         LayoutElementType.Station => "站點",

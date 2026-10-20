@@ -36,6 +36,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         _cases = cases;
         Elements.CollectionChanged += (_, _) =>
         {
+            RefreshElementList();
             RefreshEndpoints();
             RefreshUnmapped();
             Commit(null);
@@ -51,9 +52,13 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     /// <summary>存放位置下的廠別設定檔。</summary>
     public ObservableCollection<string> Configs { get; } = [];
 
+    /// <summary>元素；順序即畫布的上下層與存檔順序。</summary>
     public ObservableCollection<LayoutElementViewModel> Elements { get; } = [];
 
-    /// <summary>輸送線兩端可以選的元素（站點、對接設備、搬送機）。</summary>
+    /// <summary>元素清單：依 <see cref="LayoutElementTypes.ListOrder"/> 排序，不影響 <see cref="Elements"/> 的順序。</summary>
+    public ObservableCollection<LayoutElementViewModel> ElementList { get; } = [];
+
+    /// <summary>輸送線兩端可以選的元素（站點、對接設備、搬送機），依 <see cref="LayoutElementTypes.ListOrder"/> 排序。</summary>
     public ObservableCollection<LayoutElementViewModel> ConveyorEndpoints { get; } = [];
 
     [ObservableProperty]
@@ -365,7 +370,10 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         if (propertyName is nameof(LayoutElementViewModel.X) or nameof(LayoutElementViewModel.Y) or nameof(LayoutElementViewModel.W)
             or nameof(LayoutElementViewModel.H) or nameof(LayoutElementViewModel.From) or nameof(LayoutElementViewModel.To)
             or nameof(LayoutElementViewModel.Name) or nameof(LayoutElementViewModel.FromPoint) or nameof(LayoutElementViewModel.ToPoint))
+        {
+            if (propertyName is nameof(LayoutElementViewModel.Name)) RefreshElementList();
             RefreshEndpoints();
+        }
         else if (propertyName is nameof(LayoutElementViewModel.Rotation))
             RefreshCanvasSize();
     }
@@ -409,11 +417,21 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
                 (c.LineX2, c.LineY2) = b.Type == LayoutElementType.Vehicle && c.ToPoint is { } q ? (q.X, q.Y) : (b.CenterX, b.CenterY);
         }
         RefreshCanvasSize();
-        var endpoints = Elements.Where(e => LayoutElement.CanBeConveyorEnd(e.Type)).ToList();
-        if (!endpoints.SequenceEqual(ConveyorEndpoints))
+        SyncOrder(ConveyorEndpoints, Elements.Where(e => LayoutElement.CanBeConveyorEnd(e.Type)).Order(LayoutElementTypes.ListOrder).ToList());
+    }
+
+    void RefreshElementList() => SyncOrder(ElementList, Elements.Order(LayoutElementTypes.ListOrder).ToList());
+
+    /// <summary>就地調整成指定的順序（移動，不清空），清單與下拉選單的選取不會因此被清掉。</summary>
+    static void SyncOrder<T>(ObservableCollection<T> target, IReadOnlyList<T> desired) where T : class
+    {
+        for (int i = target.Count - 1; i >= 0; i--)
+            if (!desired.Contains(target[i])) target.RemoveAt(i);
+        for (int i = 0; i < desired.Count; i++)
         {
-            ConveyorEndpoints.Clear();
-            foreach (var e in endpoints) ConveyorEndpoints.Add(e);
+            int k = target.IndexOf(desired[i]);
+            if (k < 0) target.Insert(i, desired[i]);
+            else if (k != i) target.Move(k, i);
         }
     }
 
@@ -433,7 +451,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         LayoutElement model;
         if (type == LayoutElementType.Conveyor)
         {
-            var ends = ConveyorEndpoints.ToList();
+            var ends = Elements.Where(e => LayoutElement.CanBeConveyorEnd(e.Type)).ToList(); // 依加入的順序，不受清單排序影響
             if (ends.Count < 2)
             {
                 Status = "輸送線需要至少兩個站點、對接設備或搬送機。";

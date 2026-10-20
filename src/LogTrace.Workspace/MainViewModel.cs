@@ -185,6 +185,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
               : "")
           + (row.Flags.Count == 0 ? "" : "\n旗標：" + string.Join("、", row.Flags.Select(f => $"{f.Glyph} {f.Name}")))
           + (_selectedFields.Count == 0 ? "" : "\n解析欄位：" + string.Join("、", _selectedFields.Select(f => $"{FieldKinds.Label(f.Kind)} {f.Value}")))
+          + KnowledgeDetail()
           + (row.MatchNote is { } note ? $"\n搜尋：{note}" : "")
           + $"\n\n{Display(e.Message)}";
 
@@ -451,6 +452,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             await Task.Run(() => c.ApplyPlant(newer.Document, newer.Path));
             _masker = new TextMasker(c.Info.Plant.MaskPatterns);
             CurrentCasePlant = $"{c.Info.Plant.Name}（修訂 {c.Info.Plant.Revision}）";
+            LoadKnowledge(); // 快照的來源路徑可能改變
             await LoadEventsAsync(c);
             Status = $"已套用廠別設定修訂 {c.Info.Plant.Revision}：{Events.Count:N0} 筆事件。";
         }
@@ -579,6 +581,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SaveSettings(_settings.WithRecent(c.Folder));
         _dismissedRevision = 0;
         CheckNewerPlant();
+        ClearKnowledge();
         UpdateTimeTexts();
         RefreshCases();
         SelectedCase = Cases.FirstOrDefault(i => string.Equals(i.Folder, c.Folder, StringComparison.OrdinalIgnoreCase));
@@ -603,6 +606,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         CurrentCaseFolder = null;
         _newerPlant = null;
         NewerPlantNotice = null;
+        ClearKnowledge();
         UpdateTimeTexts();
     }
 

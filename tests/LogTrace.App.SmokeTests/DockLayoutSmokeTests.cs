@@ -11,7 +11,7 @@ namespace LogTrace.App.SmokeTests;
 [Trait("Category", "UI")]
 public sealed class DockLayoutSmokeTests : IDisposable
 {
-    static readonly string[] Panels = ["案件", "搜尋", "事件清單", "Layout 回放", "時間軸", "詳細資訊", "元素狀態", "命令", "設備狀態表", "未對應", "原始 LOG"];
+    static readonly string[] Panels = ["案件", "搜尋", "事件清單", "Layout 回放", "時間軸", "詳細資訊", "元素狀態", "命令", "設備狀態表", "未對應", "知識庫", "原始 LOG"];
 
     readonly TempFolder _tmp = new();
     readonly string _dataRoot;
@@ -26,7 +26,7 @@ public sealed class DockLayoutSmokeTests : IDisposable
     string Structure()
     {
         var ids = XDocument.Load(LayoutFile).Descendants("LayoutAnchorable").Select(e => (string?)e.Attribute("ContentId")).ToList();
-        Assert.Equal(11, ids.Distinct().Count());
+        Assert.Equal(Panels.Length, ids.Distinct().Count());
         return
         string.Join(" ", XDocument.Load(LayoutFile).Root!.Element("RootPanel")!.DescendantsAndSelf()
             .Where(e => e.Name.LocalName is "LayoutPanel" or "LayoutAnchorablePane" or "LayoutAnchorable")

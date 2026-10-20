@@ -44,7 +44,7 @@ publish\UiSpike\TechValidation.UiSpike.exe --selftest results\uispike-<電腦名
 
 ## 需要手動確認的項目
 
-自動量測無法取代的部分，請在對應的電腦上操作並把結果記到 `results\`：
+自動量測無法取代的部分，請在對應的電腦上操作並把結果記到 `results\`。工程師電腦上用發佈版 LogTrace 的步驟見 [`engineer-pc-checklist.md`](engineer-pc-checklist.md)（#47 A 類）。
 
 | 項目 | 做法 |
 |---|---|

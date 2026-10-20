@@ -109,12 +109,12 @@ public sealed class DockLayouts
     const Orientation H = Orientation.Horizontal, V = Orientation.Vertical;
 
     /// <summary>
-    /// 回放：Layout 為主，事件清單在旁；下方為詳細資訊、元素狀態等分頁、原始 LOG。
-    /// 搜尋：事件清單為主，搜尋面板在前；下方為原始 LOG、Layout、元素狀態等分頁。
+    /// 回放：Layout 為主，事件清單在旁；下方為詳細資訊、元素狀態等分頁（含知識庫）、原始 LOG。
+    /// 搜尋：事件清單為主，搜尋面板在前；下方為原始 LOG、Layout、元素狀態等分頁（含知識庫）。
     /// </summary>
     LayoutRoot Build(string name)
     {
-        var states = new[] { "elementstate", "commands", "equipment", "unmapped" };
+        var states = new[] { "elementstate", "commands", "equipment", "unmapped", "knowledge" };
         LayoutPanel main = name switch
         {
             Search => Panel(1, H, H,

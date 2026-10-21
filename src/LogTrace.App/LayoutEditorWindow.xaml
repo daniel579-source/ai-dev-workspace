@@ -554,6 +554,39 @@
                         <Button Content="＋ 新增站點模式名稱" HorizontalAlignment="Left" Padding="8,1" Margin="0,4,0,0"
                                 Command="{Binding AddStationModeNameCommand}" AutomationProperties.AutomationId="AddStationModeName" />
 
+                        <!-- ADR-0006、ADR-0008 第 3 點（#84）：沒有 LOG 的門檻 -->
+                        <TextBlock Text="沒有 LOG 的門檻" FontWeight="SemiBold" Margin="0,16,0,0" />
+                        <TextBlock Text="同一模組超過這麼多秒沒有任何事件時，時間軸標示「這段時間沒有 LOG（可能是閒置或缺漏）」。沒有列出的模組為 300 秒；0 表示不標示。有心跳的模組可以設小一點。修改後，開啟案件時套用新版才生效。" Foreground="#777" TextWrapping="Wrap" />
+                        <Grid Margin="0,4,0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="70" />
+                                <ColumnDefinition Width="26" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="模組" Foreground="#555" />
+                            <TextBlock Grid.Column="1" Text="秒數" Foreground="#555" />
+                        </Grid>
+                        <ItemsControl ItemsSource="{Binding GapThresholds}" AutomationProperties.AutomationId="GapThresholds">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="70" />
+                                            <ColumnDefinition Width="26" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Grid.Column="0" Text="{Binding Module, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,2,0" />
+                                        <TextBox Grid.Column="1" Text="{Binding Seconds, UpdateSourceTrigger=PropertyChanged}" />
+                                        <Button Grid.Column="2" Content="×" Margin="2,0,0,0" ToolTip="移除"
+                                                Command="{Binding DataContext.RemoveGapThresholdCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Content="＋ 新增門檻" HorizontalAlignment="Left" Padding="8,1" Margin="0,4,0,0"
+                                Command="{Binding AddGapThresholdRowCommand}" AutomationProperties.AutomationId="AddGapThreshold" />
+
                         <!-- ADR-0005 第 8 點：解析欄位的抽取規則 -->
                         <TextBlock Text="解析規則" FontWeight="SemiBold" Margin="0,16,0,0" />
                         <TextBlock Foreground="#777" TextWrapping="Wrap"

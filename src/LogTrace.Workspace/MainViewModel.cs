@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LogTrace.Engine.Cases;
+using LogTrace.Engine.Events;
 using LogTrace.Engine.Import;
 using LogTrace.Engine.Parsing;
 using LogTrace.Engine.Playback;
@@ -185,6 +186,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
               : "")
           + (row.Flags.Count == 0 ? "" : "\n旗標：" + string.Join("、", row.Flags.Select(f => $"{f.Glyph} {f.Name}")))
           + (_selectedFields.Count == 0 ? "" : "\n解析欄位：" + string.Join("、", _selectedFields.Select(f => $"{FieldKinds.Label(f.Kind)} {f.Value}")))
+          + (GapNotice is { } gap ? "\n" + gap : "")
           + KnowledgeDetail()
           + (row.MatchNote is { } note ? $"\n搜尋：{note}" : "")
           + $"\n\n{Display(e.Message)}";
@@ -691,12 +693,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         var effects = await Task.Run(() => c.GetEffects());
         var changes = effects.Select(e => e.Sequence).ToList();
+        var gaps = await Task.Run(() => LogGaps.Find(rows.Select(r => r.Event), doc?.GapThresholds)); // FR-037（#84）
         if (doc is null)
         {
             Playback.Clear(c.Info.Plant.Revision == 0
                 ? "這個案件使用內建預設的廠別設定，沒有 Layout。請在 Layout 編輯器建立廠別設定，並以它建立案件。"
                 : $"找不到廠別「{c.Info.Plant.Name}」的設定檔，無法顯示 Layout。");
-            LoadMoment(changes, []);
+            LoadMoment(changes, [], gaps);
             return;
         }
         var presence = c.Info.Plant.PresenceSignal;
@@ -704,7 +707,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var hasStateRules = c.Info.Plant.ParseRules.Any(r => r.Effect is { } e && e != EffectKinds.Signal);
         Playback.Load(model, doc.Layout, rows.Select(r => r.Event).ToList(), hasStateRules, doc.StationModeNames);
         var names = doc.Layout.Elements.ToDictionary(e => e.Id, e => e.Name ?? e.Id);
-        LoadMoment(changes, model.AlarmPeriods().Select(a => ($"{names.GetValueOrDefault(a.ElementId, a.ElementId)} {a.Code}", a.StartSequence, a.EndSequence)));
+        LoadMoment(changes, model.AlarmPeriods().Select(a => ($"{names.GetValueOrDefault(a.ElementId, a.ElementId)} {a.Code}", a.StartSequence, a.EndSequence)), gaps);
     }
 
     static (List<string> Modules, List<EventRowViewModel> Rows) LoadAll(Case c, TextMasker masker)

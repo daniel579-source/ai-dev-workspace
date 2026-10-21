@@ -1,6 +1,7 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using LogTrace.Engine.Events;
 using LogTrace.Workspace.Playback;
 
 namespace LogTrace.Workspace;
@@ -40,6 +41,20 @@ public sealed partial class MainViewModel
     [ObservableProperty]
     public partial bool SkipIdle { get; set; } = true;
 
+    /// <summary>
+    /// 目前時刻落在某些模組沒有 LOG 的時段時的提示（FR-037，#84），例如「目前時刻 模組 PLC 沒有 LOG（…）」；
+    /// 沒有時為 null。回放與詳細資訊顯示，避免把沒有 LOG 誤讀為沒有發生。
+    /// </summary>
+    [ObservableProperty]
+    public partial string? GapNotice { get; private set; }
+
+    partial void OnGapNoticeChanged(string? value)
+    {
+        Playback.GapNotice = value;
+        OnPropertyChanged(nameof(SelectedDetail));
+        OnPropertyChanged(nameof(SelectedDetailSegments));
+    }
+
     /// <summary>「只看這個元素」的元素名稱；沒有時為 null。</summary>
     [ObservableProperty]
     public partial string? FocusedElement { get; private set; }
@@ -57,6 +72,9 @@ public sealed partial class MainViewModel
         _momentSequence = sequence;
         Playback.SetMoment(sequence);
         Timeline.SetCurrent(time);
+        var gaps = Timeline.GapsAt(time);
+        GapNotice = gaps.Count == 0 ? null
+            : string.Join("\n", gaps.Select(g => $"目前時刻 模組 {g.Module} 沒有 LOG（{g.Describe()}；可能是閒置或缺漏）"));
         UpdateMomentPanels();
     }
 
@@ -97,10 +115,10 @@ public sealed partial class MainViewModel
     }
 
     /// <summary>載入案件後：狀態變化的事件與時間軸。</summary>
-    void LoadMoment(IReadOnlyList<long> changes, IEnumerable<(string Label, long Start, long? End)> alarms)
+    void LoadMoment(IReadOnlyList<long> changes, IEnumerable<(string Label, long Start, long? End)> alarms, IEnumerable<LogGap> gaps)
     {
         _changes = changes.Distinct().Order().ToArray();
-        Timeline.Load(_allRows, _changes, alarms);
+        Timeline.Load(_allRows, _changes, alarms, Modules.ToList(), gaps);
         LoadCommands();
         IsPlaying = false;
         FocusedElement = null;
@@ -114,6 +132,7 @@ public sealed partial class MainViewModel
         IsPlaying = false;
         FocusedElement = null;
         CurrentTime = null;
+        GapNotice = null;
         Timeline.Clear();
         Commands.Clear();
         CommandEvents.Clear();

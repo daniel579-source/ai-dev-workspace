@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation.Peers;
 using System.Windows.Input;
 using System.Windows.Media;
 using LogTrace.Workspace.Playback;
@@ -7,7 +8,7 @@ using LogTrace.Workspace.Playback;
 namespace LogTrace.App;
 
 /// <summary>
-/// 時間軸（ADR-0008 第 3 點）的繪製：總覽（事件密度、警報期間、時間不確定、搜尋符合、目前時刻）
+/// 時間軸（ADR-0008 第 3 點）的繪製：總覽（事件密度、警報期間、時間不確定、搜尋符合、各模組沒有 LOG 的時段、目前時刻）
 /// 或細部（目前時刻前後 30 秒的刻度）。點擊或拖曳時把位置換成時間，呼叫 Seek。
 /// </summary>
 public sealed class TimelineCanvas : FrameworkElement
@@ -20,6 +21,23 @@ public sealed class TimelineCanvas : FrameworkElement
     static readonly Pen SearchPen = new(Freeze(0xEAB308), 2);
     static readonly Pen CursorPen = new(Brushes.Black, 2);
     static readonly Pen BorderPen = new(Freeze(0xCBD5E1), 1);
+    static readonly Brush GapBrush = Hatch();
+
+    /// <summary>沒有 LOG 的時段：第一列的位置與每列的高度（#84）。</summary>
+    const double GapTop = 16, GapRowHeight = 6, GapRowStep = 7;
+
+    static Brush Hatch()
+    {
+        var pen = new Pen(Freeze(0x64748B), 1);
+        var drawing = new DrawingGroup();
+        drawing.Children.Add(new GeometryDrawing(Freeze(0xE2E8F0), null, new RectangleGeometry(new Rect(0, 0, 4, 4))));
+        drawing.Children.Add(new GeometryDrawing(null, pen, new LineGeometry(new Point(0, 4), new Point(4, 0))));
+        var brush = new DrawingBrush(drawing) { TileMode = TileMode.Tile, Viewport = new Rect(0, 0, 4, 4), ViewportUnits = BrushMappingMode.Absolute };
+        brush.Freeze();
+        return brush;
+    }
+
+    object? _defaultToolTip;
 
     static SolidColorBrush Freeze(int rgb)
     {
@@ -53,6 +71,9 @@ public sealed class TimelineCanvas : FrameworkElement
 
     void OnChanged(object? sender, EventArgs e) => InvalidateVisual();
 
+    /// <summary>讓 UI 自動化（smoke test、螢幕閱讀器）找得到時間軸。</summary>
+    protected override AutomationPeer OnCreateAutomationPeer() => new FrameworkElementAutomationPeer(this);
+
     protected override void OnRender(DrawingContext dc)
     {
         double w = ActualWidth, h = ActualHeight;
@@ -73,10 +94,16 @@ public sealed class TimelineCanvas : FrameworkElement
             return;
         }
 
-        // 事件密度
+        // 事件密度（在沒有 LOG 的列下方）
+        double densityTop = t.GapRows.Count == 0 ? 14 : GapTop + t.GapRows.Count * GapRowStep + 1, dh = Math.Max(0, h - densityTop);
         double bw = w / t.Density.Count;
         for (int i = 0; i < t.Density.Count; i++)
-            if (t.Density[i] > 0) dc.DrawRectangle(DensityBrush, null, new Rect(i * bw, h - t.Density[i] * (h - 14), Math.Max(1, bw - 0.5), t.Density[i] * (h - 14)));
+            if (t.Density[i] > 0) dc.DrawRectangle(DensityBrush, null, new Rect(i * bw, h - t.Density[i] * dh, Math.Max(1, bw - 0.5), t.Density[i] * dh));
+        // 各模組沒有 LOG 的時段（每個模組一列，左端的色塊代表模組）
+        for (int row = 0; row < t.GapRows.Count; row++)
+            dc.DrawRectangle(ModuleBrushes[row % ModuleBrushes.Length], null, new Rect(0, GapTop + row * GapRowStep, 3, GapRowHeight));
+        foreach (var gap in t.Gaps)
+            dc.DrawRectangle(GapBrush, null, new Rect(gap.From * w, GapTop + gap.Row * GapRowStep, Math.Max(2, (gap.To - gap.From) * w), GapRowHeight));
         // 警報期間（紅色區段）
         foreach (var span in t.AlarmSpans)
             dc.DrawRectangle(AlarmBrush, null, new Rect(span.From * w, 0, Math.Max(2, (span.To - span.From) * w), 8));
@@ -107,6 +134,16 @@ public sealed class TimelineCanvas : FrameworkElement
     protected override void OnMouseMove(MouseEventArgs e)
     {
         if (IsMouseCaptured && e.LeftButton == MouseButtonState.Pressed) SeekAt(e.GetPosition(this).X);
+        else if (!IsDetail) UpdateGapToolTip(e.GetPosition(this).X);
+    }
+
+    /// <summary>滑鼠在沒有 LOG 的時段上時，提示改為模組、起訖與長度（#84）。</summary>
+    void UpdateGapToolTip(double x)
+    {
+        _defaultToolTip ??= ToolTip;
+        var gaps = Timeline is { HasData: true } t && ActualWidth > 0 ? t.GapsAtPosition(x / ActualWidth) : [];
+        object? tip = gaps.Count == 0 ? _defaultToolTip : string.Join("\n", gaps.Select(TimelineViewModel.Describe));
+        if (!Equals(ToolTip, tip)) ToolTip = tip;
     }
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e) => ReleaseMouseCapture();

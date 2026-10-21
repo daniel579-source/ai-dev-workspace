@@ -397,6 +397,28 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     }
 
     [Fact]
+    public void 沒有LOG的門檻_新增移除_存檔後讀回_秒數不是整數時無法存檔()
+    {
+        _vm.PlantName = "範例廠";
+        _vm.AddGapThresholdRowCommand.Execute(null);
+        Assert.Equal("300", _vm.GapThresholds[0].Seconds); // 新增的列預設 300 秒
+        (_vm.GapThresholds[0].Module, _vm.GapThresholds[0].Seconds) = (" PLC ", "60");
+        _vm.AddGapThresholdRowCommand.Execute(null);
+        _vm.RemoveGapThresholdCommand.Execute(_vm.GapThresholds[1]);
+        Assert.True(_vm.IsDirty);
+
+        _vm.SaveCommand.Execute(null);
+        var other = new LayoutEditorViewModel(_library, _ui);
+        other.OpenConfigCommand.Execute(Assert.Single(other.Configs));
+        Assert.Equal([("PLC", "60")], other.GapThresholds.Select(r => (r.Module, r.Seconds)));
+
+        other.GapThresholds[0].Seconds = "一分鐘";
+        other.SaveCommand.Execute(null);
+        Assert.Contains("「PLC」的秒數必須是 0 以上的整數", other.Status);
+        Assert.Equal(1, other.Revision);
+    }
+
+    [Fact]
     public void 別名重複時無法存檔_標出衝突的元素()
     {
         _vm.PlantName = "範例廠";

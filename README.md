@@ -72,7 +72,7 @@ dotnet test tests/LogTrace.App.SmokeTests --logger "console;verbosity=detailed"
 
 ## 技術選型
 
-已定案的決策見 `docs/architecture.md` 第 10 章的決策索引（ADR-0001～ADR-0012 已接受；ADR-0013 知識庫與本機離線 LLM 為提議中，不在第一階段），例如：
+已定案的決策見 `docs/architecture.md` 第 10 章的決策索引（ADR-0001～ADR-0012 已接受；ADR-0013 知識庫與本機離線 LLM 為部分接受，知識庫第一版已實作；ADR-0014 第一線問答助理為提議中，不在第一階段），例如：
 
 - **部署形態**：單機桌面程式（免安裝、離線、Windows 10／11 64 位元），見 ADR-0001。
 - **用戶端**：C# + .NET 10 + WPF + AvalonDock，self-contained 單一資料夾發佈，見 ADR-0007（已接受；事件清單的人工體感待確認，見 #47）。

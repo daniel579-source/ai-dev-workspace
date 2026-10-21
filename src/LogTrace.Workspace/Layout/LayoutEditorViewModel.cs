@@ -214,6 +214,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         PresenceSignal = doc.PresenceSignal;
         StationModeNames.Clear();
         foreach (var (code, name) in doc.StationModeNames) AddModeName(new StationModeNameViewModel(code, name));
+        GapThresholds.Clear();
+        foreach (var (module, seconds) in doc.GapThresholds) AddGapThreshold(new GapThresholdViewModel(module, seconds.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         Revision = doc.Revision;
         RevisionInfo = doc.Revision == 0 ? "尚未存檔"
             : doc.RevisedAt is { } at ? $"修訂 {doc.Revision}（{doc.RevisedBy}，{at:yyyy-MM-dd HH:mm}）"
@@ -286,6 +288,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         _document.ParseRules = ParseRules.Select(r => r.ToModel()).ToList();
         _document.PresenceSignal = PresenceSignal.Trim();
         _document.StationModeNames = StationModeNames.Select(r => r.ToModel()).ToList();
+        _document.GapThresholds = GapThresholds.Select(r => r.ToModel()).ToList();
         try
         {
             PlantConfigFile.Save(_document, path);
@@ -947,6 +950,28 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     void RemoveStationModeName(StationModeNameViewModel? row)
     {
         if (row is not null && StationModeNames.Remove(row)) IsDirty = true;
+    }
+
+    /// <summary>沒有 LOG 的門檻（ADR-0006、#84）：模組、秒數；沒有列出的模組 300 秒，0 表示不標示。</summary>
+    public ObservableCollection<GapThresholdViewModel> GapThresholds { get; } = [];
+
+    void AddGapThreshold(GapThresholdViewModel row)
+    {
+        row.PropertyChanged += (_, _) => IsDirty = true;
+        GapThresholds.Add(row);
+    }
+
+    [RelayCommand]
+    void AddGapThresholdRow()
+    {
+        AddGapThreshold(new GapThresholdViewModel("", LogTrace.Engine.Events.LogGaps.DefaultThresholdSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        IsDirty = true;
+    }
+
+    [RelayCommand]
+    void RemoveGapThreshold(GapThresholdViewModel? row)
+    {
+        if (row is not null && GapThresholds.Remove(row)) IsDirty = true;
     }
 
     void AddParseRule(ParseRuleViewModel rule)

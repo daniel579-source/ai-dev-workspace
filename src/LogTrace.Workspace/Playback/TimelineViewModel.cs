@@ -11,10 +11,14 @@ public readonly record struct TimelineTick(double Fraction, bool IsChange, int M
 /// <summary>時間軸總覽上的一段警報期間（位置為 0～1）。</summary>
 public readonly record struct TimelineSpan(double From, double To, string Label, bool NeverReset);
 
+/// <summary>時間軸總覽上，一個模組沒有 LOG 的時段（位置為 0～1；Row 為模組的列）。</summary>
+public readonly record struct TimelineGap(int Row, double From, double To, LogGap Gap);
+
 /// <summary>
 /// 時間軸（ADR-0008 第 3 點）。
 /// <list type="bullet">
-/// <item>總覽：整個案件的事件密度、警報期間（沒有復歸時延伸到案件結束）、時間不確定的位置、搜尋符合的位置。</item>
+/// <item>總覽：整個案件的事件密度、警報期間（沒有復歸時延伸到案件結束）、時間不確定的位置、搜尋符合的位置、
+/// 各模組沒有 LOG 的時段（每個模組一列，#84）。</item>
 /// <item>細部：目前時刻前後 30 秒；狀態變化為長刻度、其他事件為短刻度，顏色代表模組。</item>
 /// </list>
 /// 位置一律以 0～1 表示，畫面依寬度換算；點擊或拖曳時把位置換回時間。資料改變時觸發 Changed。
@@ -47,6 +51,12 @@ public sealed class TimelineViewModel
     /// <summary>搜尋符合的位置（與搜尋結果一致）。</summary>
     public IReadOnlyList<double> SearchMarks { get; private set; } = [];
 
+    /// <summary>沒有 LOG 的時段的列（模組，依案件的模組順序）。</summary>
+    public IReadOnlyList<string> GapRows { get; private set; } = [];
+
+    /// <summary>各模組沒有 LOG 的時段（FR-037）。</summary>
+    public IReadOnlyList<TimelineGap> Gaps { get; private set; } = [];
+
     /// <summary>目前時刻在總覽上的位置。</summary>
     public double Cursor { get; private set; }
 
@@ -62,14 +72,19 @@ public sealed class TimelineViewModel
         UncertainMarks = [];
         SearchMarks = [];
         DetailTicks = [];
+        GapRows = [];
+        Gaps = [];
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
     /// <param name="rows">依事件序號（時間）排列的所有事件。</param>
     /// <param name="changes">會改變狀態的事件序號。</param>
     /// <param name="alarms">警報期間（開始與結束的事件序號；沒有復歸時結束為 null）。</param>
+    /// <param name="modules">案件的模組（依模組順序），每個模組一列。</param>
+    /// <param name="gaps">沒有 LOG 的時段（LogGaps.Find）。</param>
     public void Load(IReadOnlyList<EventRowViewModel> rows, IEnumerable<long> changes,
-        IEnumerable<(string Label, long Start, long? End)> alarms)
+        IEnumerable<(string Label, long Start, long? End)> alarms,
+        IReadOnlyList<string>? modules = null, IEnumerable<LogGap>? gaps = null)
     {
         _rows = rows;
         _changes = changes.ToHashSet();
@@ -95,6 +110,11 @@ public sealed class TimelineViewModel
         UncertainMarks = rows.Where(r => (r.Event.Flags & (EventFlags.TimeBackward | EventFlags.TimeInvalid)) != 0)
             .Select(r => FractionOf(r.Event.Timestamp)).Distinct().ToList();
         SearchMarks = [];
+        GapRows = modules ?? [];
+        Gaps = (gaps ?? [])
+            .Select(g => new TimelineGap(GapRows.ToList().IndexOf(g.Module), FractionOf(g.From), FractionOf(g.To), g))
+            .Where(g => g.Row >= 0)
+            .ToList();
         SetCurrent(Start);
     }
 
@@ -120,6 +140,17 @@ public sealed class TimelineViewModel
         DetailTicks = ticks;
         Changed?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>時刻落在其中的時段（不含兩端），依模組順序。</summary>
+    public IReadOnlyList<LogGap> GapsAt(DateTime time) => Gaps.Where(g => g.Gap.Contains(time)).OrderBy(g => g.Row).Select(g => g.Gap).ToList();
+
+    /// <summary>總覽上某個位置（0～1）的時段（滑鼠提示用），依模組順序。</summary>
+    public IReadOnlyList<LogGap> GapsAtPosition(double fraction) =>
+        Gaps.Where(g => g.From <= fraction && fraction <= g.To).OrderBy(g => g.Row).Select(g => g.Gap).ToList();
+
+    /// <summary>滑鼠提示，例如「模組 PLC：08:10:00～08:20:00 沒有 LOG（10 分鐘；可能是閒置或缺漏）」。</summary>
+    public static string Describe(LogGap gap) =>
+        $"模組 {gap.Module}：{gap.From:HH:mm:ss}～{gap.To:HH:mm:ss} 沒有 LOG（{LogGap.FormatLength(gap.Length)}；可能是閒置或缺漏）";
 
     public double FractionOf(DateTime t) =>
         End <= Start ? 0 : Math.Clamp((t - Start).Ticks / (double)(End - Start).Ticks, 0, 1);

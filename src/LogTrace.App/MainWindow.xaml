@@ -396,6 +396,19 @@
                                                 </Style>
                                             </TextBlock.Style>
                                         </TextBlock>
+                                        <!-- FR-037（#84）：目前時刻落在某些模組沒有 LOG 的時段 -->
+                                        <TextBlock Text="{Binding GapNotice}" Foreground="#475569" Background="#F1F5F9" Padding="4,1" TextWrapping="Wrap" Margin="0,3,0,0"
+                                                   AutomationProperties.AutomationId="PlaybackGapNotice">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding GapNotice}" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                     </StackPanel>
                                 </Border>
                                 <Border DockPanel.Dock="Top" Padding="6,3" BorderBrush="#DDD" BorderThickness="0,0,0,1">
@@ -570,7 +583,7 @@
                                     <CheckBox Content="略過閒置時段（10 秒以上沒有狀態變化）" IsChecked="{Binding SkipIdle}" VerticalAlignment="Center" Margin="12,0,0,0" />
                                     <TextBlock Text="{Binding CurrentTimeText, StringFormat=目前時刻：{0}}" VerticalAlignment="Center" Margin="16,0,0,0" FontWeight="SemiBold"
                                                AutomationProperties.AutomationId="CurrentTime" />
-                                    <TextBlock Text="　紅＝警報期間　黃＝搜尋符合　橘＝時間不確定" VerticalAlignment="Center" Foreground="#777" />
+                                    <TextBlock Text="　紅＝警報期間　黃＝搜尋符合　橘＝時間不確定　灰斜線＝模組沒有 LOG" VerticalAlignment="Center" Foreground="#777" />
                                 </StackPanel>
                                 <local:TimelineCanvas x:Name="DetailTimeline" DockPanel.Dock="Bottom" Height="30" Margin="0,2,0,0" IsDetail="True"
                                                       Timeline="{Binding Timeline}" ToolTip="細部：目前時刻前後 30 秒；長刻度＝狀態變化，顏色＝模組"

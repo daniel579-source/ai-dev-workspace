@@ -219,6 +219,12 @@ public sealed class PlantConfigDocument
     /// </summary>
     public List<KeyValuePair<string, string>> StationModeNames { get; set; } = [];
 
+    /// <summary>
+    /// 沒有 LOG 的門檻（ADR-0006、ADR-0008 第 3 點，#84）：模組＝秒數，保持輸入順序。
+    /// 沒有列出的模組使用預設 300 秒；0 表示該模組不標示。
+    /// </summary>
+    public List<KeyValuePair<string, int>> GapThresholds { get; set; } = [];
+
     /// <summary>個人資料的遮罩規則（正規表示式，ADR-0009 第 1 點）。</summary>
     public List<string> MaskPatterns { get; set; } = [.. Search.TextMasker.DefaultPatterns];
 

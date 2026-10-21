@@ -39,7 +39,7 @@ public static class PlantConfigFile
         WriteIndented = true,
         // 中文與正規表示式中的 <、> 直接寫出，方便閱讀與比對（設定檔不會嵌入 HTML）
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false), new PropsConverter() },
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false), new PropsConverter(), new GapThresholdsConverter() },
     };
 
     /// <summary>寫出 JSON；格式版本依內容決定（用到新功能時才升版，ADR-0006 第 7 點）。</summary>
@@ -157,6 +157,17 @@ public static class PlantConfigFile
                      .GroupBy(p => p.Key.Trim(), StringComparer.Ordinal).Where(g => g.Count() > 1))
             issues.Add(new($"站點模式代號「{g.Key}」重複。", []));
 
+        foreach (var (module, seconds) in doc.GapThresholds)
+        {
+            if (string.IsNullOrWhiteSpace(module))
+                issues.Add(new("沒有 LOG 的門檻中有沒有填模組的列。", []));
+            if (seconds < 0)
+                issues.Add(new($"沒有 LOG 的門檻「{module}」的秒數必須是 0 以上的整數（0 表示不標示）。", []));
+        }
+        foreach (var g in doc.GapThresholds.Where(p => !string.IsNullOrWhiteSpace(p.Key))
+                     .GroupBy(p => p.Key.Trim(), StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
+            issues.Add(new($"沒有 LOG 的門檻中，模組「{g.Key}」重複。", []));
+
         foreach (var pattern in doc.MaskPatterns)
             if (Search.TextMasker.Check(pattern) is { } problem) issues.Add(new(problem, []));
 
@@ -230,6 +241,32 @@ public static class PlantConfigFile
         {
             writer.WriteStartObject();
             foreach (var (k, v) in value) writer.WriteString(k, v);
+            writer.WriteEndObject();
+        }
+    }
+
+    /// <summary>沒有 LOG 的門檻以 JSON 物件保存（模組＝秒數），並保持順序。</summary>
+    sealed class GapThresholdsConverter : JsonConverter<List<KeyValuePair<string, int>>>
+    {
+        public override List<KeyValuePair<string, int>> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType != JsonTokenType.StartObject) throw new JsonException("沒有 LOG 的門檻必須是物件（模組＝秒數）。");
+            var list = new List<KeyValuePair<string, int>>();
+            while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
+            {
+                var key = reader.GetString()!;
+                reader.Read();
+                if (reader.TokenType != JsonTokenType.Number || !reader.TryGetInt32(out var seconds))
+                    throw new JsonException($"沒有 LOG 的門檻「{key}」的秒數必須是整數。");
+                list.Add(new(key, seconds));
+            }
+            return list;
+        }
+
+        public override void Write(Utf8JsonWriter writer, List<KeyValuePair<string, int>> value, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject();
+            foreach (var (k, v) in value) writer.WriteNumber(k, v);
             writer.WriteEndObject();
         }
     }

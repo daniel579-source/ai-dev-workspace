@@ -183,6 +183,10 @@ public sealed partial class PlaybackViewModel : ObservableObject
     [ObservableProperty]
     public partial string? Message { get; private set; } = "請開啟案件。";
 
+    /// <summary>目前時刻落在某些模組沒有 LOG 的時段時的提示（#84，由主畫面設定）；沒有時為 null。</summary>
+    [ObservableProperty]
+    public partial string? GapNotice { get; set; }
+
     /// <summary>目前時刻（顯示用）。</summary>
     [ObservableProperty]
     public partial string? MomentText { get; private set; }

@@ -167,6 +167,10 @@ public static class PlantConfigFile
         foreach (var g in doc.GapThresholds.Where(p => !string.IsNullOrWhiteSpace(p.Key))
                      .GroupBy(p => p.Key.Trim(), StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
             issues.Add(new($"沒有 LOG 的門檻中，模組「{g.Key}」重複。", []));
+        // #86：只依模組名稱比對，填到 Logger 或元件名稱時門檻不會生效，所以必須是模組順序中的模組。
+        var modules = new HashSet<string>(doc.ModuleOrder.Select(m => m.Trim()), StringComparer.OrdinalIgnoreCase);
+        foreach (var module in doc.GapThresholds.Select(p => p.Key.Trim()).Where(m => m.Length > 0 && !modules.Contains(m)).Distinct(StringComparer.OrdinalIgnoreCase))
+            issues.Add(new($"沒有 LOG 的門檻的模組「{module}」不在模組順序中，請從模組順序中選擇。", []));
 
         foreach (var pattern in doc.MaskPatterns)
             if (Search.TextMasker.Check(pattern) is { } problem) issues.Add(new(problem, []));

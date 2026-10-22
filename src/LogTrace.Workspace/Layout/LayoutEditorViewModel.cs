@@ -87,7 +87,11 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
 
     public IReadOnlyList<string> EncodingChoices => EncodingRuleViewModel.Choices;
 
-    partial void OnModuleOrderTextChanged(string value) => IsDirty = true;
+    partial void OnModuleOrderTextChanged(string value)
+    {
+        IsDirty = true;
+        RefreshGapModuleChoices();
+    }
     partial void OnKnownLoggersTextChanged(string value) => IsDirty = true;
 
     static List<string> Lines(string text) =>
@@ -957,8 +961,16 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
 
     void AddGapThreshold(GapThresholdViewModel row)
     {
-        row.PropertyChanged += (_, _) => IsDirty = true;
+        row.SetModuleChoices(Lines(ModuleOrderText));
+        row.PropertyChanged += (_, e) => { if (e.PropertyName != nameof(GapThresholdViewModel.ModuleChoices)) IsDirty = true; };
         GapThresholds.Add(row);
+    }
+
+    /// <summary>模組的下拉選項跟著模組順序（#86）。</summary>
+    void RefreshGapModuleChoices()
+    {
+        var modules = Lines(ModuleOrderText);
+        foreach (var row in GapThresholds) row.SetModuleChoices(modules);
     }
 
     [RelayCommand]

@@ -116,4 +116,17 @@ public sealed class LogGapsTests
         Assert.Contains(issues, i => i.Message.Contains("沒有填模組"));
         Assert.Contains(issues, i => i.Message.Contains("模組「EXE」重複"));
     }
+
+    [Fact]
+    public void 門檻的模組不在模組順序中時_無法存檔()
+    {
+        // #86：填到 Logger 或 Layout 元件名稱時門檻不會生效，存檔時就擋下；大小寫不同視為相同模組
+        var doc = new PlantConfigDocument { Plant = "範例廠", ModuleOrder = ["EXE", "PLC"], GapThresholds = [new("plc", 120), new("WCS_LOG", 60), new(" 輸送線1 ", 0)] };
+
+        var issues = PlantConfigFile.Validate(doc).Select(i => i.Message).ToList();
+
+        Assert.Equal(
+            ["沒有 LOG 的門檻的模組「WCS_LOG」不在模組順序中，請從模組順序中選擇。", "沒有 LOG 的門檻的模組「輸送線1」不在模組順序中，請從模組順序中選擇。"],
+            issues.Where(m => m.Contains("不在模組順序中")));
+    }
 }

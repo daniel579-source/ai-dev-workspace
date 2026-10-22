@@ -419,6 +419,34 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     }
 
     [Fact]
+    public void 沒有LOG的門檻_模組選項跟著模組順序_不在模組順序中的舊名稱保留顯示但無法存檔()
+    {
+        _vm.PlantName = "範例廠";
+        _vm.ModuleOrderText = "EXE\nPLC";
+        _vm.AddGapThresholdRowCommand.Execute(null);
+        var row = _vm.GapThresholds[0];
+        Assert.Equal(["EXE", "PLC"], row.ModuleChoices);
+
+        _vm.ModuleOrderText = "EXE\nPLC\nServer";
+        Assert.Equal(["EXE", "PLC", "Server"], row.ModuleChoices);
+
+        row.Module = "PLC";
+        _vm.ModuleOrderText = "EXE"; // 模組順序改掉了 PLC：這一列仍顯示 PLC，存檔時擋下
+        Assert.Equal(["EXE", "PLC"], row.ModuleChoices);
+        Assert.Equal("PLC", row.Module);
+        _vm.SaveCommand.Execute(null);
+        Assert.Contains("「PLC」不在模組順序中", _vm.Status);
+        Assert.Equal(0, _vm.Revision);
+
+        row.Module = null!; // 下拉選單換選項時可能寫回 null，模組不能因此被清掉
+        Assert.Equal("PLC", row.Module);
+
+        _vm.ModuleOrderText = "EXE\nPLC";
+        _vm.SaveCommand.Execute(null);
+        Assert.Equal(1, _vm.Revision);
+    }
+
+    [Fact]
     public void 別名重複時無法存檔_標出衝突的元素()
     {
         _vm.PlantName = "範例廠";

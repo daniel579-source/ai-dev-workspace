@@ -107,4 +107,61 @@ public sealed class LayoutEditorSmokeTests : IDisposable
             if (!app.HasExited) app.Kill();
         }
     }
+
+    [Fact]
+    public void 沒有LOG的門檻_從下拉選單選擇模組_存檔後重新開啟仍在()
+    {
+        var dataRoot = Path.Combine(_tmp.Path, "AppData");
+        using var app = FlaUI.Core.Application.Launch(new ProcessStartInfo(ImportSmokeTests.AppExe(), $"--data-root \"{dataRoot}\""));
+        using var automation = new UIA3Automation();
+        try
+        {
+            var main = app.GetMainWindow(automation, TimeSpan.FromSeconds(30));
+            Assert.NotNull(main);
+            var cf = main.ConditionFactory;
+            var desktop = automation.GetDesktop();
+            AutomationElement In(AutomationElement root, string id) =>
+                Retry.WhileNull(() => root.FindFirstDescendant(cf.ByAutomationId(id)), TimeSpan.FromSeconds(10)).Result
+                ?? throw new InvalidOperationException($"找不到 {id}");
+            AutomationElement? FindEditor() =>
+                main.FindFirstChild(cf.ByAutomationId("LayoutEditor")) ?? desktop.FindFirstChild(cf.ByAutomationId("LayoutEditor"));
+            AutomationElement OpenEditor()
+            {
+                In(main, "OpenLayoutEditor").AsButton().Invoke();
+                return Retry.WhileNull(() => FindEditor(), TimeSpan.FromSeconds(10)).Result
+                    ?? throw new InvalidOperationException("找不到 Layout 編輯器視窗");
+            }
+
+            // #86：模組只能從模組順序中選擇（預設的模組順序為 EXE、PLC、Server）
+            var editor = OpenEditor();
+            In(editor, "PlantName").AsTextBox().Text = "冒煙測試廠";
+            In(editor, "LogSettingsTab").AsTabItem().Select();
+            In(editor, "AddGapThreshold").AsButton().Invoke();
+            var module = In(In(editor, "GapThresholds"), "GapThresholdModule").AsComboBox();
+            Assert.Equal(["EXE", "PLC", "Server"], module.Items.Select(i => i.Text));
+            module.Select("PLC");
+            module.Collapse();
+            In(editor, "SaveConfig").AsButton().Invoke();
+            Assert.True(Retry.WhileFalse(() => In(editor, "EditorStatus").Name.Contains("修訂 1"), TimeSpan.FromSeconds(10)).Result,
+                In(editor, "EditorStatus").Name);
+            Assert.Contains("\"PLC\": 300", File.ReadAllText(Path.Combine(dataRoot, "Plants", "冒煙測試廠.json")));
+            editor.AsWindow().Close();
+            Assert.True(Retry.WhileFalse(() => FindEditor() is null, TimeSpan.FromSeconds(10)).Result);
+
+            editor = OpenEditor();
+            var config = Retry.WhileNull(() => In(editor, "ConfigList").FindFirstChild(cf.ByControlType(ControlType.ListItem)), TimeSpan.FromSeconds(10)).Result;
+            Assert.NotNull(config);
+            config.AsListBoxItem().Select();
+            In(editor, "OpenSelectedConfig").AsButton().Invoke();
+            In(editor, "LogSettingsTab").AsTabItem().Select();
+            module = In(In(editor, "GapThresholds"), "GapThresholdModule").AsComboBox();
+            Assert.True(Retry.WhileFalse(() => module.SelectedItem?.Text == "PLC", TimeSpan.FromSeconds(5)).Result, module.SelectedItem?.Text);
+            editor.AsWindow().Close();
+        }
+        finally
+        {
+            app.Close();
+            if (!app.HasExited) app.Kill();
+        }
+    }
 }

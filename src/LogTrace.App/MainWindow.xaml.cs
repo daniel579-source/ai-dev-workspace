@@ -37,6 +37,11 @@ public partial class MainWindow : Window
     readonly System.Windows.Threading.DispatcherTimer _playTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     DateTime _lastTick;
 
+    // 需要等待的工作：狀態列的經過秒數；畫面執行緒被佔住時由監看器另開「處理中」視窗
+    readonly System.Windows.Threading.DispatcherTimer _busyTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+    readonly System.Diagnostics.Stopwatch _busyClock = new();
+    BusyWatchdog? _watchdog;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -50,7 +55,29 @@ public partial class MainWindow : Window
             _vm?.Tick(now - _lastTick);
             _lastTick = now;
         };
+        _busyTimer.Tick += (_, _) => ShowBusyElapsed();
     }
+
+    /// <summary>工作開始或結束：狀態列的經過秒數、滑鼠游標（箭頭加忙碌圖示，仍可按「取消」），並告訴監看器目前的工作。</summary>
+    void UpdateBusy()
+    {
+        bool busy = _vm?.IsBusy == true;
+        if (busy && !_busyClock.IsRunning)
+        {
+            _busyClock.Restart();
+            ShowBusyElapsed();
+            _busyTimer.Start();
+        }
+        else if (!busy && _busyClock.IsRunning)
+        {
+            _busyClock.Stop();
+            _busyTimer.Stop();
+        }
+        Cursor = busy ? Cursors.AppStarting : null;
+        if (_watchdog is not null) _watchdog.Activity = busy ? _vm!.Status : null;
+    }
+
+    void ShowBusyElapsed() => BusyElapsed.Text = $"已經過 {(int)_busyClock.Elapsed.TotalSeconds} 秒";
 
     /// <summary>
     /// 回放的按鍵（ADR-0008 第 1 點）：→／← 狀態變化、Shift 逐筆事件、Ctrl 符合篩選的事件、空白鍵播放、Home／End。
@@ -108,6 +135,9 @@ public partial class MainWindow : Window
                 break;
             case nameof(MainViewModel.IsTrackView):
                 UpdateEventView();
+                break;
+            case nameof(MainViewModel.IsBusy) or nameof(MainViewModel.Status):
+                UpdateBusy();
                 break;
             case nameof(MainViewModel.RawSelectedLine) when _vm?.RawSelectedLine is { } line:
                 // 跳到原始 LOG 中對應的行
@@ -188,7 +218,11 @@ public partial class MainWindow : Window
         }
         if (saved is null) _layouts.ApplyPreset(DockLayouts.Playback);
         else if (!_layouts.TryRestore(saved)) _vm?.ShowStatus("保存的版面無法使用（檔案損壞或來自其他版本的程式），已改用預設版面。");
+        _watchdog = new BusyWatchdog(this);
+        UpdateBusy();
     }
+
+    void Window_Closed(object? sender, EventArgs e) => _watchdog?.Dispose();
 
     /// <summary>關閉程式時保存目前的版面；保存失敗不阻擋關閉。</summary>
     void Window_Closing(object? sender, CancelEventArgs e)

@@ -5,7 +5,7 @@
         xmlns:local="clr-namespace:LogTrace.App"
         xmlns:vm="clr-namespace:LogTrace.Workspace;assembly=LogTrace.Workspace"
         xmlns:pb="clr-namespace:LogTrace.Workspace.Playback;assembly=LogTrace.Workspace"
-        Title="LogTrace" Width="1480" Height="860" Activated="Window_Activated" Loaded="Window_Loaded" Closing="Window_Closing" PreviewKeyDown="Window_PreviewKeyDown"
+        Title="LogTrace" Width="1480" Height="860" Activated="Window_Activated" Loaded="Window_Loaded" Closing="Window_Closing" Closed="Window_Closed" PreviewKeyDown="Window_PreviewKeyDown"
         AutomationProperties.AutomationId="MainWindow">
     <Window.Resources>
         <local:NotConverter x:Key="Not" />
@@ -106,6 +106,13 @@
                 <TextBlock Text="{Binding CurrentCaseName, StringFormat=案件：{0}, TargetNullValue=尚未開啟案件}" />
             </StatusBarItem>
             <Separator />
+            <!-- 需要等待的工作（匯入、開啟案件、搜尋、重新排序等）進行中：會動的進度條與經過秒數 -->
+            <StatusBarItem Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" AutomationProperties.AutomationId="BusyIndicator">
+                <StackPanel Orientation="Horizontal">
+                    <ProgressBar IsIndeterminate="True" Width="100" Height="12" />
+                    <TextBlock x:Name="BusyElapsed" Margin="6,0,0,0" AutomationProperties.AutomationId="BusyElapsed" />
+                </StackPanel>
+            </StatusBarItem>
             <StatusBarItem>
                 <TextBlock Text="{Binding Status}" AutomationProperties.AutomationId="Status" />
             </StatusBarItem>

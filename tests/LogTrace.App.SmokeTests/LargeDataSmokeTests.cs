@@ -95,4 +95,79 @@ public sealed class LargeDataSmokeTests(ITestOutputHelper output) : IDisposable
             if (!app.HasExited) app.Kill();
         }
     }
+
+    /// <summary>
+    /// 需要等待時表示程式正在運作：匯入期間狀態列有忙碌表示；
+    /// 符合十幾萬筆（一天份「CMD_NO」）時畫面執行緒會被佔住一段時間，這時另開「處理中」視窗，恢復後自動關閉。
+    /// </summary>
+    [Fact]
+    public void 一天份資料_需要等待時表示程式正在運作()
+    {
+        var source = Environment.GetEnvironmentVariable("LOGTRACE_E2E_SOURCE");
+        if (string.IsNullOrEmpty(source))
+        {
+            output.WriteLine("未設定 LOGTRACE_E2E_SOURCE，略過。");
+            return;
+        }
+        var dataRoot = Path.Combine(_tmp.Path, "AppData");
+        using var app = FlaUI.Core.Application.Launch(new ProcessStartInfo(ImportSmokeTests.AppExe(), $"--data-root \"{dataRoot}\""));
+        using var automation = new UIA3Automation();
+        try
+        {
+            var main = app.GetMainWindow(automation, TimeSpan.FromSeconds(30))!;
+            var cf = main.ConditionFactory;
+            AutomationElement In(string id) =>
+                Retry.WhileNull(() => main.FindFirstDescendant(cf.ByAutomationId(id)), TimeSpan.FromSeconds(10)).Result
+                ?? throw new InvalidOperationException($"找不到 {id}");
+            // 主視窗沒有回應時，用 UI Automation 在桌面上找視窗會被擋住或丟出例外，所以直接依標題找（不經過主視窗）
+            IntPtr BusyWindow()
+            {
+                var hwnd = NativeMethods.FindWindowW(null, "LogTrace 處理中");
+                return hwnd != IntPtr.Zero && NativeMethods.IsWindowVisible(hwnd) ? hwnd : IntPtr.Zero;
+            }
+            bool BusyWindowGone() => BusyWindow() == IntPtr.Zero;
+
+            In("NewCaseName").AsTextBox().Text = "一天份";
+            In("CreateCase").AsButton().Invoke();
+            Assert.Null(main.FindFirstDescendant(cf.ByAutomationId("BusyIndicator"))); // 沒有工作時不顯示
+            In("ImportSource").AsTextBox().Text = source;
+            In("Import").AsButton().Invoke();
+            Assert.StartsWith("已經過", In("BusyElapsed").Name);
+            Assert.True(Retry.WhileFalse(() => In("Status").Name.Contains("筆事件"), TimeSpan.FromMinutes(5), TimeSpan.FromMilliseconds(200)).Result);
+            Assert.True(Retry.WhileFalse(() => main.FindFirstDescendant(cf.ByAutomationId("BusyIndicator")) is null, TimeSpan.FromSeconds(30)).Result);
+            Assert.True(Retry.WhileFalse(BusyWindowGone, TimeSpan.FromSeconds(30)).Result);
+
+            ImportSmokeTests.OpenTab(main, "搜尋");
+            In("SearchAllOf").AsTextBox().Text = "CMD_NO";
+            var clock = Stopwatch.StartNew();
+            In("Search").AsButton().Invoke();
+            Assert.True(Retry.WhileFalse(() => !BusyWindowGone(), TimeSpan.FromSeconds(60), TimeSpan.FromMilliseconds(100)).Result, "處理中視窗沒有出現");
+            output.WriteLine($"處理中視窗出現：{clock.Elapsed.TotalSeconds:N1} 秒");
+            // 處理中視窗有自己的畫面執行緒，主視窗沒有回應時仍然可以讀取
+            var shown = automation.FromHandle(BusyWindow());
+            Assert.Equal("BusyWindow", shown.AutomationId);
+            var texts = shown.FindAllDescendants(cf.ByControlType(ControlType.Text)).Select(t => t.Name).ToList();
+            Assert.Contains(texts, t => t.Contains("沒有當機"));
+            Assert.Contains(texts, t => t.StartsWith("已經過"));
+
+            Assert.True(Retry.WhileFalse(BusyWindowGone, TimeSpan.FromMinutes(10), TimeSpan.FromMilliseconds(500)).Result, "處理中視窗沒有關閉");
+            output.WriteLine($"處理中視窗關閉：{clock.Elapsed.TotalSeconds:N1} 秒（{In("SearchStatus").Name}）");
+            Assert.StartsWith("符合", In("SearchStatus").Name);
+        }
+        finally
+        {
+            app.Close();
+            if (!app.HasExited) app.Kill();
+        }
+    }
+
+    static class NativeMethods
+    {
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        public static extern IntPtr FindWindowW(string? className, string windowName);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        public static extern bool IsWindowVisible(IntPtr hWnd);
+    }
 }

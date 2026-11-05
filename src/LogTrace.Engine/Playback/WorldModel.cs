@@ -162,13 +162,31 @@ public sealed class WorldModel
     static CommandState CommandOf(WorldState w, string id, long cause) =>
         w.Commands.TryGetValue(id, out var c) ? c : w.Commands[id] = new CommandState { Id = id, StatusCause = cause };
 
+    /// <summary>
+    /// 移動棧板。離開儲位時該儲位變成「空」（LOG 記載已取出）；放進儲位時，原本記錄在那裡的另一個棧板
+    /// 位置改為不明（LOG 記載儲位已有別的棧板，不推測它去了哪裡，ADR-0005 第 2 點 2026-11-04 補充）。
+    /// </summary>
     static void MovePallet(WorldState w, PalletState p, LocationKind kind, string id, long cause)
     {
-        if (p.Location == LocationKind.Storage && p.LocationId is { } old && w.Storage.TryGetValue(old, out var there) && there == p.Id)
-            w.Storage.Remove(old);
+        if (p.Location == LocationKind.Storage && p.LocationId is { } old && old != id && w.Storage.TryGetValue(old, out var there) && there.Pallet == p.Id)
+            w.Storage[old] = new StorageSlotState(null, cause);
         (p.Location, p.LocationId, p.LocationCause) = (kind, id, cause);
-        if (kind == LocationKind.Storage) w.Storage[id] = p.Id;
+        if (kind == LocationKind.Storage) PutInStorage(w, id, p.Id, cause);
     }
+
+    static void PutInStorage(WorldState w, string slot, string? pallet, long cause)
+    {
+        if (w.Storage.TryGetValue(slot, out var before) && before.Pallet is { } other && other != pallet && w.Pallets.TryGetValue(other, out var o)
+            && o.Location == LocationKind.Storage && o.LocationId == slot)
+            (o.Location, o.LocationId, o.LocationCause) = (LocationKind.Unknown, null, cause);
+        w.Storage[slot] = new StorageSlotState(pallet, cause);
+    }
+
+    /// <summary>命令的棧板；世界中還沒有時建立（LOG 第一次提到它的位置）。命令沒有棧板編號時為 null。</summary>
+    static PalletState? PalletOf(WorldState w, CommandState c, bool preexisting) =>
+        c.Pallet is not { } pid ? null
+        : w.Pallets.TryGetValue(pid, out var p) ? p
+        : w.Pallets[pid] = new PalletState { Id = pid, Preexisting = preexisting };
 
     void Apply(WorldState w, EventEffect x)
     {
@@ -224,6 +242,15 @@ public sealed class WorldModel
                 var c = CommandOf(w, id, seq);
                 (c.Status, c.StatusCause, c.Segment, c.Vehicle, c.SegmentDestination) =
                     (CommandStatus.SegmentRunning, seq, ParseInt(x.Get(FieldKinds.Segment)) ?? (c.Segment ?? 0) + 1, vh, x.Get(FieldKinds.Destination));
+                // 派送的來源是儲位：LOG 記載派送時該儲位有命令的棧板，取走後變空（ADR-0005 第 2 點 2026-11-04 補充）
+                if (x.Get(FieldKinds.Source) is { } src && Locate(src) is (LocationKind.Storage, var slot))
+                {
+                    if (PalletOf(w, c, preexisting: true) is { } sp)
+                    {
+                        if (sp.Location != LocationKind.Storage || sp.LocationId != slot) MovePallet(w, sp, LocationKind.Storage, slot, seq);
+                    }
+                    else PutInStorage(w, slot, null, seq); // 命令沒有棧板編號：仍記載儲位已被取出
+                }
                 if (c.Pallet is { } pid && w.Pallets.TryGetValue(pid, out var p)) MovePallet(w, p, LocationKind.Vehicle, vh, seq);
                 var v = VehicleOf(w, vh);
                 (v.Work, v.WorkCause, v.Command, v.Destination) = (VehicleWork.Executing, seq, id, x.Get(FieldKinds.Destination));
@@ -233,7 +260,10 @@ public sealed class WorldModel
             {
                 var c = CommandOf(w, id, seq);
                 var (kind, at) = Locate(dest);
-                if (c.Pallet is { } pid && w.Pallets.TryGetValue(pid, out var p)) MovePallet(w, p, kind, at, seq);
+                // 抵達儲位：LOG 記載放入命令的棧板，棧板之前沒有位置紀錄時也建立（ADR-0005 第 2 點 2026-11-04 補充）
+                var p = kind == LocationKind.Storage ? PalletOf(w, c, preexisting: false)
+                    : c.Pallet is { } pid && w.Pallets.TryGetValue(pid, out var known) ? known : null;
+                if (p is not null) MovePallet(w, p, kind, at, seq);
                 if (kind == LocationKind.Station) StationOf(w, at);
                 (c.Status, c.StatusCause, c.Segment) = (kind == LocationKind.Delivered ? CommandStatus.Delivered : CommandStatus.SegmentArrived, seq,
                     ParseInt(x.Get(FieldKinds.Segment)) ?? c.Segment);
@@ -247,9 +277,15 @@ public sealed class WorldModel
             }
             case EffectKinds.SegmentFinished when x.Get(FieldKinds.Command) is { } id:
             {
-                // LOG 沒有記錄地點：不推導（不沿用派送的目的地），貨物位置維持最後的紀錄（#53）
+                // LOG 沒有記錄地點：一般不推導（不沿用派送的目的地），貨物位置維持最後的紀錄（#53）。
+                // 例外：這一段派送的目的地是儲位時，派送的目的地加上作業完成視為 LOG 記載放入（ADR-0005 第 2 點 2026-11-04 補充）。
                 var c = CommandOf(w, id, seq);
-                (c.Status, c.StatusCause, c.Segment) = (CommandStatus.SegmentFinished, seq, ParseInt(x.Get(FieldKinds.Segment)) ?? c.Segment);
+                var segment = ParseInt(x.Get(FieldKinds.Segment));
+                bool thisSegment = c.Status == CommandStatus.SegmentRunning && (segment is null || segment == c.Segment);
+                if (thisSegment && c.SegmentDestination is { } sd && Locate(sd) is (LocationKind.Storage, var slot)
+                    && PalletOf(w, c, preexisting: false) is { } fp)
+                    MovePallet(w, fp, LocationKind.Storage, slot, seq);
+                (c.Status, c.StatusCause, c.Segment) = (CommandStatus.SegmentFinished, seq, segment ?? c.Segment);
                 var vh = Element(FieldKinds.Vehicle, LayoutElementType.Vehicle) ?? c.Vehicle;
                 if (vh is not null)
                 {

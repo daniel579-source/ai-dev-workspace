@@ -169,6 +169,21 @@ public sealed class PlaybackViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task 側視圖區分空與未取得資訊_都能追溯到造成它的事件()
+    {
+        await OpenPrototypeCase();
+        MoveTo("派送 00040002 第1段"); // 出庫命令從 0100501 取走棧板（#95）
+        var rack = El("rk-1");
+        P.SelectRackCell(rack.Cells.Single(c => c.Column == 5));
+
+        var level1 = P.SideView.Single(l => l.Level == 1);
+        Assert.Equal(("0100501", null, true, "空"), (level1.StorageCode, level1.Pallet, level1.IsEmpty, level1.Content));
+        Assert.Contains("派送 00040002 第1段", level1.CauseText);
+        Assert.All(P.SideView.Where(l => l.Level != 1), l => Assert.Equal(("—", false, (long?)null), (l.Content, l.IsEmpty, l.Cause))); // 未取得資訊
+        Assert.Contains("空", rack.Summary);
+    }
+
+    [Fact]
     public async Task 內建預設的案件沒有Layout_顯示說明()
     {
         _vm.NewCaseName = "預設";

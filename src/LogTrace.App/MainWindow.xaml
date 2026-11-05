@@ -664,8 +664,19 @@
                                             <GridView>
                                                 <GridViewColumn Header="層" DisplayMemberBinding="{Binding Level}" Width="40" />
                                                 <GridViewColumn Header="儲位" DisplayMemberBinding="{Binding StorageCode}" Width="80" />
-                                                <GridViewColumn Header="棧板" DisplayMemberBinding="{Binding Pallet, TargetNullValue=—}" Width="110" />
-                                                <GridViewColumn Header="造成這個狀態的事件" DisplayMemberBinding="{Binding CauseText}" Width="260" />
+                                                <GridViewColumn Header="棧板" DisplayMemberBinding="{Binding Content}" Width="110" />
+                                                <GridViewColumn Header="造成這個狀態的事件" Width="260">
+                                                    <GridViewColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock TextTrimming="CharacterEllipsis" ToolTip="{Binding CauseText}">
+                                                                <Hyperlink Command="{Binding DataContext.Playback.GoToCauseCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                           CommandParameter="{Binding Cause}">
+                                                                    <Run Text="{Binding CauseText, Mode=OneWay}" />
+                                                                </Hyperlink>
+                                                            </TextBlock>
+                                                        </DataTemplate>
+                                                    </GridViewColumn.CellTemplate>
+                                                </GridViewColumn>
                                             </GridView>
                                         </ListView.View>
                                     </ListView>

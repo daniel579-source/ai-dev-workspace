@@ -30,7 +30,7 @@ public sealed class SegmentFinishedTests
     ];
 
     [Fact]
-    public void 一段作業完成_狀態另外標示_搬送機回到閒置_不推導貨物位置()
+    public void 一段作業完成_狀態另外標示_搬送機回到閒置_目的地是儲位時放入()
     {
         var world = new WorldModel(Effects, Layout, "在席");
 
@@ -39,8 +39,9 @@ public sealed class SegmentFinishedTests
         Assert.Equal((CommandStatus.SegmentFinished, 1, 4L), (c.Status, c.Segment, c.StatusCause));
         Assert.Equal(VehicleWork.Idle, w.Vehicles["vh-1"].Work);
         Assert.Null(w.Vehicles["vh-1"].Command);
-        Assert.Equal((LocationKind.Vehicle, "vh-1"), (w.Pallets["PLT-X"].Location, w.Pallets["PLT-X"].LocationId)); // 不沿用派送的目的地
-        Assert.Empty(w.Storage);
+        // 派送的目的地是儲位：作業完成視為放入（ADR-0005 第 2 點 2026-11-04 補充，#95）；其他目的地見 StorageStateTests
+        Assert.Equal((LocationKind.Storage, "0100101"), (w.Pallets["PLT-X"].Location, w.Pallets["PLT-X"].LocationId));
+        Assert.Equal(("PLT-X", 4L), (w.Storage["0100101"].Pallet, w.Storage["0100101"].Cause));
         Assert.False(c.IsFinished); // 一段作業完成不等於命令完成
 
         Assert.Equal(CommandStatus.Completed, world.Final.Commands["00090001"].Status);

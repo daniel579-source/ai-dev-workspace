@@ -54,8 +54,12 @@ public sealed partial class RackCellViewModel(int column, int levels) : Observab
     public partial bool IsSelected { get; set; }
 }
 
-/// <summary>料架側視圖的一層。</summary>
-public sealed record RackLevelViewModel(int Level, string? StorageCode, string? Pallet, long? Cause, string? CauseText);
+/// <summary>料架側視圖的一層。IsEmpty＝LOG 記載已取出；Pallet 與 IsEmpty 都沒有時為未取得資訊（ADR-0005 第 2 點 2026-11-04 補充）。</summary>
+public sealed record RackLevelViewModel(int Level, string? StorageCode, string? Pallet, bool IsEmpty, long? Cause, string? CauseText)
+{
+    /// <summary>棧板欄的顯示：棧板編號、「空」，或未取得資訊的「—」。</summary>
+    public string Content => Pallet ?? (IsEmpty ? "空" : "—");
+}
 
 /// <summary>Layout 面板上的一個元素與它在目前時刻的狀態。</summary>
 public sealed partial class PlaybackElementViewModel : ObservableObject
@@ -298,14 +302,23 @@ public sealed partial class PlaybackViewModel : ObservableObject
             }
             case LayoutElementType.Rack:
             {
-                int total = 0;
+                int total = 0, empty = 0;
                 foreach (var cell in el.Cells)
                 {
-                    cell.Occupied = Enumerable.Range(1, cell.Levels)
-                        .Count(l => StorageCode.Format(_storageRule, el.Model.Row ?? "", cell.Column, l) is { } code && w.Storage.ContainsKey(code));
+                    var slots = Enumerable.Range(1, cell.Levels)
+                        .Select(l => StorageCode.Format(_storageRule, el.Model.Row ?? "", cell.Column, l) is { } code && w.Storage.TryGetValue(code, out var slot) ? slot : null)
+                        .Where(slot => slot is not null).ToList();
+                    cell.Occupied = slots.Count(slot => !slot!.IsEmpty);
                     total += cell.Occupied;
+                    empty += slots.Count - cell.Occupied;
                 }
-                el.Summary = total > 0 ? $"{total} 個儲位有貨" : null;
+                el.Summary = (total, empty) switch
+                {
+                    (0, 0) => null,
+                    (_, 0) => $"{total} 個儲位有貨",
+                    (0, _) => $"{empty} 個儲位空",
+                    _ => $"{total} 個儲位有貨、{empty} 個空",
+                };
                 el.Look = total > 0 ? ElementLook.Occupied : ElementLook.Unknown;
                 break;
             }
@@ -506,9 +519,9 @@ public sealed partial class PlaybackViewModel : ObservableObject
         for (int level = cell.Levels; level >= 1; level--)
         {
             var code = StorageCode.Format(_storageRule, rack.Model.Row ?? "", cell.Column, level);
-            string? pallet = code is not null && _state.Storage.TryGetValue(code, out var p) ? p : null;
-            long? cause = pallet is not null ? _state.Pallets[pallet].LocationCause : null;
-            SideView.Add(new RackLevelViewModel(level, code, pallet, cause, Line("", "", cause).CauseText));
+            var slot = code is not null && _state.Storage.TryGetValue(code, out var sl) ? sl : null;
+            long? cause = slot?.Cause;
+            SideView.Add(new RackLevelViewModel(level, code, slot?.Pallet, slot?.IsEmpty == true, cause, Line("", "", cause).CauseText));
         }
     }
 

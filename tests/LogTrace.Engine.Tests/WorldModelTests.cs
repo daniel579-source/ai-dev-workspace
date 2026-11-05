@@ -79,7 +79,7 @@ public sealed class WorldModelTests : IDisposable
 
         w = At("00040001 第2段 抵達 0100302");
         Assert.Equal((LocationKind.Storage, "0100302"), (w.Pallets["PLT-EX-0001"].Location, w.Pallets["PLT-EX-0001"].LocationId));
-        Assert.Equal("PLT-EX-0001", w.Storage["0100302"]);
+        Assert.Equal("PLT-EX-0001", w.Storage["0100302"].Pallet);
         Assert.Equal(CommandStatus.SegmentArrived, w.Commands["00040001"].Status);
 
         w = At("完成回報 00040001");
@@ -107,10 +107,11 @@ public sealed class WorldModelTests : IDisposable
         Assert.True(p.Preexisting);
         Assert.Null(p.Bins); // 桶清單不知道
         Assert.Equal((LocationKind.Storage, "0100501"), (p.Location, p.LocationId));
-        Assert.Equal("PLT-EX-0002", w.Storage["0100501"]);
+        Assert.Equal("PLT-EX-0002", w.Storage["0100501"].Pallet);
 
         w = At("派送 00040002 第1段");
-        Assert.False(w.Storage.ContainsKey("0100501"));
+        Assert.True(w.Storage["0100501"].IsEmpty); // LOG 記載已取出：空，不是未取得資訊
+        Assert.Equal(Seq("派送 00040002 第1段"), w.Storage["0100501"].Cause);
         Assert.Equal(LocationKind.Vehicle, w.Pallets["PLT-EX-0002"].Location);
     }
 

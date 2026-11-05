@@ -94,6 +94,15 @@ public sealed class PalletState
     public PalletState Clone() => (PalletState)MemberwiseClone();
 }
 
+/// <summary>
+/// 儲位的狀態（ADR-0005 第 2 點 2026-11-04 補充）：Pallet 為棧板＝有貨；null＝空（LOG 記載已取出）。
+/// 還沒有與該儲位有關的 LOG 時，儲位不在 WorldState.Storage 中（未取得資訊）。
+/// </summary>
+public sealed record StorageSlotState(string? Pallet, long Cause)
+{
+    public bool IsEmpty => Pallet is null;
+}
+
 /// <summary>命令的狀態（ADR-0005 第 6 點）。</summary>
 public enum CommandStatus
 {
@@ -139,8 +148,8 @@ public sealed class WorldState
     public SortedDictionary<string, AlarmState> Alarms { get; } = new(StringComparer.Ordinal);
     public SortedDictionary<string, PalletState> Pallets { get; } = new(StringComparer.Ordinal);
 
-    /// <summary>儲位編號 → 棧板（逐格記錄，ADR-0005 第 1 點）。</summary>
-    public SortedDictionary<string, string> Storage { get; } = new(StringComparer.Ordinal);
+    /// <summary>儲位編號 → 狀態（逐格記錄，ADR-0005 第 1、2 點）；沒有的儲位＝未取得資訊。</summary>
+    public SortedDictionary<string, StorageSlotState> Storage { get; } = new(StringComparer.Ordinal);
 
     public SortedDictionary<string, CommandState> Commands { get; } = new(StringComparer.Ordinal);
 
@@ -175,7 +184,7 @@ public sealed class WorldState
         foreach (var (k, a) in Alarms) sb.Append($"al {k} {a.Code}@{a.Cause}\n");
         foreach (var (k, p) in Pallets)
             sb.Append($"pl {k} {p.Location}:{p.LocationId}@{p.LocationCause} pre={p.Preexisting} bins={(p.Bins is null ? "?" : string.Join(",", p.Bins))}\n");
-        foreach (var (k, v) in Storage) sb.Append($"sg {k}={v}\n");
+        foreach (var (k, v) in Storage) sb.Append($"sg {k}={v.Pallet ?? "(空)"}@{v.Cause}\n");
         foreach (var (k, c) in Commands)
             sb.Append($"cm {k} {c.Type} {c.Pallet} {c.Source}->{c.Destination} {c.Status}@{c.StatusCause} seg={c.Segment} {c.Vehicle}->{c.SegmentDestination}\n");
         return sb.ToString();

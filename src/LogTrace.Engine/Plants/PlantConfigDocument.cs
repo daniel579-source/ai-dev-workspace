@@ -41,6 +41,9 @@ public sealed class LayoutElement
     public LayoutElementType Type { get; set; }
     public string? Name { get; set; }
 
+    /// <summary>所屬樓層的名稱（ADR-0006 第 13 點）；輸送線不存（畫在兩端的樓層）。null＝第一層。</summary>
+    public string? Floor { get; set; }
+
     /// <summary>別名：只有站點、搬送機、對接設備、防火門有（ADR-0006 第 2 點）。</summary>
     public List<string>? Aliases { get; set; }
 
@@ -180,6 +183,81 @@ public static class LayoutGeometry
     }
 }
 
+/// <summary>樓層在畫布上的區域（公尺）：OffsetX、OffsetY 是該層座標原點在畫布上的位置；名稱標在區域上方。</summary>
+public sealed record FloorRegion(string Floor, double OffsetX, double OffsetY, double Width, double Height);
+
+/// <summary>樓層（ADR-0006 第 13 點）：名稱與順序；每個元素屬於一層，輸送線畫在兩端的樓層。</summary>
+public static class LayoutFloors
+{
+    /// <summary>舊設定檔沒有樓層時的預設樓層。</summary>
+    public const string Default = "1F";
+
+    /// <summary>並排檢視中樓層之間的空白（公尺）。</summary>
+    public const double Gap = 5;
+
+    /// <summary>並排檢視中每層上方標名稱的高度（公尺）。</summary>
+    public const double LabelBand = 1.5;
+
+    /// <summary>樓層名稱的比對：大小寫視為相同（和別名一致）。</summary>
+    public static StringComparer NameComparer => StringComparer.OrdinalIgnoreCase;
+
+    /// <summary>樓層清單；沒有時為只有 1F。</summary>
+    public static IReadOnlyList<string> Of(LayoutSection layout) =>
+        layout.Floors is { Count: > 0 } floors ? floors : [Default];
+
+    /// <summary>
+    /// 元素所在的樓層：輸送線取起點的樓層（沒有起點時取終點）；其他元素取 floor，沒有時為第一層。
+    /// 清單中大小寫不同的名稱以清單中的寫法為準。
+    /// </summary>
+    public static string FloorOf(LayoutElement e, IReadOnlyList<string> floors, Func<string?, LayoutElement?> find)
+    {
+        if (e.Type == LayoutElementType.Conveyor)
+            return find(e.From) is { } a && a.Type != LayoutElementType.Conveyor ? FloorOf(a, floors, find)
+                : find(e.To) is { } b && b.Type != LayoutElementType.Conveyor ? FloorOf(b, floors, find)
+                : floors[0];
+        return Canonical(e.Floor, floors) ?? e.Floor ?? floors[0];
+    }
+
+    /// <summary>清單中與 name 相同（大小寫視為相同）的名稱；沒有時為 null。</summary>
+    public static string? Canonical(string? name, IReadOnlyList<string> floors) =>
+        name is null ? null : floors.FirstOrDefault(f => NameComparer.Equals(f, name.Trim()));
+
+    /// <summary>存檔前補齊：一律寫出樓層清單，每個元素（輸送線除外）都寫出樓層（ADR-0006 第 13 點）。</summary>
+    public static void Normalize(LayoutSection layout)
+    {
+        var floors = Of(layout).ToList();
+        layout.Floors = floors;
+        foreach (var e in layout.Elements)
+            e.Floor = e.Type == LayoutElementType.Conveyor ? null : Canonical(e.Floor, floors) ?? e.Floor ?? floors[0];
+    }
+
+    /// <summary>
+    /// 並排檢視的區域：橫向依樓層順序由左到右；垂直時低樓層在下。樓層之間留 <see cref="Gap"/> 公尺，
+    /// 每層上方留 <see cref="LabelBand"/> 公尺標名稱。sizes 依樓層順序。
+    /// </summary>
+    public static IReadOnlyList<FloorRegion> Arrange(IReadOnlyList<(string Floor, double Width, double Height)> sizes, bool vertical)
+    {
+        var regions = new List<FloorRegion>();
+        double x = 0, y = 0;
+        foreach (var (floor, w, h) in vertical ? sizes.Reverse() : sizes)
+        {
+            regions.Add(new FloorRegion(floor, x, y + LabelBand, w, h));
+            if (vertical) y += LabelBand + h + Gap;
+            else x += w + Gap;
+        }
+        return vertical ? regions.AsEnumerable().Reverse().ToList() : regions;
+    }
+
+    /// <summary>點 (x, y) 所在的區域；落在空白處時取最近的區域。</summary>
+    public static FloorRegion? RegionAt(IReadOnlyList<FloorRegion> regions, double x, double y) =>
+        regions.Count == 0 ? null : regions.MinBy(r =>
+        {
+            double dx = Math.Max(0, Math.Max(r.OffsetX - x, x - (r.OffsetX + r.Width)));
+            double dy = Math.Max(0, Math.Max(r.OffsetY - LabelBand - y, y - (r.OffsetY + r.Height))); // 名稱那一條也算該層
+            return dx * dx + dy * dy;
+        });
+}
+
 /// <summary>Layout 區段（ADR-0006 第 7 點）。</summary>
 public sealed class LayoutSection
 {
@@ -188,6 +266,9 @@ public sealed class LayoutSection
 
     /// <summary>儲位編號的拆解規則，例如 RRCCCLL（排 2 碼、列 3 碼、層 2 碼）。</summary>
     public string? StorageCodeRule { get; set; }
+
+    /// <summary>樓層名稱，順序即樓層順序（ADR-0006 第 13 點）；null 或空＝只有 1F。</summary>
+    public List<string>? Floors { get; set; }
 
     public List<LayoutElement> Elements { get; set; } = [];
 

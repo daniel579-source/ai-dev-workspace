@@ -420,6 +420,31 @@
                                         </TextBlock>
                                     </StackPanel>
                                 </Border>
+                                <!-- 樓層（ADR-0006 第 13 點）：有兩層以上時顯示 -->
+                                <Border DockPanel.Dock="Top" Padding="6,3" BorderBrush="#DDD" BorderThickness="0,0,0,1"
+                                        Visibility="{Binding HasFloors, Converter={StaticResource Visible}}">
+                                    <WrapPanel>
+                                        <TextBlock Text="樓層" VerticalAlignment="Center" Foreground="#555" Margin="0,0,6,0" />
+                                        <ListBox ItemsSource="{Binding Floors}" SelectedItem="{Binding CurrentFloor}" BorderThickness="0" Background="Transparent"
+                                                 AutomationProperties.AutomationId="PlaybackFloorTabs">
+                                            <ListBox.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal" />
+                                                </ItemsPanelTemplate>
+                                            </ListBox.ItemsPanel>
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding}" Padding="8,1" />
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                        <CheckBox Content="並排" IsChecked="{Binding SideBySide}" VerticalAlignment="Center" Margin="16,0,0,0" AutomationProperties.AutomationId="PlaybackSideBySide" />
+                                        <CheckBox Content="垂直排列（低樓層在下）" IsChecked="{Binding Vertical}" IsEnabled="{Binding SideBySide}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                        <CheckBox Content="跟隨切換樓層" IsChecked="{Binding FollowFloor}" VerticalAlignment="Center" Margin="16,0,0,0"
+                                                  ToolTip="從 Layout、設備狀態表、命令或事件跳到某個元素時，切到它所在的樓層（單層檢視）"
+                                                  AutomationProperties.AutomationId="PlaybackFollowFloor" />
+                                    </WrapPanel>
+                                </Border>
                                 <Border DockPanel.Dock="Top" Padding="6,3" BorderBrush="#DDD" BorderThickness="0,0,0,1">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="縮放" VerticalAlignment="Center" Foreground="#555" />
@@ -432,19 +457,40 @@
                                 </Border>
                                 <ScrollViewer x:Name="PlaybackScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#F8FAFC"
                                               PreviewMouseWheel="PlaybackScroll_PreviewMouseWheel">
-                                    <ItemsControl ItemsSource="{Binding Elements}" Margin="8" AutomationProperties.AutomationId="PlaybackLayout">
-                                        <ItemsControl.LayoutTransform>
-                                            <ScaleTransform ScaleX="{Binding Zoom}" ScaleY="{Binding Zoom}" />
-                                        </ItemsControl.LayoutTransform>
+                                    <Grid Margin="8" Background="White" HorizontalAlignment="Left" VerticalAlignment="Top">
+                                    <Grid.LayoutTransform>
+                                        <ScaleTransform ScaleX="{Binding Zoom}" ScaleY="{Binding Zoom}" />
+                                    </Grid.LayoutTransform>
+                                    <!-- 並排檢視的樓層區域與名稱（ADR-0006 第 13 點） -->
+                                    <ItemsControl ItemsSource="{Binding FloorRegions}" IsHitTestVisible="False">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>
-                                                <Canvas Width="{Binding CanvasWidth, Converter={StaticResource Px}}" Height="{Binding CanvasHeight, Converter={StaticResource Px}}" Background="White" />
+                                                <Canvas />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Canvas Visibility="{Binding ShowLabel, Converter={StaticResource Visible}}">
+                                                    <Rectangle Canvas.Left="{Binding Left, Converter={StaticResource Px}}" Canvas.Top="{Binding Top, Converter={StaticResource Px}}"
+                                                               Width="{Binding Width, Converter={StaticResource Px}}" Height="{Binding Height, Converter={StaticResource Px}}"
+                                                               Stroke="#CBD5E1" StrokeThickness="1" />
+                                                    <TextBlock Text="{Binding Floor}" FontWeight="SemiBold" FontSize="14" Foreground="#475569"
+                                                               Canvas.Left="{Binding Left, Converter={StaticResource Px}}" Canvas.Top="{Binding LabelTop, Converter={StaticResource Px}}" />
+                                                </Canvas>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <ItemsControl ItemsSource="{Binding Elements}" AutomationProperties.AutomationId="PlaybackLayout">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <Canvas Width="{Binding CanvasWidth, Converter={StaticResource Px}}" Height="{Binding CanvasHeight, Converter={StaticResource Px}}" />
                                             </ItemsPanelTemplate>
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemContainerStyle>
                                             <Style TargetType="ContentPresenter">
-                                                <Setter Property="Canvas.Left" Value="{Binding X, Converter={StaticResource Px}}" />
-                                                <Setter Property="Canvas.Top" Value="{Binding Y, Converter={StaticResource Px}}" />
+                                                <Setter Property="Canvas.Left" Value="{Binding ViewX, Converter={StaticResource Px}}" />
+                                                <Setter Property="Canvas.Top" Value="{Binding ViewY, Converter={StaticResource Px}}" />
+                                                <Setter Property="Visibility" Value="{Binding IsOnCanvas, Converter={StaticResource Visible}}" />
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsConveyor}" Value="True">
                                                         <Setter Property="Canvas.Left" Value="0" />
@@ -582,6 +628,7 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
+                                    </Grid>
                                 </ScrollViewer>
                             </DockPanel>
                         </ad:LayoutAnchorable>
@@ -741,7 +788,7 @@
                                 <DockPanel DataContext="{Binding Playback}">
                                     <CheckBox DockPanel.Dock="Top" Content="只看異常中或不一致" IsChecked="{Binding OnlyAbnormal}" Margin="6,4"
                                               AutomationProperties.AutomationId="OnlyAbnormal" />
-                                    <ListView ItemsSource="{Binding Equipment}" BorderThickness="0" AutomationProperties.AutomationId="EquipmentTable">
+                                    <ListView ItemsSource="{Binding Equipment}" SelectedItem="{Binding SelectedEquipment}" BorderThickness="0" AutomationProperties.AutomationId="EquipmentTable">
                                         <ListView.ItemContainerStyle>
                                             <Style TargetType="ListViewItem">
                                                 <Style.Triggers>
@@ -765,6 +812,8 @@
                                                                 CommandParameter="{x:Static pb:EquipmentSort.Type}" BorderThickness="0" Background="Transparent" />
                                                     </GridViewColumn.Header>
                                                 </GridViewColumn>
+                                                <!-- ADR-0006 第 13 點：所在樓層 -->
+                                                <GridViewColumn Header="樓層" DisplayMemberBinding="{Binding Floor}" Width="50" />
                                                 <GridViewColumn Width="60">
                                                     <GridViewColumn.Header>
                                                         <Button Content="異常" Command="{Binding DataContext.SortEquipmentCommand, RelativeSource={RelativeSource AncestorType=ListView}}"

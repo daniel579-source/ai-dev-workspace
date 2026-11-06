@@ -28,6 +28,7 @@ public sealed partial class LayoutElementViewModel : ObservableObject
         Id = e.Id;
         Type = e.Type;
         Name = e.Name ?? "";
+        Floor = e.Floor ?? "";
         X = e.X ?? 0;
         Y = e.Y ?? 0;
         W = e.W ?? 0;
@@ -94,13 +95,36 @@ public sealed partial class LayoutElementViewModel : ObservableObject
     [ObservableProperty]
     public partial string Name { get; set; }
 
+    /// <summary>所屬樓層的名稱（ADR-0006 第 13 點）；輸送線不使用（畫在兩端的樓層）。</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CenterX))]
+    public partial string Floor { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CenterX), nameof(ViewX))]
     public partial double X { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CenterY))]
+    [NotifyPropertyChangedFor(nameof(CenterY), nameof(ViewY))]
     public partial double Y { get; set; }
+
+    // 畫面上的位置（由編輯器更新）：並排檢視時加上所在樓層區域的位移；單層檢視時其他樓層的元素不顯示
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ViewX))]
+    public partial double OffsetX { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ViewY))]
+    public partial double OffsetY { get; set; }
+
+    /// <summary>畫布上的左上角（公尺）＝ X ＋ 所在樓層的位移。</summary>
+    public double ViewX => X + OffsetX;
+
+    public double ViewY => Y + OffsetY;
+
+    /// <summary>是否畫在畫布上：單層檢視時只畫目前樓層的元素。</summary>
+    [ObservableProperty]
+    public partial bool IsOnCanvas { get; set; } = true;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CenterX))]
@@ -198,7 +222,7 @@ public sealed partial class LayoutElementViewModel : ObservableObject
         if (IsConveyor)
             return new LayoutElement
             {
-                Id = Id, Type = Type, Name = string.IsNullOrWhiteSpace(Name) ? null : Name, From = From, To = To,
+                Id = Id, Type = Type, Name = string.IsNullOrWhiteSpace(Name) ? null : Name, From = From, To = To, // 輸送線不存樓層
                 Bidirectional = Bidirectional ? true : null, FromPoint = FromPoint, ToPoint = ToPoint, Props = PropsModel(), Extra = _extra,
             };
         return new LayoutElement
@@ -206,6 +230,7 @@ public sealed partial class LayoutElementViewModel : ObservableObject
             Id = Id,
             Type = Type,
             Name = Name,
+            Floor = string.IsNullOrWhiteSpace(Floor) ? null : Floor,
             Aliases = CanHaveAliases ? [.. Aliases] : null,
             X = X,
             Y = Y,

@@ -49,6 +49,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _defaultCasesRoot = defaultCasesRoot;
         _isInOneDrive = isInOneDrive ?? OneDriveDetector.IsInOneDrive;
         _settings = settingsStore.Load();
+        Playback.UseViewSettings(_settings.PlaybackFloorView, view => SaveSettings(_settings with { PlaybackFloorView = view }));
         _library = new CaseLibrary(_settings.CasesRoot ?? defaultCasesRoot);
         _plantsRoot = Path.GetFullPath(_settings.PlantsRoot ?? _defaultPlantsRoot);
         UpdateCasesRoot();
@@ -209,6 +210,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _selectedFields = value is not null && _case is not null ? _case.GetFields(value.Sequence) : [];
         UpdateRawLog(value);
         OnSelectionMovedMoment(value);
+        Playback.FollowEvent(_selectedFields); // 開啟跟隨時切到事件中元素的樓層（ADR-0006 第 13 點）
     }
 
     /// <summary>
@@ -730,7 +732,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>開啟 Layout 編輯器，編輯廠別設定檔（ADR-0006）。</summary>
     [RelayCommand]
-    void OpenLayoutEditor() => _ui.ShowLayoutEditor(new Layout.LayoutEditorViewModel(new PlantConfigLibrary(_plantsRoot), _ui, _library));
+    void OpenLayoutEditor() => _ui.ShowLayoutEditor(new Layout.LayoutEditorViewModel(new PlantConfigLibrary(_plantsRoot), _ui, _library,
+        _settings.EditorFloorView, view => SaveSettings(_settings with { EditorFloorView = view })));
 
     [RelayCommand]
     void BrowseImportFolder()

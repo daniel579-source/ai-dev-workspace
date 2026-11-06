@@ -67,6 +67,12 @@ public sealed record AppSettings
     /// <summary>最近使用的案件資料夾，最近的在前。</summary>
     public IReadOnlyList<string> RecentCases { get; init; } = [];
 
+    /// <summary>Layout 編輯器的樓層檢視（單層／並排、橫向／垂直，ADR-0006 第 13 點）。</summary>
+    public Layout.FloorViewSettings EditorFloorView { get; init; } = new();
+
+    /// <summary>Layout 回放的樓層檢視與跟隨切換樓層（預設關）。</summary>
+    public Layout.FloorViewSettings PlaybackFloorView { get; init; } = new();
+
     public AppSettings WithRecent(string folder) => this with
     {
         RecentCases = [folder, .. RecentCases.Where(f => !string.Equals(f, folder, StringComparison.OrdinalIgnoreCase)).Take(MaxRecentCases - 1)],

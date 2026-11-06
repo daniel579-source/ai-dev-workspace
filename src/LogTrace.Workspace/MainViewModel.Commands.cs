@@ -47,6 +47,9 @@ public sealed partial class MainViewModel
         if (value is null || _case is null) return;
         var seqs = _case.FindSequences([FieldKinds.Command], [value.Id]).ToHashSet();
         foreach (var r in _allRows.Where(r => seqs.Contains(r.Sequence))) CommandEvents.Add(r);
+        // 選取目前時刻執行這個命令的搬送機（沒有時不選）；開啟跟隨時切換到它的樓層（ADR-0006 第 13 點）
+        if (Playback.State.Commands.TryGetValue(value.Id, out var c) && !c.IsFinished && c.Vehicle is { } vehicle)
+            Playback.SelectElementById(vehicle);
     }
 
     /// <summary>點命令的一筆事件：跳到該事件的時刻（被篩選掉時改為顯示全部）。</summary>

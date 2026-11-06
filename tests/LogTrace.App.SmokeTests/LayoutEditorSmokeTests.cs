@@ -161,6 +161,52 @@ public sealed class LayoutEditorSmokeTests : IDisposable
     }
 
     [Fact]
+    public void 樓層_新增樓層與元素_切換並排_存檔後寫出樓層()
+    {
+        var dataRoot = Path.Combine(_tmp.Path, "AppData");
+        using var app = FlaUI.Core.Application.Launch(new ProcessStartInfo(ImportSmokeTests.AppExe(), $"--data-root \"{dataRoot}\""));
+        using var automation = new UIA3Automation();
+        try
+        {
+            var main = app.GetMainWindow(automation, TimeSpan.FromSeconds(30));
+            Assert.NotNull(main);
+            var cf = main.ConditionFactory;
+            var desktop = automation.GetDesktop();
+            AutomationElement In(AutomationElement root, string id) =>
+                Retry.WhileNull(() => root.FindFirstDescendant(cf.ByAutomationId(id)), TimeSpan.FromSeconds(10)).Result
+                ?? throw new InvalidOperationException($"找不到 {id}");
+            In(main, "OpenLayoutEditor").AsButton().Invoke();
+            var editor = Retry.WhileNull(
+                () => main.FindFirstChild(cf.ByAutomationId("LayoutEditor")) ?? desktop.FindFirstChild(cf.ByAutomationId("LayoutEditor")),
+                TimeSpan.FromSeconds(10)).Result ?? throw new InvalidOperationException("找不到 Layout 編輯器視窗");
+
+            In(editor, "PlantName").AsTextBox().Text = "樓層測試廠";
+            In(editor, "Add_Station").AsButton().Invoke(); // 1F
+            In(editor, "AddFloor").AsButton().Invoke();
+            In(editor, "Add_Station").AsButton().Invoke(); // 2F
+            Assert.Equal("2F", In(editor, "ElementFloor").AsComboBox().SelectedItem?.Text);
+            In(editor, "EditorSideBySide").AsCheckBox().IsChecked = true;
+            In(editor, "EditorVertical").AsCheckBox().IsChecked = true;
+            // 並排時兩層的元素都畫在畫布上（元素清單與畫布各一個名稱）
+            Assert.True(Retry.WhileFalse(() => editor.FindAllDescendants(cf.ByName("新站點 1")).Length >= 2, TimeSpan.FromSeconds(5)).Result);
+            Assert.True(editor.FindAllDescendants(cf.ByName("新站點 2")).Length >= 2);
+            In(editor, "SaveConfig").AsButton().Invoke();
+            Assert.True(Retry.WhileFalse(() => In(editor, "EditorStatus").Name.Contains("修訂 1"), TimeSpan.FromSeconds(10)).Result,
+                In(editor, "EditorStatus").Name);
+
+            var json = File.ReadAllText(Path.Combine(dataRoot, "Plants", "樓層測試廠.json"));
+            Assert.Contains("\"floors\": [", json);
+            Assert.Contains("\"floor\": \"2F\"", json);
+            editor.AsWindow().Close();
+        }
+        finally
+        {
+            app.Close();
+            if (!app.HasExited) app.Kill();
+        }
+    }
+
+    [Fact]
     public void 沒有LOG的門檻_從下拉選單選擇模組_存檔後重新開啟仍在()
     {
         var dataRoot = Path.Combine(_tmp.Path, "AppData");

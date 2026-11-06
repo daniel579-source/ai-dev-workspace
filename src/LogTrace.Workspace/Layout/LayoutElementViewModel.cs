@@ -47,6 +47,9 @@ public sealed partial class LayoutElementViewModel : ObservableObject
         Aliases = new ObservableCollection<string>(e.Aliases ?? []);
         Props = new ObservableCollection<PropertyItemViewModel>((e.Props ?? []).Select(p => new PropertyItemViewModel(p.Key, p.Value)));
         Aliases.CollectionChanged += (_, _) => OnPropertyChanged(nameof(AliasesText));
+        DoorState = e.DoorState;
+        Conveyors = new ObservableCollection<string>(e.Conveyors ?? []);
+        Conveyors.CollectionChanged += (_, _) => OnPropertyChanged(nameof(Conveyors));
         _extra = e.Extra;
     }
 
@@ -65,6 +68,28 @@ public sealed partial class LayoutElementViewModel : ObservableObject
     public bool IsRack => Type == LayoutElementType.Rack;
     public bool IsConveyor => Type == LayoutElementType.Conveyor;
     public bool HasGeometry => !IsConveyor;
+    public bool IsFireDoor => Type == LayoutElementType.FireDoor;
+
+    /// <summary>防火門的平時狀態（編輯器手動設定）；null＝不設定。回放時還沒有 LOG 事件就以它為推估。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DoorStateText), nameof(DoorStateIndex))]
+    public partial DoorState? DoorState { get; set; }
+
+    /// <summary>屬性面板下拉選單的位置：0＝不設定、1＝開、2＝關（<see cref="DoorStates.Choices"/> 的順序）。</summary>
+    public int DoorStateIndex
+    {
+        get => DoorStates.Choices.ToList().IndexOf(DoorState);
+        set
+        {
+            if (value >= 0 && value < DoorStates.Choices.Count) DoorState = DoorStates.Choices[value];
+        }
+    }
+
+    /// <summary>畫布上顯示的平時狀態；不是防火門或沒有設定時為 null。</summary>
+    public string? DoorStateText => IsFireDoor && DoorState is not null ? "平時" + DoorStates.Text(DoorState) : null;
+
+    /// <summary>防火門關聯的輸送線 id（穿過這扇門的輸送線）。</summary>
+    public ObservableCollection<string> Conveyors { get; }
 
     [ObservableProperty]
     public partial string Name { get; set; }
@@ -193,6 +218,8 @@ public sealed partial class LayoutElementViewModel : ObservableObject
             ColTo = IsRack ? ColTo : null,
             Levels = IsRack ? Levels : null,
             LevelHeight = IsRack ? LevelHeight : null,
+            DoorState = IsFireDoor ? DoorState : null,
+            Conveyors = IsFireDoor && Conveyors.Count > 0 ? [.. Conveyors] : null,
             Props = PropsModel(),
             Extra = _extra,
         };
@@ -208,7 +235,7 @@ public static class LayoutElementTypes
     public static IReadOnlyList<LayoutElementType> Addable { get; } =
     [
         LayoutElementType.Station, LayoutElementType.Rack, LayoutElementType.Vehicle, LayoutElementType.Dock,
-        LayoutElementType.Conveyor, LayoutElementType.Area, LayoutElementType.Label,
+        LayoutElementType.FireDoor, LayoutElementType.Conveyor, LayoutElementType.Area, LayoutElementType.Label,
     ];
 
     /// <summary>
@@ -260,6 +287,7 @@ public static class LayoutElementTypes
         LayoutElementType.Rack => "料架",
         LayoutElementType.Vehicle => "搬送機",
         LayoutElementType.Dock => "對接設備",
+        LayoutElementType.FireDoor => "防火門",
         LayoutElementType.Conveyor => "輸送線",
         LayoutElementType.Area => "區域",
         LayoutElementType.Label => "文字",
@@ -272,6 +300,7 @@ public static class LayoutElementTypes
         LayoutElementType.Rack => "rk",
         LayoutElementType.Vehicle => "vh",
         LayoutElementType.Dock => "eq",
+        LayoutElementType.FireDoor => "fd",
         LayoutElementType.Conveyor => "cv",
         LayoutElementType.Area => "ar",
         LayoutElementType.Label => "tx",
@@ -285,8 +314,23 @@ public static class LayoutElementTypes
         LayoutElementType.Rack => (12, 1.5, 0),
         LayoutElementType.Vehicle => (2.5, 1.2, 2),
         LayoutElementType.Dock => (2, 2, 1.5),
+        LayoutElementType.FireDoor => (2, 0.5, 3),
         LayoutElementType.Area => (6, 4, 0),
         LayoutElementType.Label => (3, 1, 0),
         _ => (0, 0, 0),
+    };
+}
+
+/// <summary>防火門平時狀態的選項與文字。</summary>
+public static class DoorStates
+{
+    /// <summary>編輯器的選項：不設定、開、關。</summary>
+    public static IReadOnlyList<DoorState?> Choices { get; } = [null, Engine.Plants.DoorState.Open, Engine.Plants.DoorState.Closed];
+
+    public static string Text(DoorState? state) => state switch
+    {
+        Engine.Plants.DoorState.Open => "開",
+        Engine.Plants.DoorState.Closed => "關",
+        _ => "不設定",
     };
 }

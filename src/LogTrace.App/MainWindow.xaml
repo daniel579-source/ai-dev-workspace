@@ -390,6 +390,8 @@
                                             <Border Background="#BFDBFE" BorderBrush="#9CA3AF" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="有貨" Margin="0,0,10,0" Foreground="#555" />
                                             <Border Background="#FDE68A" BorderBrush="#9CA3AF" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="搬送機執行中" Margin="0,0,10,0" Foreground="#555" />
                                             <Border Background="#FEE2E2" BorderBrush="#DC2626" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="異常中" Margin="0,0,10,0" Foreground="#555" />
+                                            <Border Background="#DCFCE7" BorderBrush="#16A34A" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="防火門開" Margin="0,0,10,0" Foreground="#555" />
+                                            <Border Background="#FECACA" BorderBrush="#B91C1C" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="防火門關（虛線框＝推估）" Margin="0,0,10,0" Foreground="#555" />
                                             <TextBlock Text="●在席 ON　○OFF　◌未知　⚠ 不一致" Foreground="#555" />
                                         </WrapPanel>
                                         <TextBlock Text="{Binding Message}" Foreground="#B45309" TextWrapping="Wrap" Margin="0,3,0,0" AutomationProperties.AutomationId="PlaybackMessage">
@@ -459,7 +461,7 @@
                                                 <Grid>
                                                     <Line X1="{Binding LineX1, Converter={StaticResource Px}}" Y1="{Binding LineY1, Converter={StaticResource Px}}"
                                                           X2="{Binding LineX2, Converter={StaticResource Px}}" Y2="{Binding LineY2, Converter={StaticResource Px}}"
-                                                          Stroke="#94A3B8" StrokeThickness="3" StrokeDashArray="3 2" IsHitTestVisible="False"
+                                                          x:Name="ConveyorLine" Stroke="#94A3B8" StrokeThickness="3" StrokeDashArray="3 2" IsHitTestVisible="False"
                                                           Visibility="{Binding IsConveyor, Converter={StaticResource Visible}}" />
                                                     <Border x:Name="Shape" Tag="{Binding}" Cursor="Hand" MouseLeftButtonUp="PlaybackElement_Click"
                                                             Width="{Binding W, Converter={StaticResource Px}}" Height="{Binding H, Converter={StaticResource Px}}"
@@ -523,7 +525,10 @@
                                                                 </TextBlock.Style>
                                                             </TextBlock>
                                                             <TextBlock x:Name="Warn" Text="⚠" Foreground="#B45309" FontSize="12" HorizontalAlignment="Left" VerticalAlignment="Top"
-                                                                       Margin="3,0,0,0" Visibility="Collapsed" IsHitTestVisible="False" ToolTip="不一致：命令與在席訊號矛盾" />
+                                                                       Margin="3,0,0,0" Visibility="Collapsed" IsHitTestVisible="False" ToolTip="{Binding InconsistentText}" />
+                                                            <!-- 防火門的推估狀態（還沒有 LOG 事件，用平時狀態）：虛線框 -->
+                                                            <Rectangle Stroke="#334155" StrokeThickness="1.5" StrokeDashArray="3 2" IsHitTestVisible="False"
+                                                                       Visibility="{Binding IsEstimated, Converter={StaticResource Visible}}" />
                                                         </Grid>
                                                     </Border>
                                                 </Grid>
@@ -545,6 +550,22 @@
                                                     <DataTrigger Binding="{Binding Look}" Value="Auxiliary">
                                                         <Setter TargetName="Shape" Property="Background" Value="#0F94A3B8" />
                                                         <Setter TargetName="Shape" Property="BorderBrush" Value="#CBD5E1" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Look}" Value="DoorOpen">
+                                                        <Setter TargetName="Shape" Property="Background" Value="#DCFCE7" />
+                                                        <Setter TargetName="Shape" Property="BorderBrush" Value="#16A34A" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Look}" Value="DoorClosed">
+                                                        <Setter TargetName="Shape" Property="Background" Value="#FECACA" />
+                                                        <Setter TargetName="Shape" Property="BorderBrush" Value="#B91C1C" />
+                                                    </DataTrigger>
+                                                    <!-- 輸送線被關著的防火門阻斷：紅色實線；只有推估的門時為紅色虛線 -->
+                                                    <DataTrigger Binding="{Binding IsBlocked}" Value="True">
+                                                        <Setter TargetName="ConveyorLine" Property="Stroke" Value="#DC2626" />
+                                                        <Setter TargetName="ConveyorLine" Property="StrokeDashArray" Value="{x:Null}" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsBlockedEstimated}" Value="True">
+                                                        <Setter TargetName="ConveyorLine" Property="StrokeDashArray" Value="2 2" />
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding Type}" Value="Label">
                                                         <Setter TargetName="Shape" Property="Background" Value="Transparent" />

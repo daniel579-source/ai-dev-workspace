@@ -23,6 +23,10 @@ public enum ElementLook
     Alarm,
     /// <summary>輔助元素（區域、文字、輸送線），不推導狀態。</summary>
     Auxiliary,
+    /// <summary>防火門開（LOG 確定或推估；推估時 IsEstimated）。</summary>
+    DoorOpen,
+    /// <summary>防火門關（LOG 確定或推估；推估時 IsEstimated）。</summary>
+    DoorClosed,
 }
 
 /// <summary>設備狀態表的排序欄位。</summary>
@@ -34,7 +38,7 @@ public enum EquipmentSort
     Abnormal,
 }
 
-/// <summary>設備狀態表的一列（ADR-0008 第 6 點）：站點、搬送機、對接設備在目前時刻的狀態。</summary>
+/// <summary>設備狀態表的一列（ADR-0008 第 6 點）：站點、搬送機、對接設備、防火門在目前時刻的狀態。</summary>
 /// <param name="IsAbnormal">異常中（有未復歸的警報）或不一致。</param>
 public sealed record EquipmentRowViewModel(string Id, string Name, string TypeLabel, string Aliases, string State, bool IsAbnormal, ElementLook Look);
 
@@ -89,6 +93,7 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     public string Aliases => string.Join("・", Model.Aliases ?? []);
     public bool IsConveyor => Type == LayoutElementType.Conveyor;
     public bool IsRack => Type == LayoutElementType.Rack;
+    public bool IsFireDoor => Type == LayoutElementType.FireDoor;
     public bool HasGeometry => !IsConveyor;
     public bool IsAuxiliary => Type is LayoutElementType.Conveyor or LayoutElementType.Area or LayoutElementType.Label;
 
@@ -118,9 +123,25 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     [ObservableProperty]
     public partial string? StatusBadge { get; set; }
 
-    /// <summary>命令與在席訊號矛盾（ADR-0005 第 3 點）。</summary>
+    /// <summary>命令與在席訊號矛盾（ADR-0005 第 3 點），或貨物在這一筆事件穿過關著的防火門。</summary>
     [ObservableProperty]
     public partial bool IsInconsistent { get; set; }
+
+    /// <summary>不一致的說明（滑鼠停留時顯示）。</summary>
+    [ObservableProperty]
+    public partial string? InconsistentText { get; set; }
+
+    /// <summary>防火門的狀態是推估（還沒有 LOG 事件，用 Layout 的平時狀態）；畫面以虛線框表示。</summary>
+    [ObservableProperty]
+    public partial bool IsEstimated { get; set; }
+
+    /// <summary>輸送線被關著的防火門阻斷（含推估）。</summary>
+    [ObservableProperty]
+    public partial bool IsBlocked { get; set; }
+
+    /// <summary>輸送線的阻斷只來自推估的防火門狀態。</summary>
+    [ObservableProperty]
+    public partial bool IsBlockedEstimated { get; set; }
 
     /// <summary>元素上的簡短狀態（例如棧板編號、搬送機的命令）。</summary>
     [ObservableProperty]
@@ -252,6 +273,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
             ? "案件開始（所有元素都是未知）"
             : $"{e.Timestamp:yyyy-MM-dd HH:mm:ss.ffff}　事件 #{sequence}";
         foreach (var el in Elements) Update(el);
+        UpdateConveyorBlocks();
         UpdateDetail();
         UpdateSideView();
         UpdateEquipment();
@@ -277,6 +299,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
                 el.PresenceLight = s?.Presence switch { true => "●", false => "○", null => "◌" };
                 el.StatusBadge = s?.Status is { Length: > 0 } status && status != NormalStationStatus ? status[..1] : null;
                 el.IsInconsistent = w.IsInconsistent(el.Id);
+                el.InconsistentText = el.IsInconsistent ? "不一致：命令與在席訊號矛盾" : null;
                 el.Summary = pallets.Count > 0 ? string.Join("、", pallets) : null;
                 el.Look = w.Alarms.ContainsKey(el.Id) ? ElementLook.Alarm
                     : pallets.Count > 0 ? ElementLook.Occupied
@@ -298,6 +321,17 @@ public sealed partial class PlaybackViewModel : ObservableObject
                 var delivered = w.PalletsAt(LocationKind.Delivered, el.Id).Count();
                 el.Summary = delivered > 0 ? $"已交出 {delivered}" : null;
                 el.Look = w.Alarms.ContainsKey(el.Id) ? ElementLook.Alarm : delivered > 0 ? ElementLook.Empty : ElementLook.Unknown;
+                break;
+            }
+            case LayoutElementType.FireDoor:
+            {
+                var (state, _, estimated) = DoorStateOf(el);
+                el.IsEstimated = estimated;
+                el.Summary = state is null ? null : (estimated ? "推估：" : "") + DoorStates.Text(state);
+                el.Look = state switch { DoorState.Open => ElementLook.DoorOpen, DoorState.Closed => ElementLook.DoorClosed, _ => ElementLook.Unknown };
+                var crossing = CrossingNow(el.Id);
+                el.IsInconsistent = crossing is not null;
+                el.InconsistentText = crossing is null ? null : $"不一致：防火門關著，但棧板 {crossing.Pallet} 經過「{NameOf(crossing.Conveyor)}」移動";
                 break;
             }
             case LayoutElementType.Rack:
@@ -326,6 +360,36 @@ public sealed partial class PlaybackViewModel : ObservableObject
     }
 
     Dictionary<string, string> _stationModeNames = [];
+
+    /// <summary>
+    /// 防火門在目前時刻的狀態：LOG 事件確定的優先；沒有 LOG 事件時用 Layout 的平時狀態（推估）；都沒有時為 null（未取得資訊）。
+    /// </summary>
+    (DoorState? State, long? Cause, bool Estimated) DoorStateOf(PlaybackElementViewModel door) =>
+        _state.Doors.TryGetValue(door.Id, out var d) && d.State is { } s ? (s, d.StateCause, false)
+        : door.Model.DoorState is { } usual ? (usual, null, true)
+        : (null, null, false);
+
+    /// <summary>貨物在目前這一筆事件穿過關著的防火門（只在那一筆事件的時刻標示）。</summary>
+    DoorCrossing? CrossingNow(string doorId) =>
+        _state.Doors.TryGetValue(doorId, out var d) && d.LastCrossing is { } c && c.Cause == _state.Sequence && _state.Sequence > 0 ? c : null;
+
+    /// <summary>輸送線的阻斷：關聯到關著的防火門（含推估）時畫成阻斷；只有推估的門時標為推估。</summary>
+    void UpdateConveyorBlocks()
+    {
+        var blocked = new Dictionary<string, bool>(StringComparer.Ordinal); // 輸送線 id → 是否只有推估
+        foreach (var door in Elements.Where(e => e.IsFireDoor))
+        {
+            var (state, _, estimated) = DoorStateOf(door);
+            if (state != DoorState.Closed) continue;
+            foreach (var c in door.Model.Conveyors ?? [])
+                blocked[c] = blocked.TryGetValue(c, out var onlyEstimated) ? onlyEstimated && estimated : estimated;
+        }
+        foreach (var c in Elements.Where(e => e.IsConveyor))
+        {
+            c.IsBlocked = blocked.TryGetValue(c.Id, out var onlyEstimated);
+            c.IsBlockedEstimated = c.IsBlocked && onlyEstimated;
+        }
+    }
 
     /// <summary>運轉狀態的正常值：不是這個值時在 Layout 上加小標記（以文字比對，ADR-0005 第 3 點）。</summary>
     public const string NormalStationStatus = "自動";
@@ -377,6 +441,18 @@ public sealed partial class PlaybackViewModel : ObservableObject
                     Detail.Add(Line("已交出", PalletText(p), p.LocationCause));
                 if (Detail.Count == 0) Detail.Add(Line("已交出", "無", null));
                 break;
+            case LayoutElementType.FireDoor:
+            {
+                var (state, cause, estimated) = DoorStateOf(el);
+                Detail.Add(Line("狀態", state is null ? "未取得資訊"
+                    : estimated ? $"{DoorStates.Text(state)}（推估：Layout 的平時狀態，還沒有 LOG 事件）"
+                    : DoorStates.Text(state), cause));
+                var conveyors = (el.Model.Conveyors ?? []).Select(NameOf).ToList();
+                Detail.Add(Line("關聯的輸送線", conveyors.Count > 0 ? string.Join("、", conveyors) : "無", null));
+                if (CrossingNow(el.Id) is { } crossing)
+                    Detail.Add(Line("不一致", $"防火門關著，但棧板 {crossing.Pallet} 經過「{NameOf(crossing.Conveyor)}」移動（不判斷哪一邊才對）", crossing.Cause));
+                break;
+            }
             case LayoutElementType.Rack:
                 Detail.Add(Line("料架", $"排 {el.Model.Row}，列 {el.Model.ColFrom}～{el.Model.ColTo}，{el.Model.Levels} 層；點一列看側視圖", null));
                 break;
@@ -412,7 +488,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
 
     // ---- 設備狀態表（ADR-0008 第 6 點） ----
 
-    /// <summary>站點、搬送機、對接設備在目前時刻的狀態；與 Layout 面板使用同一份世界狀態。</summary>
+    /// <summary>站點、搬送機、對接設備、防火門在目前時刻的狀態；與 Layout 面板使用同一份世界狀態。</summary>
     public ObservableCollection<EquipmentRowViewModel> Equipment { get; } = [];
 
     /// <summary>只看異常中或不一致的設備。</summary>
@@ -438,7 +514,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
 
     void UpdateEquipment()
     {
-        var rows = Elements.Where(e => e.Type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Dock)
+        var rows = Elements.Where(e => e.Type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Dock or LayoutElementType.FireDoor)
             .Select(e => new EquipmentRowViewModel(e.Id, e.Name, e.TypeLabel, e.Aliases, EquipmentState(e), _state.Alarms.ContainsKey(e.Id) || e.IsInconsistent, e.Look))
             .Where(r => !OnlyAbnormal || r.IsAbnormal);
         Func<EquipmentRowViewModel, string> key = SortBy switch
@@ -485,6 +561,11 @@ public sealed partial class PlaybackViewModel : ObservableObject
             case LayoutElementType.Dock:
                 var delivered = w.PalletsAt(LocationKind.Delivered, e.Id).Count();
                 parts.Add(delivered > 0 ? $"已交出 {delivered}" : "未交出");
+                break;
+            case LayoutElementType.FireDoor:
+                var (state, _, estimated) = DoorStateOf(e);
+                parts.Add(state is null ? "未取得資訊" : (estimated ? "推估 " : "") + DoorStates.Text(state));
+                if (e.IsInconsistent) parts.Add("不一致");
                 break;
         }
         return string.Join("；", parts);

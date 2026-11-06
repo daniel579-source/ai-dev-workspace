@@ -61,6 +61,19 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     /// <summary>輸送線兩端可以選的元素（站點、對接設備、搬送機），依 <see cref="LayoutElementTypes.ListOrder"/> 排序。</summary>
     public ObservableCollection<LayoutElementViewModel> ConveyorEndpoints { get; } = [];
 
+    /// <summary>防火門可以關聯的輸送線，依 <see cref="LayoutElementTypes.ListOrder"/> 排序。</summary>
+    public ObservableCollection<LayoutElementViewModel> ConveyorChoices { get; } = [];
+
+    /// <summary>選取的防火門目前關聯的輸送線（屬性面板顯示）；沒有選取防火門時為空。</summary>
+    public ObservableCollection<LayoutElementViewModel> SelectedDoorConveyors { get; } = [];
+
+    /// <summary>防火門的平時狀態選項的文字（與 <see cref="LayoutElementViewModel.DoorStateIndex"/> 對應）。</summary>
+    public IReadOnlyList<string> DoorStateChoices { get; } = DoorStates.Choices.Select(DoorStates.Text).ToList();
+
+    /// <summary>屬性面板中選擇、準備加入防火門的輸送線。</summary>
+    [ObservableProperty]
+    public partial LayoutElementViewModel? NewDoorConveyor { get; set; }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Title))]
     public partial string? FilePath { get; private set; }
@@ -178,6 +191,12 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         if (_selecting) return;
         foreach (var e in Elements) e.IsSelected = e == newValue;
         OnSelectionChanged();
+    }
+
+    void RefreshDoorConveyors()
+    {
+        var ids = SelectedElement is { IsFireDoor: true } door ? door.Conveyors : [];
+        SyncOrder(SelectedDoorConveyors, ids.Select(id => Elements.FirstOrDefault(e => e.Id == id && e.IsConveyor)).OfType<LayoutElementViewModel>().ToList());
     }
 
     partial void OnPlantNameChanged(string value) => IsDirty = true;
@@ -355,7 +374,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             or nameof(LayoutElementViewModel.LineX2) or nameof(LayoutElementViewModel.LineY2)
             or nameof(LayoutElementViewModel.CenterX) or nameof(LayoutElementViewModel.CenterY)
             or nameof(LayoutElementViewModel.HasFromPoint) or nameof(LayoutElementViewModel.HasToPoint)
-            or nameof(LayoutElementViewModel.TransferPointsText))
+            or nameof(LayoutElementViewModel.TransferPointsText) or nameof(LayoutElementViewModel.DoorStateText) or nameof(LayoutElementViewModel.DoorStateIndex))
             return;
         IsDirty = true;
         _suppressUndo++; // 連帶的變更（交接點、線端）和這次修改算同一步
@@ -369,7 +388,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         {
             _suppressUndo--;
         }
-        if (sender is LayoutElementViewModel changed) Commit($"{changed.Id}.{e.PropertyName}");
+        // 防火門的關聯每次加入或移除各算一步；其他欄位連續輸入合併成一步
+        if (sender is LayoutElementViewModel changed) Commit(e.PropertyName == nameof(LayoutElementViewModel.Conveyors) ? null : $"{changed.Id}.{e.PropertyName}");
     }
 
     void RefreshAfterChange(string? propertyName)
@@ -381,6 +401,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             if (propertyName is nameof(LayoutElementViewModel.Name)) RefreshElementList();
             RefreshEndpoints();
         }
+        else if (propertyName is nameof(LayoutElementViewModel.Conveyors))
+            RefreshDoorConveyors();
         else if (propertyName is nameof(LayoutElementViewModel.Rotation))
             RefreshCanvasSize();
     }
@@ -425,6 +447,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         }
         RefreshCanvasSize();
         SyncOrder(ConveyorEndpoints, Elements.Where(e => LayoutElement.CanBeConveyorEnd(e.Type)).Order(LayoutElementTypes.ListOrder).ToList());
+        SyncOrder(ConveyorChoices, Elements.Where(e => e.IsConveyor).Order(LayoutElementTypes.ListOrder).ToList());
+        RefreshDoorConveyors();
     }
 
     void RefreshElementList() => SyncOrder(ElementList, Elements.Order(LayoutElementTypes.ListOrder).ToList());
@@ -508,6 +532,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         var ids = selected.Where(e => e.HasGeometry).Select(e => e.Id).ToHashSet();
         var removed = Elements.Where(x => x.IsSelected || (x.IsConveyor && (ids.Contains(x.From ?? "") || ids.Contains(x.To ?? "")))).ToList();
         SetSelection([]);
+        var removedIds = removed.Select(x => x.Id).ToHashSet();
         Batch(() =>
         {
             foreach (var x in removed)
@@ -515,6 +540,9 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
                 Detach(x);
                 Elements.Remove(x);
             }
+            // 刪除的輸送線也從防火門的關聯中移除
+            foreach (var door in Elements.Where(x => x.IsFireDoor))
+                foreach (var id in door.Conveyors.Where(removedIds.Contains).ToList()) door.Conveyors.Remove(id);
         });
         IsDirty = true;
         var extra = removed.Count - selected.Count;
@@ -554,6 +582,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
 
     void OnSelectionChanged()
     {
+        RefreshDoorConveyors();
+        NewDoorConveyor = null;
         _lastEditKey = null; // 換了選取後的修改另算一步
         OnPropertyChanged(nameof(SelectionCount));
         OnPropertyChanged(nameof(SelectionHint));
@@ -634,8 +664,17 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
                 if (c.From is { } f && map.TryGetValue(f, out var nf)) (c.From, c.FromPoint) = (nf, Shift(c.FromPoint));
                 if (c.To is { } t && map.TryGetValue(t, out var nt)) (c.To, c.ToPoint) = (nt, Shift(c.ToPoint));
                 if (Find(c.From) is null || Find(c.To) is null) continue; // 原本的元素已經刪除
-                c.Id = NextId(LayoutElementType.Conveyor);
+                var oldId = c.Id;
+                map[oldId] = c.Id = NextId(LayoutElementType.Conveyor);
                 added.Add(AttachNew(c));
+            }
+            // 防火門：一起貼上的輸送線改成新的 id，其他保留原本的 id（已經刪除的輸送線移除）
+            foreach (var door in added.Where(e => e.IsFireDoor))
+            {
+                var ids = door.Conveyors.Select(id => map.TryGetValue(id, out var n) ? n : id)
+                    .Where(id => Elements.Any(e => e.Id == id && e.IsConveyor)).Distinct().ToList();
+                door.Conveyors.Clear();
+                foreach (var id in ids) door.Conveyors.Add(id);
             }
         });
         IsDirty = true;
@@ -819,6 +858,45 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         if (SelectedElement is { HasGeometry: true } e) e.Rotation = (e.Rotation + 90) % 360;
     }
 
+    // ---- 防火門（ADR-0006 第 1 點 2026-11-06 補充） ----
+
+    /// <summary>把屬性面板選擇的輸送線加入選取的防火門。</summary>
+    [RelayCommand]
+    void AddDoorConveyor()
+    {
+        if (SelectedElement is not { IsFireDoor: true } door || NewDoorConveyor is not { IsConveyor: true } c) return;
+        if (door.Conveyors.Contains(c.Id))
+        {
+            Status = $"「{door.Name}」已經關聯「{c.Name}」。";
+            return;
+        }
+        door.Conveyors.Add(c.Id);
+        NewDoorConveyor = null;
+        Status = $"已把「{c.Name}」關聯到「{door.Name}」。";
+    }
+
+    [RelayCommand]
+    void RemoveDoorConveyor(LayoutElementViewModel? conveyor)
+    {
+        if (SelectedElement is { IsFireDoor: true } door && conveyor is not null && door.Conveyors.Remove(conveyor.Id))
+            Status = $"已移除「{door.Name}」與「{conveyor.Name}」的關聯。";
+    }
+
+    /// <summary>依位置帶入：線段碰到防火門範圍的輸送線加入關聯（已經關聯的不重複）。</summary>
+    [RelayCommand]
+    void SuggestDoorConveyors()
+    {
+        if (SelectedElement is not { IsFireDoor: true } door) return;
+        var bounds = LayoutGeometry.Bounds(door.X, door.Y, door.W, door.H, door.Rotation);
+        var hits = Elements.Where(e => e.IsConveyor && !door.Conveyors.Contains(e.Id)
+            && LayoutGeometry.SegmentTouchesRect(e.LineX1, e.LineY1, e.LineX2, e.LineY2, bounds)).ToList();
+        Batch(() =>
+        {
+            foreach (var c in hits) door.Conveyors.Add(c.Id);
+        });
+        Status = hits.Count == 0 ? $"沒有其他輸送線穿過「{door.Name}」。" : $"已依位置帶入 {hits.Count} 條輸送線：{string.Join("、", hits.Select(h => h.Name))}。";
+    }
+
     // ---- 別名與自訂屬性 ----
 
     /// <summary>目前擁有這個別名的元素（大小寫視為相同，ADR-0006 第 2 點）。</summary>
@@ -838,7 +916,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         if (alias.Length == 0) return false;
         if (!e.CanHaveAliases)
         {
-            Status = $"「{e.TypeLabel}」不能加別名；只有站點、搬送機、對接設備可以。";
+            Status = $"「{e.TypeLabel}」不能加別名；只有站點、搬送機、對接設備、防火門可以。";
             return false;
         }
         var owner = AliasOwner(alias);

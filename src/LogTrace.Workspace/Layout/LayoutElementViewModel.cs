@@ -49,6 +49,9 @@ public sealed partial class LayoutElementViewModel : ObservableObject
         Props = new ObservableCollection<PropertyItemViewModel>((e.Props ?? []).Select(p => new PropertyItemViewModel(p.Key, p.Value)));
         Aliases.CollectionChanged += (_, _) => OnPropertyChanged(nameof(AliasesText));
         DoorState = e.DoorState;
+        RailPoints = e.Points ?? [];
+        Closed = e.Closed == true;
+        Rail = e.Rail;
         Conveyors = new ObservableCollection<string>(e.Conveyors ?? []);
         Conveyors.CollectionChanged += (_, _) => OnPropertyChanged(nameof(Conveyors));
         _extra = e.Extra;
@@ -68,8 +71,34 @@ public sealed partial class LayoutElementViewModel : ObservableObject
     public bool CanHaveAliases => LayoutElement.CanHaveAliases(Type);
     public bool IsRack => Type == LayoutElementType.Rack;
     public bool IsConveyor => Type == LayoutElementType.Conveyor;
-    public bool HasGeometry => !IsConveyor;
+    /// <summary>有位置與尺寸（x、y、w、h、rotation）的元素；輸送線與導軌沒有。</summary>
+    public bool HasGeometry => !IsConveyor && !IsRail;
     public bool IsFireDoor => Type == LayoutElementType.FireDoor;
+    public bool IsRail => Type == LayoutElementType.Rail;
+    public bool IsVehicle => Type == LayoutElementType.Vehicle;
+
+    // ---- 導軌（ADR-0006 第 14 點） ----
+
+    /// <summary>導軌的點與各段的凸度（樓層座標，公尺）；每次修改整個換掉。</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<RailPoint> RailPoints { get; set; }
+
+    /// <summary>導軌是否頭尾相接。</summary>
+    [ObservableProperty]
+    public partial bool Closed { get; set; }
+
+    /// <summary>搬送機所走的導軌 id；沒有時為 null。</summary>
+    [ObservableProperty]
+    public partial string? Rail { get; set; }
+
+    /// <summary>導軌在畫面上的路徑（WPF 路徑語法，公尺，含樓層位移；由編輯器更新）。</summary>
+    [ObservableProperty]
+    public partial string? RailPathData { get; set; }
+
+    /// <summary>選取導軌時畫出的把手（點與每段的中點，畫面上的公尺；由編輯器更新）。</summary>
+    public System.Collections.ObjectModel.ObservableCollection<RailHandleViewModel> RailHandles { get; } = [];
+
+    public RailPath Path() => new(RailPoints, Closed);
 
     /// <summary>防火門的平時狀態（編輯器手動設定）；null＝不設定。回放時還沒有 LOG 事件就以它為推估。</summary>
     [ObservableProperty]
@@ -219,6 +248,12 @@ public sealed partial class LayoutElementViewModel : ObservableObject
 
     public LayoutElement ToModel()
     {
+        if (IsRail)
+            return new LayoutElement
+            {
+                Id = Id, Type = Type, Name = Name, Floor = string.IsNullOrWhiteSpace(Floor) ? null : Floor,
+                Points = [.. RailPoints], Closed = Closed ? true : null, Props = PropsModel(), Extra = _extra,
+            };
         if (IsConveyor)
             return new LayoutElement
             {
@@ -244,6 +279,7 @@ public sealed partial class LayoutElementViewModel : ObservableObject
             Levels = IsRack ? Levels : null,
             LevelHeight = IsRack ? LevelHeight : null,
             DoorState = IsFireDoor ? DoorState : null,
+            Rail = IsVehicle && !string.IsNullOrEmpty(Rail) ? Rail : null,
             Conveyors = IsFireDoor && Conveyors.Count > 0 ? [.. Conveyors] : null,
             Props = PropsModel(),
             Extra = _extra,
@@ -260,7 +296,7 @@ public static class LayoutElementTypes
     public static IReadOnlyList<LayoutElementType> Addable { get; } =
     [
         LayoutElementType.Station, LayoutElementType.Rack, LayoutElementType.Vehicle, LayoutElementType.Dock,
-        LayoutElementType.FireDoor, LayoutElementType.Conveyor, LayoutElementType.Area, LayoutElementType.Label,
+        LayoutElementType.FireDoor, LayoutElementType.Conveyor, LayoutElementType.Rail, LayoutElementType.Area, LayoutElementType.Label,
     ];
 
     /// <summary>
@@ -313,6 +349,7 @@ public static class LayoutElementTypes
         LayoutElementType.Vehicle => "搬送機",
         LayoutElementType.Dock => "對接設備",
         LayoutElementType.FireDoor => "防火門",
+        LayoutElementType.Rail => "導軌",
         LayoutElementType.Conveyor => "輸送線",
         LayoutElementType.Area => "區域",
         LayoutElementType.Label => "文字",
@@ -326,6 +363,7 @@ public static class LayoutElementTypes
         LayoutElementType.Vehicle => "vh",
         LayoutElementType.Dock => "eq",
         LayoutElementType.FireDoor => "fd",
+        LayoutElementType.Rail => "rl",
         LayoutElementType.Conveyor => "cv",
         LayoutElementType.Area => "ar",
         LayoutElementType.Label => "tx",
@@ -358,4 +396,17 @@ public static class DoorStates
         Engine.Plants.DoorState.Closed => "關",
         _ => "不設定",
     };
+}
+
+/// <summary>導軌的把手：點（拖曳移動那一點）或某一段的中點（拖曳調整彎度）。座標是畫面上的公尺。</summary>
+public sealed partial class RailHandleViewModel(LayoutElementViewModel rail, bool isPoint, int index, double x, double y) : ObservableObject
+{
+    public LayoutElementViewModel Rail { get; } = rail;
+    public bool IsPoint { get; } = isPoint;
+    public int Index { get; } = index;
+    public double X { get; } = x;
+    public double Y { get; } = y;
+
+    [ObservableProperty]
+    public partial bool IsSelected { get; set; }
 }

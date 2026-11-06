@@ -22,6 +22,8 @@ public enum LayoutElementType
     Label,
     /// <summary>防火門（有 LOG 意義，可以有別名）：開或關；可以關聯穿過它的輸送線（ADR-0006 第 1 點 2026-11-06 補充）。</summary>
     FireDoor,
+    /// <summary>導軌（輔助）：搬送機行走的路徑，由直線與弧線組成，可以閉合（ADR-0006 第 14 點）。</summary>
+    Rail,
 }
 
 /// <summary>防火門的開關狀態。JSON 中以小寫英文字串保存（open、closed）。</summary>
@@ -81,6 +83,16 @@ public sealed class LayoutElement
 
     /// <summary>穿過這扇防火門的輸送線 id；門關上時這些輸送線畫成阻斷。</summary>
     public List<string>? Conveyors { get; set; }
+
+    // 導軌（ADR-0006 第 14 點）：點與各段的凸度；不存 x、y、w、h、rotation
+
+    public List<RailPoint>? Points { get; set; }
+
+    /// <summary>頭尾相接（最後一點接回第一點）；null（不寫出）表示不閉合。</summary>
+    public bool? Closed { get; set; }
+
+    /// <summary>搬送機所走的導軌 id（ADR-0006 第 14 點）。</summary>
+    public string? Rail { get; set; }
 
     /// <summary>自訂屬性（ADR-0006 第 6 點）：鍵＝值，值一律是文字；保持輸入順序。</summary>
     public List<KeyValuePair<string, string>>? Props { get; set; }
@@ -173,6 +185,12 @@ public static class LayoutGeometry
 
     static IEnumerable<(double, double)> Extents(LayoutElement e)
     {
+        if (e.Type == LayoutElementType.Rail)
+        {
+            var (_, _, r, b) = RailPath.Of(e).Bounds();
+            yield return (r, b);
+            yield break;
+        }
         if (e.X is { } x && e.Y is { } y)
         {
             var (_, _, r, b) = Bounds(x, y, e.W ?? 0, e.H ?? 0, e.Rotation ?? 0);
@@ -285,15 +303,16 @@ public sealed class PlantConfigDocument
 {
     /// <summary>
     /// 程式能讀寫的格式版本。2：輸送線的 bidirectional 與交接點（#63）。3：防火門（舊版程式不認得 fireDoor 這個種類）。
-    /// 存檔時只寫實際用到的最低版本，讓舊版程式照常開啟（ADR-0006 第 7 點）。
+    /// 4：導軌（#100，舊版程式不認得 rail 這個種類）。存檔時只寫實際用到的最低版本，讓舊版程式照常開啟（ADR-0006 第 7 點）。
     /// </summary>
-    public const int CurrentFormatVersion = 3;
+    public const int CurrentFormatVersion = 4;
 
     /// <summary>
-    /// 這份設定需要的格式版本：有防火門時為 3；有雙向或連到搬送機（有交接點）的輸送線時為 2；否則為 1。
+    /// 這份設定需要的格式版本：有導軌時為 4；有防火門時為 3；有雙向或連到搬送機（有交接點）的輸送線時為 2；否則為 1。
     /// </summary>
     public int RequiredFormatVersion() =>
-        Layout.Elements.Any(e => e.Type == LayoutElementType.FireDoor) ? 3
+        Layout.Elements.Any(e => e.Type == LayoutElementType.Rail) ? 4
+        : Layout.Elements.Any(e => e.Type == LayoutElementType.FireDoor) ? 3
         : Layout.Elements.Any(e => e.Type == LayoutElementType.Conveyor && (e.Bidirectional == true || e.FromPoint is not null || e.ToPoint is not null)) ? 2 : 1;
 
     public int FormatVersion { get; set; } = CurrentFormatVersion;

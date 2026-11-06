@@ -226,6 +226,21 @@ public static class PlantConfigFile
                 else if (!LayoutFloors.NameComparer.Equals(LayoutFloors.FloorOf(from, floors, _ => null), LayoutFloors.FloorOf(to, floors, _ => null)))
                     issues.Add(new($"輸送線「{Label(e)}」的兩端不在同一層；跨樓層的搬送請用電梯。", [e.Id, from.Id, to.Id]));
             }
+            if (e.Type == LayoutElementType.Rail)
+            {
+                if ((e.Points?.Count ?? 0) < 2)
+                    issues.Add(new($"導軌「{Label(e)}」至少要有 2 個點。", [e.Id]));
+                if (e.Points?.Any(p => Math.Abs(p.Bulge) > RailPath.MaxBulge) == true)
+                    issues.Add(new($"導軌「{Label(e)}」有超過半圓的弧（凸度必須在 -1～1 之間）。", [e.Id]));
+            }
+            if (e.Rail is { } railId)
+            {
+                var rail = elements.FirstOrDefault(x => x.Id == railId && x.Type == LayoutElementType.Rail);
+                if (rail is null)
+                    issues.Add(new($"「{Label(e)}」指定的導軌「{railId}」不存在。", [e.Id]));
+                else if (!LayoutFloors.NameComparer.Equals(LayoutFloors.FloorOf(e, floors, _ => null), LayoutFloors.FloorOf(rail, floors, _ => null)))
+                    issues.Add(new($"「{Label(e)}」和它的導軌「{Label(rail)}」不在同一層。", [e.Id, rail.Id]));
+            }
             if (e.Type == LayoutElementType.FireDoor)
             {
                 foreach (var id in e.Conveyors ?? [])

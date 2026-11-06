@@ -33,15 +33,16 @@ public sealed class LayoutEditorViewModelTests : IDisposable
         {
             var e = Add(type);
             Assert.Equal(type, e.Type);
-            Assert.True(e.W > 0 && e.H > 0);
+            if (type == LayoutElementType.Rail) Assert.Equal(2, e.RailPoints.Count); // 導軌沒有寬深：直線範本（ADR-0006 第 14 點）
+            else Assert.True(e.W > 0 && e.H > 0);
         }
         var conveyor = Add(LayoutElementType.Conveyor); // 已有站點、搬送機與對接設備，可以加輸送線
 
         Assert.Equal(LayoutElementType.Conveyor, conveyor.Type);
         Assert.Equal(["st-1", "vh-1"], new[] { conveyor.From!, conveyor.To! });
         Assert.NotNull(conveyor.ToPoint); // 連到搬送機的那一端有交接點
-        Assert.Equal(8, _vm.Elements.Count);
-        Assert.Equal(8, _vm.Elements.Select(e => e.Id).Distinct().Count());
+        Assert.Equal(9, _vm.Elements.Count);
+        Assert.Equal(9, _vm.Elements.Select(e => e.Id).Distinct().Count());
         Assert.True(_vm.IsDirty);
     }
 

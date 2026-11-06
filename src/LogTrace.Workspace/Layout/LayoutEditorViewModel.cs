@@ -383,7 +383,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             or nameof(LayoutElementViewModel.HasFromPoint) or nameof(LayoutElementViewModel.HasToPoint)
             or nameof(LayoutElementViewModel.TransferPointsText) or nameof(LayoutElementViewModel.DoorStateText) or nameof(LayoutElementViewModel.DoorStateIndex)
             or nameof(LayoutElementViewModel.OffsetX) or nameof(LayoutElementViewModel.OffsetY) or nameof(LayoutElementViewModel.ViewX)
-            or nameof(LayoutElementViewModel.ViewY) or nameof(LayoutElementViewModel.IsOnCanvas))
+            or nameof(LayoutElementViewModel.ViewY) or nameof(LayoutElementViewModel.IsOnCanvas) or nameof(LayoutElementViewModel.RailPathData))
             return;
         IsDirty = true;
         _suppressUndo++; // 連帶的變更（交接點、線端）和這次修改算同一步
@@ -406,7 +406,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         if (propertyName is nameof(LayoutElementViewModel.X) or nameof(LayoutElementViewModel.Y) or nameof(LayoutElementViewModel.W)
             or nameof(LayoutElementViewModel.H) or nameof(LayoutElementViewModel.From) or nameof(LayoutElementViewModel.To)
             or nameof(LayoutElementViewModel.Name) or nameof(LayoutElementViewModel.FromPoint) or nameof(LayoutElementViewModel.ToPoint)
-            or nameof(LayoutElementViewModel.Floor))
+            or nameof(LayoutElementViewModel.Floor) or nameof(LayoutElementViewModel.RailPoints) or nameof(LayoutElementViewModel.Closed))
         {
             if (propertyName is nameof(LayoutElementViewModel.Name)) RefreshElementList();
             RefreshEndpoints();
@@ -477,6 +477,11 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     [RelayCommand]
     void AddElement(LayoutElementType type)
     {
+        if (type == LayoutElementType.Rail)
+        {
+            AddRail(loop: false); // 直線範本（ADR-0006 第 14 點）
+            return;
+        }
         var id = NextId(type);
         LayoutElement model;
         if (type == LayoutElementType.Conveyor)
@@ -501,7 +506,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         {
             var (w, h, height) = LayoutElementTypes.DefaultSize(type);
             // 放在現有元素的下方，避免疊在一起
-            var top = SnapTo(Elements.Where(e => e.HasGeometry && SameFloor(FloorOf(e), CurrentFloor)).Select(e => e.Y + e.H).DefaultIfEmpty(0).Max() + 1);
+            var top = SnapTo(Elements.Where(e => !e.IsConveyor && SameFloor(FloorOf(e), CurrentFloor)).Select(e => BoundsOf(e).Bottom).DefaultIfEmpty(0).Max() + 1);
             model = new LayoutElement
             {
                 Id = id, Type = type, Name = $"新{LayoutElementTypes.Label(type)} {id[(id.IndexOf('-') + 1)..]}",
@@ -532,6 +537,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         var removed = Elements.Where(x => x.IsSelected || (x.IsConveyor && (ids.Contains(x.From ?? "") || ids.Contains(x.To ?? "")))).ToList();
         SetSelection([]);
         var removedIds = removed.Select(x => x.Id).ToHashSet();
+        int clearedVehicles = 0;
         Batch(() =>
         {
             foreach (var x in removed)
@@ -542,11 +548,13 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             // 刪除的輸送線也從防火門的關聯中移除
             foreach (var door in Elements.Where(x => x.IsFireDoor))
                 foreach (var id in door.Conveyors.Where(removedIds.Contains).ToList()) door.Conveyors.Remove(id);
+            clearedVehicles = ClearRailsOf(removedIds); // 刪除的導軌：指定它的搬送機清除指定（ADR-0006 第 14 點）
         });
         IsDirty = true;
         var extra = removed.Count - selected.Count;
         var what = selected.Count == 1 ? $"「{selected[0].Name}」" : $" {selected.Count} 個元素";
-        Status = extra > 0 ? $"已刪除{what}與連到的 {extra} 條輸送線。" : $"已刪除{what}。";
+        Status = (extra > 0 ? $"已刪除{what}與連到的 {extra} 條輸送線。" : $"已刪除{what}。")
+            + (clearedVehicles > 0 ? $" {clearedVehicles} 台搬送機的導軌指定已清除。" : "");
     }
 
     // ---- 選取（ADR-0006 第 10 點）：IsSelected 標示所有選取的元素；只選一個時 SelectedElement 為它，屬性面板才顯示 ----
@@ -581,6 +589,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
 
     void OnSelectionChanged()
     {
+        (SelectedRailPoint, SelectedRailSegment) = (null, null);
+        RefreshRails();
         RefreshDoorConveyors();
         NewDoorConveyor = null;
         _lastEditKey = null; // 換了選取後的修改另算一步
@@ -601,7 +611,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     public void SelectInRect(double x1, double y1, double x2, double y2, bool add)
     {
         var rect = (Math.Min(x1, x2), Math.Min(y1, y2), Math.Max(x1, x2), Math.Max(y1, y2));
-        var hits = Elements.Where(e => e.IsOnCanvas).Where(e => e.HasGeometry
+        var hits = Elements.Where(e => e.IsOnCanvas).Where(e => e.IsRail ? e.Path().TouchesRect(rect, e.OffsetX, e.OffsetY)
+            : e.HasGeometry
             ? LayoutGeometry.RectsTouch(LayoutGeometry.Bounds(e.ViewX, e.ViewY, e.W, e.H, e.Rotation), rect)
             : LayoutGeometry.SegmentTouchesRect(e.LineX1, e.LineY1, e.LineX2, e.LineY2, rect)).ToList();
         SetSelection(add ? Selection.Concat(hits) : hits);
@@ -619,7 +630,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(HasAnySelection))]
     void Copy()
     {
-        var shapes = Selection.Where(e => e.HasGeometry).ToList();
+        var shapes = Selection.Where(e => e.HasGeometry || e.IsRail).ToList();
         var ids = shapes.Select(e => e.Id).ToHashSet();
         var conveyors = Elements.Where(e => e.IsConveyor && (e.IsSelected || ids.Contains(e.From ?? "") || ids.Contains(e.To ?? ""))).ToList();
         _clipboard = PlantConfigFile.SerializeElements(shapes.Concat(conveyors).Select(e => e.ToModel()));
@@ -648,7 +659,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             var region = RegionAt(vx, vy);
             floor = region.Floor;
             var (px, py) = (vx - region.OffsetX, vy - region.OffsetY);
-            var bounds = shapes.Select(e => LayoutGeometry.Bounds(e.X ?? 0, e.Y ?? 0, e.W ?? 0, e.H ?? 0, e.Rotation ?? 0)).ToList();
+            var bounds = shapes.Select(BoundsOf).ToList();
             dx = Math.Max(0, SnapTo(px)) - bounds.Min(b => b.Left);
             dy = Math.Max(0, SnapTo(py)) - bounds.Min(b => b.Top);
         }
@@ -661,6 +672,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             {
                 map[e.Id] = e.Id = NextId(e.Type);
                 (e.X, e.Y, e.Floor) = (e.X + dx, e.Y + dy, floor);
+                if (e.Points is { } pts) e.Points = RailPath.Shift(pts, dx, dy);
+                e.Rail = null; // 貼上的搬送機清除導軌指定（使用者決定）
                 added.Add(AttachNew(e));
             }
             foreach (var c in items.Where(e => e.Type == LayoutElementType.Conveyor))
@@ -717,7 +730,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     /// </summary>
     void Commit(string? key)
     {
-        if (_suppressUndo > 0 || _drag is not null || _pointDrag is not null) return;
+        if (_suppressUndo > 0 || _drag is not null || _pointDrag is not null || IsHandleDragging) return;
         var now = Snapshot();
         if (now == _undoBaseline) return;
         if (key is null || key != _lastEditKey)
@@ -799,6 +812,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         if (!element.IsSelected) SelectedElement = element;
         IReadOnlyList<LayoutElementViewModel> group = SelectionCount > 1 ? Selection : [element];
         _drag = group.Where(e => e.HasGeometry).Select(e => (e, e.X, e.Y, e.W, e.H)).ToList();
+        _railDrag = group.Where(e => e.IsRail).Select(e => (e, e.RailPoints)).ToList();
         _dragPrimary = element;
     }
 
@@ -808,14 +822,17 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     /// </summary>
     public void DragMoveBy(double dx, double dy)
     {
-        if (_drag is not { Count: > 0 } group) return;
-        dx = Math.Max(dx, -group.Min(d => d.X + d.Element.OffsetX));
-        dy = Math.Max(dy, -group.Min(d => d.Y + d.Element.OffsetY));
+        if (_drag is not { } group || _railDrag is not { } rails || group.Count + rails.Count == 0) return;
+        var lefts = group.Select(d => d.X + d.Element.OffsetX).Concat(rails.Select(r => new RailPath(r.Points, r.Rail.Closed).Bounds().Left + r.Rail.OffsetX));
+        var tops = group.Select(d => d.Y + d.Element.OffsetY).Concat(rails.Select(r => new RailPath(r.Points, r.Rail.Closed).Bounds().Top + r.Rail.OffsetY));
+        dx = Math.Max(dx, -lefts.Min());
+        dy = Math.Max(dy, -tops.Min());
         foreach (var d in group)
         {
             d.Element.X = Math.Max(-d.Element.OffsetX, SnapTo(d.X + dx));
             d.Element.Y = Math.Max(-d.Element.OffsetY, SnapTo(d.Y + dy));
         }
+        foreach (var (rail, points) in rails) rail.RailPoints = RailPath.Shift(points, SnapTo(dx), SnapTo(dy)); // 整條平移
     }
 
     /// <summary>
@@ -837,9 +854,13 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     public void EndDrag()
     {
         var group = _drag;
+        var rails = _railDrag;
         _drag = null;
+        _railDrag = null;
         _dragPrimary = null;
         _pointDrag = null;
+        _railHandleDrag = null;
+        if (rails is { Count: > 0 }) EndRailDrag(rails.Select(r => r.Rail).ToList());
         if (group is { Count: > 0 })
         {
             // 先以拖曳時的區域算好每個元素的目的地，再一起套用（套用時區域會重算）
@@ -894,6 +915,11 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanEditSelection))]
     void SetRotation(int angle)
     {
+        if (SelectedElement is { IsRail: true } rail)
+        {
+            RotateRail(rail); // 導軌沒有角度：每按一次順時針轉 90 度
+            return;
+        }
         if (SelectedElement is not { HasGeometry: true } e) return;
         if (!Rotations.Contains(angle))
         {
@@ -907,7 +933,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanEditSelection))]
     void RotateClockwise()
     {
-        if (SelectedElement is { HasGeometry: true } e) e.Rotation = (e.Rotation + 90) % 360;
+        if (SelectedElement is { IsRail: true } rail) RotateRail(rail);
+        else if (SelectedElement is { HasGeometry: true } e) e.Rotation = (e.Rotation + 90) % 360;
     }
 
     // ---- 防火門（ADR-0006 第 1 點 2026-11-06 補充） ----

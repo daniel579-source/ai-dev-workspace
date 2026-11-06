@@ -97,8 +97,12 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     public bool IsConveyor => Type == LayoutElementType.Conveyor;
     public bool IsRack => Type == LayoutElementType.Rack;
     public bool IsFireDoor => Type == LayoutElementType.FireDoor;
-    public bool HasGeometry => !IsConveyor;
-    public bool IsAuxiliary => Type is LayoutElementType.Conveyor or LayoutElementType.Area or LayoutElementType.Label;
+    public bool IsRail => Type == LayoutElementType.Rail;
+    public bool HasGeometry => !IsConveyor && !IsRail;
+    public bool IsAuxiliary => Type is LayoutElementType.Conveyor or LayoutElementType.Area or LayoutElementType.Label or LayoutElementType.Rail;
+
+    /// <summary>導軌的路徑（WPF 路徑語法，公尺，含樓層位移，ADR-0006 第 14 點）；不是導軌時為 null。</summary>
+    public string? RailPathData => IsRail ? RailPath.Of(Model).ToPathData(OffsetX, OffsetY) : null;
 
     public double X { get; }
     public double Y { get; }
@@ -114,11 +118,11 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     // 畫面上的位置：並排檢視時加上所在樓層區域的位移；單層檢視時其他樓層的元素不顯示（ADR-0006 第 13 點）
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ViewX), nameof(LineX1), nameof(LineX2))]
+    [NotifyPropertyChangedFor(nameof(ViewX), nameof(LineX1), nameof(LineX2), nameof(RailPathData))]
     public partial double OffsetX { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ViewY), nameof(LineY1), nameof(LineY2))]
+    [NotifyPropertyChangedFor(nameof(ViewY), nameof(LineY1), nameof(LineY2), nameof(RailPathData))]
     public partial double OffsetY { get; set; }
 
     [ObservableProperty]

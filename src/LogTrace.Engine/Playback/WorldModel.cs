@@ -82,6 +82,12 @@ public sealed class WorldModel
     /// <summary>案件結束時（所有事件之後）的狀態。</summary>
     public WorldState Final { get; }
 
+    /// <summary>依事件序號排列的效果（搬送機沿導軌移動等推估使用，ADR-0005 第 10 點）。</summary>
+    public IReadOnlyList<EventEffect> Effects => _effects;
+
+    /// <summary>儲位編號的拆解規則。</summary>
+    public string? StorageRule => _storageRule;
+
     public int SnapshotCount => _snapshots.Count;
 
     /// <summary>會改變狀態的事件序號（依時間）。</summary>

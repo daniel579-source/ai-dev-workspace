@@ -121,6 +121,13 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ViewX), nameof(LineX1), nameof(LineX2), nameof(RailPathData))]
     public partial double OffsetX { get; set; }
 
+    /// <summary>
+    /// 沿導軌移動的搬送機在目前時刻的位置與依據（ADR-0005 第 10 點）；其他元素為 null（畫在 Layout 上放的位置）。
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ViewX), nameof(ViewY))]
+    public partial VehiclePlacement? Placement { get; set; }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ViewY), nameof(LineY1), nameof(LineY2), nameof(RailPathData))]
     public partial double OffsetY { get; set; }
@@ -128,8 +135,9 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsOnCanvas { get; set; } = true;
 
-    public double ViewX => X + OffsetX;
-    public double ViewY => Y + OffsetY;
+    /// <summary>畫面上的左上角：沿導軌移動時以位置（中心）換算，否則為 Layout 上放的位置；再加上樓層的位移。</summary>
+    public double ViewX => (Placement is { } p ? p.X - W / 2 : X) + OffsetX;
+    public double ViewY => (Placement is { } p ? p.Y - H / 2 : Y) + OffsetY;
     public double LineX1 => _lineX1 + OffsetX;
     public double LineY1 => _lineY1 + OffsetY;
     public double LineX2 => _lineX2 + OffsetX;
@@ -186,6 +194,7 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
 public sealed partial class PlaybackViewModel : ObservableObject
 {
     WorldModel? _model;
+    VehicleMotion? _motion;
 
     /// <summary>世界模型；沒有 Layout 時為 null。</summary>
     public WorldModel? Model => _model;
@@ -283,6 +292,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
         _stationModeNames = (stationModeNames ?? []).GroupBy(p => p.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Value, StringComparer.Ordinal);
         _storageRule = layout.StorageCodeRule;
         _events = events.ToDictionary(e => e.Sequence);
+        _motion = new VehicleMotion(model.Effects, layout, seq => _events.TryGetValue(seq, out var ev) ? ev.Timestamp : null);
         var byId = layout.Elements.GroupBy(e => e.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
         LoadFloors(layout);
         Elements.Clear();
@@ -293,11 +303,15 @@ public sealed partial class PlaybackViewModel : ObservableObject
         SetMoment(0);
     }
 
-    /// <summary>目前時刻：事件序號 sequence（含）之前的所有事件套用後的狀態。</summary>
-    public void SetMoment(long sequence)
+    /// <summary>
+    /// 目前時刻：事件序號 sequence（含）之前的所有事件套用後的狀態。time 是目前時刻的時間（播放時可能落在兩筆事件之間），
+    /// 用來內插搬送機在導軌上的位置；null 時用該事件的時間。
+    /// </summary>
+    public void SetMoment(long sequence, DateTime? time = null)
     {
         if (_model is null) return;
         _state = _model.StateAt(sequence);
+        _momentTime = time ?? (_events.TryGetValue(sequence, out var at) ? at.Timestamp : null);
         MomentText = sequence == 0 || !_events.TryGetValue(sequence, out var e)
             ? "案件開始（所有元素都是未知）"
             : $"{e.Timestamp:yyyy-MM-dd HH:mm:ss.ffff}　事件 #{sequence}";
@@ -339,6 +353,8 @@ public sealed partial class PlaybackViewModel : ObservableObject
             case LayoutElementType.Vehicle:
             {
                 w.Vehicles.TryGetValue(el.Id, out var v);
+                el.Placement = _motion?.PlacementAt(el.Id, w.Sequence, _momentTime);
+                el.IsEstimated = el.Placement?.IsEstimated == true; // 推估的位置以虛線框表示
                 var load = w.PalletsAt(LocationKind.Vehicle, el.Id).Select(p => p.Id).ToList();
                 el.Summary = v?.Work == VehicleWork.Executing ? $"{v.Command} → {v.Destination}" : load.Count > 0 ? string.Join("、", load) : null;
                 el.Look = w.Alarms.ContainsKey(el.Id) ? ElementLook.Alarm
@@ -390,6 +406,18 @@ public sealed partial class PlaybackViewModel : ObservableObject
     }
 
     Dictionary<string, string> _stationModeNames = [];
+    DateTime? _momentTime;
+
+    /// <summary>搬送機位置依據的文字（ADR-0005 第 10 點）。</summary>
+    public static string PlacementText(VehiclePositionBasis basis) => basis switch
+    {
+        VehiclePositionBasis.Estimated => "推估（派送到抵達之間依時間比例內插，不是實際位置）",
+        VehiclePositionBasis.Arrived => "依 LOG：已抵達（位置為目的地在導軌上的投影）",
+        VehiclePositionBasis.WaitingArrival => "執行中，抵達時間未知（停在起點）",
+        VehiclePositionBasis.FinishedNoLocation => "作業完成，地點未記錄（停在起點）",
+        VehiclePositionBasis.Cancelled => "命令取消（停在起點）",
+        _ => "位置未取得資訊（畫在 Layout 上放的位置）",
+    };
 
     /// <summary>
     /// 防火門在目前時刻的狀態：LOG 事件確定的優先；沒有 LOG 事件時用 Layout 的平時狀態（推估）；都沒有時為 null（未取得資訊）。
@@ -465,6 +493,11 @@ public sealed partial class PlaybackViewModel : ObservableObject
                 }, v?.WorkCause));
                 foreach (var p in w.PalletsAt(LocationKind.Vehicle, el.Id))
                     Detail.Add(Line("載著", PalletText(p), p.LocationCause));
+                if (el.Placement is { } pl)
+                {
+                    Detail.Add(Line("位置", PlacementText(pl.Basis), pl.ArrivalCause ?? pl.DispatchCause));
+                    if (pl.DispatchCause is { } d && pl.ArrivalCause is not null) Detail.Add(Line("派送", "這一段的派送", d));
+                }
                 break;
             }
             case LayoutElementType.Dock:

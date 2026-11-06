@@ -70,7 +70,7 @@ public sealed partial class MainViewModel
     {
         CurrentTime = time;
         _momentSequence = sequence;
-        Playback.SetMoment(sequence);
+        Playback.SetMoment(sequence, time); // 時間用來內插搬送機在導軌上的位置（ADR-0005 第 10 點）
         Timeline.SetCurrent(time);
         var gaps = Timeline.GapsAt(time);
         GapNotice = gaps.Count == 0 ? null

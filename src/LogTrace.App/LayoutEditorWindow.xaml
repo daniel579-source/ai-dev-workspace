@@ -10,6 +10,7 @@
         <local:ElementTypeLabelConverter x:Key="TypeLabel" />
         <local:FileNameConverter x:Key="FileName" />
         <local:RailGeometryConverter x:Key="RailGeometry" />
+        <local:CollapsedWhenTrueConverter x:Key="Collapsed" />
         <BooleanToVisibilityConverter x:Key="Visible" />
         <!-- 輸送線起點、終點選單的項目：類型＋名稱（和元素清單一樣） -->
         <DataTemplate x:Key="EndpointItem">
@@ -27,6 +28,129 @@
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Margin" Value="0,1" />
         </Style>
+        <!-- 元素的畫法：元素本身與電梯在其他樓層的分身共用（ADR-0006 第 15 點） -->
+        <DataTemplate x:Key="EditorElementTemplate">
+            <Grid>
+                <!-- 輸送線：表示貨物流向；連到搬送機的那一端畫到交接點，以橘點拖曳調整 -->
+                <Line X1="{Binding LineX1, Converter={StaticResource Px}}" Y1="{Binding LineY1, Converter={StaticResource Px}}"
+                      X2="{Binding LineX2, Converter={StaticResource Px}}" Y2="{Binding LineY2, Converter={StaticResource Px}}"
+                      Stroke="#94A3B8" StrokeThickness="3" StrokeDashArray="3 2" Tag="{Binding}"
+                      Visibility="{Binding IsConveyor, Converter={StaticResource Visible}}" />
+                <Canvas Visibility="{Binding IsConveyor, Converter={StaticResource Visible}}">
+                    <Ellipse Tag="fromPoint" Width="10" Height="10" Fill="#F59E0B" Stroke="White" Cursor="SizeAll"
+                             Canvas.Left="{Binding LineX1, Converter={StaticResource Px}}" Canvas.Top="{Binding LineY1, Converter={StaticResource Px}}"
+                             Visibility="{Binding HasFromPoint, Converter={StaticResource Visible}}"
+                             AutomationProperties.AutomationId="{Binding Id, StringFormat=FromPoint_{0}}">
+                        <Ellipse.RenderTransform><TranslateTransform X="-5" Y="-5" /></Ellipse.RenderTransform>
+                    </Ellipse>
+                    <Ellipse Tag="toPoint" Width="10" Height="10" Fill="#F59E0B" Stroke="White" Cursor="SizeAll"
+                             Canvas.Left="{Binding LineX2, Converter={StaticResource Px}}" Canvas.Top="{Binding LineY2, Converter={StaticResource Px}}"
+                             Visibility="{Binding HasToPoint, Converter={StaticResource Visible}}"
+                             AutomationProperties.AutomationId="{Binding Id, StringFormat=ToPoint_{0}}">
+                        <Ellipse.RenderTransform><TranslateTransform X="-5" Y="-5" /></Ellipse.RenderTransform>
+                    </Ellipse>
+                </Canvas>
+                <!-- 導軌（ADR-0006 第 14 點）：拖曳線條整條移動，雙擊插入點；選取時畫出點（方）與中點（圓）的把手 -->
+                <Path x:Name="RailLine" Data="{Binding RailPathData, Converter={StaticResource RailGeometry}}" Tag="{Binding}" Cursor="SizeAll"
+                      Stroke="#64748B" StrokeThickness="5" StrokeLineJoin="Round" Visibility="{Binding IsRail, Converter={StaticResource Visible}}"
+                      AutomationProperties.AutomationId="{Binding Id, StringFormat=Rail_{0}}" />
+                <ItemsControl ItemsSource="{Binding RailHandles}" Visibility="{Binding IsRail, Converter={StaticResource Visible}}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Setter Property="Canvas.Left" Value="{Binding X, Converter={StaticResource Px}}" />
+                            <Setter Property="Canvas.Top" Value="{Binding Y, Converter={StaticResource Px}}" />
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Rectangle x:Name="Handle" Tag="railHandle" Width="10" Height="10" Fill="#F59E0B" Stroke="White" Cursor="SizeAll">
+                                <Rectangle.RenderTransform><TranslateTransform X="-5" Y="-5" /></Rectangle.RenderTransform>
+                            </Rectangle>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsPoint}" Value="False">
+                                    <Setter TargetName="Handle" Property="RadiusX" Value="5" />
+                                    <Setter TargetName="Handle" Property="RadiusY" Value="5" />
+                                    <Setter TargetName="Handle" Property="Fill" Value="#FDE68A" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                    <Setter TargetName="Handle" Property="Stroke" Value="#2563EB" />
+                                    <Setter TargetName="Handle" Property="StrokeThickness" Value="2" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Border x:Name="Shape" Tag="{Binding}" Cursor="SizeAll"
+                        Width="{Binding W, Converter={StaticResource Px}}" Height="{Binding H, Converter={StaticResource Px}}"
+                        BorderBrush="#475569" BorderThickness="1" Background="#E2E8F0"
+                        RenderTransformOrigin="0.5,0.5"
+                        Visibility="{Binding HasGeometry, Converter={StaticResource Visible}}"
+                        AutomationProperties.AutomationId="{Binding Id, StringFormat=Element_{0}}">
+                    <Border.RenderTransform>
+                        <RotateTransform Angle="{Binding Rotation}" />
+                    </Border.RenderTransform>
+                    <Grid>
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False">
+                            <TextBlock Text="{Binding Name}" FontSize="11" TextAlignment="Center" />
+                            <TextBlock Text="{Binding AliasesText}" FontSize="10" Foreground="#2A6CB0" TextAlignment="Center" />
+                            <TextBlock Text="{Binding DoorStateText}" FontSize="10" Foreground="#9F1239" TextAlignment="Center" />
+                        </StackPanel>
+                        <!-- 拖右下角的方塊調整大小 -->
+                        <Rectangle x:Name="ResizeHandle" Tag="resize" Width="8" Height="8" Fill="#F59E0B"
+                                   HorizontalAlignment="Right" VerticalAlignment="Bottom" Cursor="SizeNWSE" Visibility="Collapsed" />
+                    </Grid>
+                </Border>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Type}" Value="Station">
+                    <Setter TargetName="Shape" Property="Background" Value="#DBEAFE" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Type}" Value="Rack">
+                    <Setter TargetName="Shape" Property="Background" Value="#FEF3C7" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Type}" Value="Vehicle">
+                    <Setter TargetName="Shape" Property="Background" Value="#DCFCE7" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Type}" Value="Dock">
+                    <Setter TargetName="Shape" Property="Background" Value="#F3E8FF" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Type}" Value="Elevator">
+                    <Setter TargetName="Shape" Property="Background" Value="#E0F2FE" />
+                    <Setter TargetName="Shape" Property="BorderBrush" Value="#0284C7" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Type}" Value="FireDoor">
+                    <Setter TargetName="Shape" Property="Background" Value="#FFE4E6" />
+                    <Setter TargetName="Shape" Property="BorderBrush" Value="#E11D48" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Type}" Value="Area">
+                    <Setter TargetName="Shape" Property="Background" Value="#0F94A3B8" />
+                    <Setter TargetName="Shape" Property="BorderBrush" Value="#94A3B8" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Type}" Value="Label">
+                    <Setter TargetName="Shape" Property="Background" Value="Transparent" />
+                    <Setter TargetName="Shape" Property="BorderBrush" Value="Transparent" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter TargetName="Shape" Property="BorderBrush" Value="#2563EB" />
+                    <Setter TargetName="Shape" Property="BorderThickness" Value="2" />
+                    <Setter TargetName="ResizeHandle" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="RailLine" Property="Stroke" Value="#2563EB" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding HasIssue}" Value="True">
+                    <Setter TargetName="RailLine" Property="Stroke" Value="#DC2626" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding HasIssue}" Value="True">
+                    <Setter TargetName="Shape" Property="BorderBrush" Value="#DC2626" />
+                    <Setter TargetName="Shape" Property="BorderThickness" Value="3" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
     </Window.Resources>
     <DockPanel>
         <!-- 檔案 -->
@@ -119,7 +243,7 @@
                                 AutomationProperties.AutomationId="LoadCaseCompare" />
                         <TextBlock Text="{Binding CompareCaseName, StringFormat=目前比對：{0}, TargetNullValue=''}" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#777" />
                     </StackPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="案件 LOG 中出現、但還沒有元素以它為別名的編號。把編號拖到畫布上的站點、搬送機、對接設備或防火門，即可加為別名。"
+                    <TextBlock DockPanel.Dock="Top" Text="案件 LOG 中出現、但還沒有元素以它為別名的編號。把編號拖到畫布上的站點、搬送機、對接設備、防火門或電梯，即可加為別名。"
                                Foreground="#777" Margin="0,4,0,4" TextWrapping="Wrap" />
                     <ListBox x:Name="UnmappedList" ItemsSource="{Binding Unmapped}" AutomationProperties.AutomationId="UnmappedList"
                              PreviewMouseLeftButtonDown="Unmapped_PreviewMouseLeftButtonDown" PreviewMouseMove="Unmapped_PreviewMouseMove">
@@ -261,122 +385,25 @@
                             </Style>
                         </ItemsControl.ItemContainerStyle>
                         <ItemsControl.ItemTemplate>
+                            <StaticResource ResourceKey="EditorElementTemplate" />
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <!-- 並排檢視中電梯在其他服務樓層的分身（ADR-0006 第 15 點）：同一個元素，拖曳任何一個都是移動電梯 -->
+                    <ItemsControl ItemsSource="{Binding ElevatorCopies}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <Canvas />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemContainerStyle>
+                            <Style TargetType="ContentPresenter">
+                                <Setter Property="Canvas.Left" Value="{Binding ViewX, Converter={StaticResource Px}}" />
+                                <Setter Property="Canvas.Top" Value="{Binding ViewY, Converter={StaticResource Px}}" />
+                            </Style>
+                        </ItemsControl.ItemContainerStyle>
+                        <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Grid>
-                                    <!-- 輸送線：表示貨物流向；連到搬送機的那一端畫到交接點，以橘點拖曳調整 -->
-                                    <Line X1="{Binding LineX1, Converter={StaticResource Px}}" Y1="{Binding LineY1, Converter={StaticResource Px}}"
-                                          X2="{Binding LineX2, Converter={StaticResource Px}}" Y2="{Binding LineY2, Converter={StaticResource Px}}"
-                                          Stroke="#94A3B8" StrokeThickness="3" StrokeDashArray="3 2" Tag="{Binding}"
-                                          Visibility="{Binding IsConveyor, Converter={StaticResource Visible}}" />
-                                    <Canvas Visibility="{Binding IsConveyor, Converter={StaticResource Visible}}">
-                                        <Ellipse Tag="fromPoint" Width="10" Height="10" Fill="#F59E0B" Stroke="White" Cursor="SizeAll"
-                                                 Canvas.Left="{Binding LineX1, Converter={StaticResource Px}}" Canvas.Top="{Binding LineY1, Converter={StaticResource Px}}"
-                                                 Visibility="{Binding HasFromPoint, Converter={StaticResource Visible}}"
-                                                 AutomationProperties.AutomationId="{Binding Id, StringFormat=FromPoint_{0}}">
-                                            <Ellipse.RenderTransform><TranslateTransform X="-5" Y="-5" /></Ellipse.RenderTransform>
-                                        </Ellipse>
-                                        <Ellipse Tag="toPoint" Width="10" Height="10" Fill="#F59E0B" Stroke="White" Cursor="SizeAll"
-                                                 Canvas.Left="{Binding LineX2, Converter={StaticResource Px}}" Canvas.Top="{Binding LineY2, Converter={StaticResource Px}}"
-                                                 Visibility="{Binding HasToPoint, Converter={StaticResource Visible}}"
-                                                 AutomationProperties.AutomationId="{Binding Id, StringFormat=ToPoint_{0}}">
-                                            <Ellipse.RenderTransform><TranslateTransform X="-5" Y="-5" /></Ellipse.RenderTransform>
-                                        </Ellipse>
-                                    </Canvas>
-                                    <!-- 導軌（ADR-0006 第 14 點）：拖曳線條整條移動，雙擊插入點；選取時畫出點（方）與中點（圓）的把手 -->
-                                    <Path x:Name="RailLine" Data="{Binding RailPathData, Converter={StaticResource RailGeometry}}" Tag="{Binding}" Cursor="SizeAll"
-                                          Stroke="#64748B" StrokeThickness="5" StrokeLineJoin="Round" Visibility="{Binding IsRail, Converter={StaticResource Visible}}"
-                                          AutomationProperties.AutomationId="{Binding Id, StringFormat=Rail_{0}}" />
-                                    <ItemsControl ItemsSource="{Binding RailHandles}" Visibility="{Binding IsRail, Converter={StaticResource Visible}}">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <Canvas />
-                                            </ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                        <ItemsControl.ItemContainerStyle>
-                                            <Style TargetType="ContentPresenter">
-                                                <Setter Property="Canvas.Left" Value="{Binding X, Converter={StaticResource Px}}" />
-                                                <Setter Property="Canvas.Top" Value="{Binding Y, Converter={StaticResource Px}}" />
-                                            </Style>
-                                        </ItemsControl.ItemContainerStyle>
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Rectangle x:Name="Handle" Tag="railHandle" Width="10" Height="10" Fill="#F59E0B" Stroke="White" Cursor="SizeAll">
-                                                    <Rectangle.RenderTransform><TranslateTransform X="-5" Y="-5" /></Rectangle.RenderTransform>
-                                                </Rectangle>
-                                                <DataTemplate.Triggers>
-                                                    <DataTrigger Binding="{Binding IsPoint}" Value="False">
-                                                        <Setter TargetName="Handle" Property="RadiusX" Value="5" />
-                                                        <Setter TargetName="Handle" Property="RadiusY" Value="5" />
-                                                        <Setter TargetName="Handle" Property="Fill" Value="#FDE68A" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                        <Setter TargetName="Handle" Property="Stroke" Value="#2563EB" />
-                                                        <Setter TargetName="Handle" Property="StrokeThickness" Value="2" />
-                                                    </DataTrigger>
-                                                </DataTemplate.Triggers>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                    <Border x:Name="Shape" Tag="{Binding}" Cursor="SizeAll"
-                                            Width="{Binding W, Converter={StaticResource Px}}" Height="{Binding H, Converter={StaticResource Px}}"
-                                            BorderBrush="#475569" BorderThickness="1" Background="#E2E8F0"
-                                            RenderTransformOrigin="0.5,0.5"
-                                            Visibility="{Binding HasGeometry, Converter={StaticResource Visible}}"
-                                            AutomationProperties.AutomationId="{Binding Id, StringFormat=Element_{0}}">
-                                        <Border.RenderTransform>
-                                            <RotateTransform Angle="{Binding Rotation}" />
-                                        </Border.RenderTransform>
-                                        <Grid>
-                                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False">
-                                                <TextBlock Text="{Binding Name}" FontSize="11" TextAlignment="Center" />
-                                                <TextBlock Text="{Binding AliasesText}" FontSize="10" Foreground="#2A6CB0" TextAlignment="Center" />
-                                                <TextBlock Text="{Binding DoorStateText}" FontSize="10" Foreground="#9F1239" TextAlignment="Center" />
-                                            </StackPanel>
-                                            <!-- 拖右下角的方塊調整大小 -->
-                                            <Rectangle x:Name="ResizeHandle" Tag="resize" Width="8" Height="8" Fill="#F59E0B"
-                                                       HorizontalAlignment="Right" VerticalAlignment="Bottom" Cursor="SizeNWSE" Visibility="Collapsed" />
-                                        </Grid>
-                                    </Border>
-                                </Grid>
-                                <DataTemplate.Triggers>
-                                    <DataTrigger Binding="{Binding Type}" Value="Station">
-                                        <Setter TargetName="Shape" Property="Background" Value="#DBEAFE" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding Type}" Value="Rack">
-                                        <Setter TargetName="Shape" Property="Background" Value="#FEF3C7" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding Type}" Value="Vehicle">
-                                        <Setter TargetName="Shape" Property="Background" Value="#DCFCE7" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding Type}" Value="Dock">
-                                        <Setter TargetName="Shape" Property="Background" Value="#F3E8FF" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding Type}" Value="FireDoor">
-                                        <Setter TargetName="Shape" Property="Background" Value="#FFE4E6" />
-                                        <Setter TargetName="Shape" Property="BorderBrush" Value="#E11D48" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding Type}" Value="Area">
-                                        <Setter TargetName="Shape" Property="Background" Value="#0F94A3B8" />
-                                        <Setter TargetName="Shape" Property="BorderBrush" Value="#94A3B8" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding Type}" Value="Label">
-                                        <Setter TargetName="Shape" Property="Background" Value="Transparent" />
-                                        <Setter TargetName="Shape" Property="BorderBrush" Value="Transparent" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                        <Setter TargetName="Shape" Property="BorderBrush" Value="#2563EB" />
-                                        <Setter TargetName="Shape" Property="BorderThickness" Value="2" />
-                                        <Setter TargetName="ResizeHandle" Property="Visibility" Value="Visible" />
-                                        <Setter TargetName="RailLine" Property="Stroke" Value="#2563EB" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding HasIssue}" Value="True">
-                                        <Setter TargetName="RailLine" Property="Stroke" Value="#DC2626" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding HasIssue}" Value="True">
-                                        <Setter TargetName="Shape" Property="BorderBrush" Value="#DC2626" />
-                                        <Setter TargetName="Shape" Property="BorderThickness" Value="3" />
-                                    </DataTrigger>
-                                </DataTemplate.Triggers>
+                                <ContentControl Content="{Binding Element}" ContentTemplate="{StaticResource EditorElementTemplate}" />
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
@@ -517,11 +544,30 @@
 
                         <!-- 位置、尺寸、旋轉 -->
                         <StackPanel Visibility="{Binding HasGeometry, Converter={StaticResource Visible}}">
-                            <DockPanel>
+                            <DockPanel Visibility="{Binding IsElevator, Converter={StaticResource Collapsed}}">
                                 <TextBlock Text="樓層" Style="{StaticResource Field}" />
                                 <ComboBox ItemsSource="{Binding DataContext.Floors, RelativeSource={RelativeSource AncestorType=Window}}"
                                           SelectedItem="{Binding Floor}" AutomationProperties.AutomationId="ElementFloor" />
                             </DockPanel>
+                            <!-- 電梯服務的樓層（ADR-0006 第 15 點） -->
+                            <StackPanel Visibility="{Binding IsElevator, Converter={StaticResource Visible}}">
+                                <TextBlock Text="服務的樓層（至少兩層）" FontWeight="SemiBold" Margin="0,2,0,2" />
+                                <ItemsControl ItemsSource="{Binding DataContext.ServedFloorChoices, RelativeSource={RelativeSource AncestorType=Window}}"
+                                              AutomationProperties.AutomationId="ServedFloors">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox Content="{Binding Floor}" IsChecked="{Binding IsChecked}" Margin="0,0,10,2"
+                                                      AutomationProperties.AutomationId="{Binding Floor, StringFormat=ServedFloor_{0}}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="電梯在每個服務的樓層同一個位置畫出來，任何一層都可以拖曳；並排時拖到別層不會換樓層。輸送線不能接到電梯。" TextWrapping="Wrap" Foreground="#777" Margin="0,2,0,6" />
+                            </StackPanel>
                             <DockPanel>
                                 <TextBlock Text="x（m）" Style="{StaticResource Field}" />
                                 <TextBox Text="{Binding X}" />

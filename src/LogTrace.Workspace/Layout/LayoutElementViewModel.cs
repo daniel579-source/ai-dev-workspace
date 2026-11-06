@@ -52,6 +52,7 @@ public sealed partial class LayoutElementViewModel : ObservableObject
         RailPoints = e.Points ?? [];
         Closed = e.Closed == true;
         Rail = e.Rail;
+        ServedFloors = e.ServedFloors ?? [];
         Conveyors = new ObservableCollection<string>(e.Conveyors ?? []);
         Conveyors.CollectionChanged += (_, _) => OnPropertyChanged(nameof(Conveyors));
         _extra = e.Extra;
@@ -76,6 +77,11 @@ public sealed partial class LayoutElementViewModel : ObservableObject
     public bool IsFireDoor => Type == LayoutElementType.FireDoor;
     public bool IsRail => Type == LayoutElementType.Rail;
     public bool IsVehicle => Type == LayoutElementType.Vehicle;
+    public bool IsElevator => Type == LayoutElementType.Elevator;
+
+    /// <summary>電梯服務的樓層（ADR-0006 第 15 點）；每次修改整個換掉。電梯不使用 Floor。</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<string> ServedFloors { get; set; }
 
     // ---- 導軌（ADR-0006 第 14 點） ----
 
@@ -265,7 +271,8 @@ public sealed partial class LayoutElementViewModel : ObservableObject
             Id = Id,
             Type = Type,
             Name = Name,
-            Floor = string.IsNullOrWhiteSpace(Floor) ? null : Floor,
+            Floor = IsElevator || string.IsNullOrWhiteSpace(Floor) ? null : Floor,
+            ServedFloors = IsElevator ? [.. ServedFloors] : null,
             Aliases = CanHaveAliases ? [.. Aliases] : null,
             X = X,
             Y = Y,
@@ -296,7 +303,7 @@ public static class LayoutElementTypes
     public static IReadOnlyList<LayoutElementType> Addable { get; } =
     [
         LayoutElementType.Station, LayoutElementType.Rack, LayoutElementType.Vehicle, LayoutElementType.Dock,
-        LayoutElementType.FireDoor, LayoutElementType.Conveyor, LayoutElementType.Rail, LayoutElementType.Area, LayoutElementType.Label,
+        LayoutElementType.FireDoor, LayoutElementType.Elevator, LayoutElementType.Conveyor, LayoutElementType.Rail, LayoutElementType.Area, LayoutElementType.Label,
     ];
 
     /// <summary>
@@ -350,6 +357,7 @@ public static class LayoutElementTypes
         LayoutElementType.Dock => "對接設備",
         LayoutElementType.FireDoor => "防火門",
         LayoutElementType.Rail => "導軌",
+        LayoutElementType.Elevator => "電梯",
         LayoutElementType.Conveyor => "輸送線",
         LayoutElementType.Area => "區域",
         LayoutElementType.Label => "文字",
@@ -364,6 +372,7 @@ public static class LayoutElementTypes
         LayoutElementType.Dock => "eq",
         LayoutElementType.FireDoor => "fd",
         LayoutElementType.Rail => "rl",
+        LayoutElementType.Elevator => "ev",
         LayoutElementType.Conveyor => "cv",
         LayoutElementType.Area => "ar",
         LayoutElementType.Label => "tx",
@@ -378,6 +387,7 @@ public static class LayoutElementTypes
         LayoutElementType.Vehicle => (2.5, 1.2, 2),
         LayoutElementType.Dock => (2, 2, 1.5),
         LayoutElementType.FireDoor => (2, 0.5, 3),
+        LayoutElementType.Elevator => (2, 2, 3),
         LayoutElementType.Area => (6, 4, 0),
         LayoutElementType.Label => (3, 1, 0),
         _ => (0, 0, 0),

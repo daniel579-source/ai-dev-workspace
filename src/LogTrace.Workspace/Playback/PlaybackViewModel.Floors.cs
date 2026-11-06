@@ -33,6 +33,12 @@ public sealed partial class PlaybackViewModel
 
     public ObservableCollection<FloorRegionViewModel> FloorRegions { get; } = [];
 
+    /// <summary>並排檢視中，電梯在其他服務樓層的分身（ADR-0006 第 15 點）。</summary>
+    public ObservableCollection<ElevatorCopyViewModel> ElevatorCopies { get; } = [];
+
+    /// <summary>元素是否畫在 floor：電梯在每個服務的樓層。</summary>
+    bool OnFloor(PlaybackElementViewModel e, string floor) => e.ServedFloors.Any(f => SameFloor(f, floor)) || (!e.IsElevator && SameFloor(e.Floor, floor));
+
     /// <summary>套用本機的檢視設定；save 在使用者切換時呼叫。</summary>
     public void UseViewSettings(FloorViewSettings settings, Action<FloorViewSettings>? save)
     {
@@ -77,7 +83,7 @@ public sealed partial class PlaybackViewModel
         if (!Floors.Any(f => SameFloor(f, CurrentFloor))) CurrentFloor = Floors.FirstOrDefault() ?? LayoutFloors.Default;
         (string, double, double) Size(string floor)
         {
-            var (w, h) = LayoutGeometry.CanvasSize(Elements.Where(e => SameFloor(e.Floor, floor)).Select(e => e.Model));
+            var (w, h) = LayoutGeometry.CanvasSize(Elements.Where(e => OnFloor(e, floor)).Select(e => e.Model));
             return (floor, w, h);
         }
         var (_, width, height) = Size(CurrentFloor);
@@ -86,9 +92,17 @@ public sealed partial class PlaybackViewModel
             : [new FloorRegion(CurrentFloor, 0, 0, width, height)];
         foreach (var e in Elements)
         {
-            var r = regions.FirstOrDefault(r => SameFloor(r.Floor, e.Floor));
+            var r = regions.FirstOrDefault(r => OnFloor(e, r.Floor));
             e.IsOnCanvas = r is not null;
             (e.OffsetX, e.OffsetY) = r is null ? (0, 0) : (r.OffsetX, r.OffsetY);
+        }
+        var copies = Elements.Where(e => e.IsElevator)
+            .SelectMany(e => regions.Where(r => OnFloor(e, r.Floor)).Skip(1).Select(r => (Element: e, r.Floor, r.OffsetX, r.OffsetY))).ToList();
+        if (copies.Count != ElevatorCopies.Count || copies.Where((c, i) => !ElevatorCopies[i].SameAs(c.Element, c.Floor, c.OffsetX, c.OffsetY)).Any())
+        {
+            foreach (var c in ElevatorCopies) c.Detach();
+            ElevatorCopies.Clear();
+            foreach (var c in copies) ElevatorCopies.Add(new ElevatorCopyViewModel(c.Element, c.Floor, c.OffsetX, c.OffsetY, () => c.Element.X, () => c.Element.Y));
         }
         (CanvasWidth, CanvasHeight) = (regions.Max(r => r.OffsetX + r.Width), regions.Max(r => r.OffsetY + r.Height));
         var vms = regions.Select(r => new FloorRegionViewModel(r.Floor, r.OffsetX, r.OffsetY, r.Width, r.Height, SameFloor(r.Floor, CurrentFloor), SideBySide)).ToList();
@@ -133,7 +147,10 @@ public sealed partial class PlaybackViewModel
         foreach (var f in fields.Where(f => FieldKinds.Identifiers.Contains(f.Kind)))
             if (_model.Resolve(f.Value) is { } target && Elements.FirstOrDefault(e => e.Id == target.Id) is { } el)
             {
-                Follow(el.Floor);
+                // 電梯：目前所在的樓層；未取得資訊時看下一個欄位
+                if (!el.IsElevator) Follow(el.Floor);
+                else if (_state.Elevators.TryGetValue(el.Id, out var ev) && ev.Floor is { } floor) Follow(floor);
+                else continue;
                 return;
             }
     }

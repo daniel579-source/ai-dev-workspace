@@ -24,6 +24,8 @@ public enum LayoutElementType
     FireDoor,
     /// <summary>導軌（輔助）：搬送機行走的路徑，由直線與弧線組成，可以閉合（ADR-0006 第 14 點）。</summary>
     Rail,
+    /// <summary>電梯（有 LOG 意義，可以有別名）：在樓層之間搬送貨物；和搬送機是不同的種類（ADR-0006 第 15 點）。</summary>
+    Elevator,
 }
 
 /// <summary>防火門的開關狀態。JSON 中以小寫英文字串保存（open、closed）。</summary>
@@ -94,6 +96,9 @@ public sealed class LayoutElement
     /// <summary>搬送機所走的導軌 id（ADR-0006 第 14 點）。</summary>
     public string? Rail { get; set; }
 
+    /// <summary>電梯服務的樓層（ADR-0006 第 15 點）：在每一層同一個位置畫出來；電梯不使用 floor。</summary>
+    public List<string>? ServedFloors { get; set; }
+
     /// <summary>自訂屬性（ADR-0006 第 6 點）：鍵＝值，值一律是文字；保持輸入順序。</summary>
     public List<KeyValuePair<string, string>>? Props { get; set; }
 
@@ -102,7 +107,7 @@ public sealed class LayoutElement
     public Dictionary<string, JsonElement>? Extra { get; set; }
 
     public static bool CanHaveAliases(LayoutElementType type) =>
-        type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Dock or LayoutElementType.FireDoor;
+        type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Dock or LayoutElementType.FireDoor or LayoutElementType.Elevator;
 
     /// <summary>可以當作輸送線兩端的元素：站點、對接設備、搬送機。</summary>
     public static bool CanBeConveyorEnd(LayoutElementType type) =>
@@ -236,6 +241,14 @@ public static class LayoutFloors
         return Canonical(e.Floor, floors) ?? e.Floor ?? floors[0];
     }
 
+    /// <summary>
+    /// 元素畫在哪些樓層：電梯為服務的樓層（清單中的寫法，依樓層順序）；其他元素為 <see cref="FloorOf"/> 的那一層。
+    /// </summary>
+    public static IReadOnlyList<string> FloorsOf(LayoutElement e, IReadOnlyList<string> floors, Func<string?, LayoutElement?> find) =>
+        e.Type == LayoutElementType.Elevator
+            ? floors.Where(f => (e.ServedFloors ?? []).Any(s => NameComparer.Equals(s.Trim(), f))).ToList()
+            : [FloorOf(e, floors, find)];
+
     /// <summary>清單中與 name 相同（大小寫視為相同）的名稱；沒有時為 null。</summary>
     public static string? Canonical(string? name, IReadOnlyList<string> floors) =>
         name is null ? null : floors.FirstOrDefault(f => NameComparer.Equals(f, name.Trim()));
@@ -246,7 +259,15 @@ public static class LayoutFloors
         var floors = Of(layout).ToList();
         layout.Floors = floors;
         foreach (var e in layout.Elements)
+        {
+            if (e.Type == LayoutElementType.Elevator)
+            {
+                e.Floor = null; // 電梯以服務的樓層表示
+                e.ServedFloors = e.ServedFloors?.Select(f => Canonical(f, floors) ?? f).ToList();
+                continue;
+            }
             e.Floor = e.Type == LayoutElementType.Conveyor ? null : Canonical(e.Floor, floors) ?? e.Floor ?? floors[0];
+        }
     }
 
     /// <summary>
@@ -303,15 +324,16 @@ public sealed class PlantConfigDocument
 {
     /// <summary>
     /// 程式能讀寫的格式版本。2：輸送線的 bidirectional 與交接點（#63）。3：防火門（舊版程式不認得 fireDoor 這個種類）。
-    /// 4：導軌（#100，舊版程式不認得 rail 這個種類）。存檔時只寫實際用到的最低版本，讓舊版程式照常開啟（ADR-0006 第 7 點）。
+    /// 4：導軌（#100，舊版程式不認得 rail 這個種類）。5：電梯（#102）。存檔時只寫實際用到的最低版本，讓舊版程式照常開啟（ADR-0006 第 7 點）。
     /// </summary>
-    public const int CurrentFormatVersion = 4;
+    public const int CurrentFormatVersion = 5;
 
     /// <summary>
-    /// 這份設定需要的格式版本：有導軌時為 4；有防火門時為 3；有雙向或連到搬送機（有交接點）的輸送線時為 2；否則為 1。
+    /// 這份設定需要的格式版本：有電梯時為 5；有導軌時為 4；有防火門時為 3；有雙向或連到搬送機（有交接點）的輸送線時為 2；否則為 1。
     /// </summary>
     public int RequiredFormatVersion() =>
-        Layout.Elements.Any(e => e.Type == LayoutElementType.Rail) ? 4
+        Layout.Elements.Any(e => e.Type == LayoutElementType.Elevator) ? 5
+        : Layout.Elements.Any(e => e.Type == LayoutElementType.Rail) ? 4
         : Layout.Elements.Any(e => e.Type == LayoutElementType.FireDoor) ? 3
         : Layout.Elements.Any(e => e.Type == LayoutElementType.Conveyor && (e.Bidirectional == true || e.FromPoint is not null || e.ToPoint is not null)) ? 2 : 1;
 

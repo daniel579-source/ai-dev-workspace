@@ -80,11 +80,52 @@ public sealed partial class LayoutEditorViewModel
         RefreshLayoutView();
     }
 
-    /// <summary>元素所在的樓層（清單中的寫法）：輸送線取起點（沒有時取終點）的樓層。</summary>
+    /// <summary>
+    /// 元素所在的樓層（清單中的寫法）：輸送線取起點（沒有時取終點）的樓層；電梯取第一個服務的樓層（ADR-0006 第 15 點）。
+    /// </summary>
     public string FloorOf(LayoutElementViewModel e)
     {
         if (e.IsConveyor) return (Find(e.From) ?? Find(e.To)) is { } end ? FloorOf(end) : FloorList[0];
+        if (e.IsElevator) return ServedFloorsOf(e).FirstOrDefault() ?? FloorList[0];
         return LayoutFloors.Canonical(e.Floor, FloorList) ?? FloorList[0];
+    }
+
+    /// <summary>電梯服務的樓層（依樓層順序，清單中的寫法）。</summary>
+    IReadOnlyList<string> ServedFloorsOf(LayoutElementViewModel e) =>
+        FloorList.Where(f => e.ServedFloors.Any(s => SameFloor(s.Trim(), f))).ToList();
+
+    /// <summary>元素是否畫在 floor：電梯在每個服務的樓層，其他元素在所在的樓層。</summary>
+    bool OnFloor(LayoutElementViewModel e, string floor) =>
+        e.IsElevator ? ServedFloorsOf(e).Any(f => SameFloor(f, floor)) : SameFloor(FloorOf(e), floor);
+
+    /// <summary>並排檢視中，電梯在其他服務樓層的分身（ADR-0006 第 15 點）。</summary>
+    public ObservableCollection<ElevatorCopyViewModel> ElevatorCopies { get; } = [];
+
+    /// <summary>屬性面板的「服務的樓層」勾選框：選取電梯時列出所有樓層。</summary>
+    public ObservableCollection<ServedFloorChoice> ServedFloorChoices { get; } = [];
+
+    void RefreshServedFloorChoices()
+    {
+        var items = SelectedElement is { IsElevator: true } ev
+            ? FloorList.Select(f => (f, ServedFloorsOf(ev).Any(s => SameFloor(s, f)))).ToList()
+            : [];
+        if (items.SequenceEqual(ServedFloorChoices.Select(c => (c.Floor, c.IsChecked)))) return;
+        ServedFloorChoices.Clear();
+        foreach (var (f, on) in items)
+        {
+            var choice = new ServedFloorChoice(f, on);
+            choice.PropertyChanged += (_, _) => SetServedFloor(choice.Floor, choice.IsChecked);
+            ServedFloorChoices.Add(choice);
+        }
+    }
+
+    /// <summary>勾選或取消一個服務的樓層（依樓層順序寫回）。</summary>
+    void SetServedFloor(string floor, bool on)
+    {
+        if (SelectedElement is not { IsElevator: true } ev) return;
+        var served = FloorList.Where(f => SameFloor(f, floor) ? on : ev.ServedFloors.Any(s => SameFloor(s.Trim(), f))).ToList();
+        ev.ServedFloors = served;
+        Status = served.Count < 2 ? "電梯至少要服務兩個樓層（存檔前會檢查）。" : $"「{ev.Name}」服務 {string.Join("、", served)}。";
     }
 
     bool SameFloor(string a, string b) => LayoutFloors.NameComparer.Equals(a, b);
@@ -106,10 +147,20 @@ public sealed partial class LayoutEditorViewModel
         if (_drag is null && _pointDrag is null) _regions = ComputeRegions();
         foreach (var e in Elements)
         {
-            var r = _regions.FirstOrDefault(r => SameFloor(r.Floor, FloorOf(e)));
+            // 電梯：本體畫在第一個顯示中的服務樓層，其他服務樓層畫分身
+            var r = _regions.FirstOrDefault(r => OnFloor(e, r.Floor));
             e.IsOnCanvas = r is not null;
             (e.OffsetX, e.OffsetY) = r is null ? (0, 0) : (r.OffsetX, r.OffsetY);
         }
+        var copies = Elements.Where(e => e.IsElevator)
+            .SelectMany(e => _regions.Where(r => OnFloor(e, r.Floor)).Skip(1).Select(r => (Element: e, r.Floor, r.OffsetX, r.OffsetY))).ToList();
+        if (copies.Count != ElevatorCopies.Count || copies.Where((c, i) => !ElevatorCopies[i].SameAs(c.Element, c.Floor, c.OffsetX, c.OffsetY)).Any())
+        {
+            foreach (var c in ElevatorCopies) c.Detach();
+            ElevatorCopies.Clear();
+            foreach (var c in copies) ElevatorCopies.Add(new ElevatorCopyViewModel(c.Element, c.Floor, c.OffsetX, c.OffsetY, () => c.Element.X, () => c.Element.Y));
+        }
+        RefreshServedFloorChoices();
         var byId = Elements.Where(e => e.HasGeometry).ToDictionary(e => e.Id);
         foreach (var c in Elements.Where(e => e.IsConveyor))
         {
@@ -134,7 +185,7 @@ public sealed partial class LayoutEditorViewModel
     /// <summary>單層：目前樓層一個區域；並排：每層一個，大小依該層元素範圍計算（ADR-0006 第 11、13 點）。</summary>
     IReadOnlyList<FloorRegion> ComputeRegions()
     {
-        (double, double) Size(string floor) => LayoutGeometry.CanvasSize(Elements.Where(e => SameFloor(FloorOf(e), floor)).Select(e => e.ToModel()));
+        (double, double) Size(string floor) => LayoutGeometry.CanvasSize(Elements.Where(e => OnFloor(e, floor)).Select(e => e.ToModel()));
         if (!SideBySide)
         {
             var (w, h) = Size(CurrentFloor);
@@ -199,7 +250,9 @@ public sealed partial class LayoutEditorViewModel
         }
         Batch(() =>
         {
-            foreach (var e in Elements.Where(e => !e.IsConveyor && SameFloor(FloorOf(e), old))) e.Floor = name;
+            foreach (var e in Elements.Where(e => !e.IsConveyor && !e.IsElevator && SameFloor(FloorOf(e), old))) e.Floor = name;
+            foreach (var e in Elements.Where(e => e.IsElevator && e.ServedFloors.Any(s => SameFloor(s.Trim(), old))))
+                e.ServedFloors = e.ServedFloors.Select(s => SameFloor(s.Trim(), old) ? name : s).ToList(); // 電梯服務的樓層一併改名
             Floors[i] = name;
             CurrentFloor = name;
         });
@@ -232,10 +285,16 @@ public sealed partial class LayoutEditorViewModel
             Status = "至少要有一個樓層。";
             return;
         }
-        int count = Elements.Count(e => !e.IsConveyor && SameFloor(FloorOf(e), CurrentFloor));
+        int count = Elements.Count(e => !e.IsConveyor && !e.IsElevator && SameFloor(FloorOf(e), CurrentFloor));
+        var elevators = Elements.Where(e => e.IsElevator && OnFloor(e, CurrentFloor)).ToList();
         if (count > 0)
         {
             Status = $"樓層「{CurrentFloor}」還有 {count} 個元素，請先把它們移到其他樓層或刪除。";
+            return;
+        }
+        if (elevators.Count > 0)
+        {
+            Status = $"樓層「{CurrentFloor}」是 {string.Join("、", elevators.Select(e => $"「{e.Name}」"))}服務的樓層，請先從電梯的服務樓層移除。";
             return;
         }
         var name = CurrentFloor;
@@ -249,11 +308,20 @@ public sealed partial class LayoutEditorViewModel
     void MoveSelectionToFloor()
     {
         if (MoveTargetFloor is not { } target) return;
-        var items = Selection.Where(e => e.HasGeometry || e.IsRail).ToList();
+        var items = Selection.Where(e => (e.HasGeometry || e.IsRail) && !e.IsElevator).ToList(); // 電梯以服務的樓層表示
         Batch(() =>
         {
             foreach (var e in items) e.Floor = target;
         });
         Status = $"已把 {items.Count} 個元素移到「{target}」。";
     }
+}
+
+/// <summary>屬性面板「服務的樓層」的一個勾選框。</summary>
+public sealed partial class ServedFloorChoice(string floor, bool isChecked) : ObservableObject
+{
+    public string Floor { get; } = floor;
+
+    [ObservableProperty]
+    public partial bool IsChecked { get; set; } = isChecked;
 }

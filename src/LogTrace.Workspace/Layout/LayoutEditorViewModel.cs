@@ -195,7 +195,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         if (_selecting) return;
         foreach (var e in Elements) e.IsSelected = e == newValue;
         OnSelectionChanged();
-        if (newValue is not null && !SameFloor(FloorOf(newValue), CurrentFloor)) CurrentFloor = FloorOf(newValue); // 例如從元素清單選了別層的元素
+        if (newValue is not null && !OnFloor(newValue, CurrentFloor)) CurrentFloor = FloorOf(newValue); // 例如從元素清單選了別層的元素
+        RefreshServedFloorChoices();
     }
 
     void RefreshDoorConveyors()
@@ -406,7 +407,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         if (propertyName is nameof(LayoutElementViewModel.X) or nameof(LayoutElementViewModel.Y) or nameof(LayoutElementViewModel.W)
             or nameof(LayoutElementViewModel.H) or nameof(LayoutElementViewModel.From) or nameof(LayoutElementViewModel.To)
             or nameof(LayoutElementViewModel.Name) or nameof(LayoutElementViewModel.FromPoint) or nameof(LayoutElementViewModel.ToPoint)
-            or nameof(LayoutElementViewModel.Floor) or nameof(LayoutElementViewModel.RailPoints) or nameof(LayoutElementViewModel.Closed))
+            or nameof(LayoutElementViewModel.Floor) or nameof(LayoutElementViewModel.RailPoints) or nameof(LayoutElementViewModel.Closed)
+            or nameof(LayoutElementViewModel.ServedFloors))
         {
             if (propertyName is nameof(LayoutElementViewModel.Name)) RefreshElementList();
             RefreshEndpoints();
@@ -506,11 +508,13 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         {
             var (w, h, height) = LayoutElementTypes.DefaultSize(type);
             // 放在現有元素的下方，避免疊在一起
-            var top = SnapTo(Elements.Where(e => !e.IsConveyor && SameFloor(FloorOf(e), CurrentFloor)).Select(e => BoundsOf(e).Bottom).DefaultIfEmpty(0).Max() + 1);
+            var top = SnapTo(Elements.Where(e => !e.IsConveyor && OnFloor(e, CurrentFloor)).Select(e => BoundsOf(e).Bottom).DefaultIfEmpty(0).Max() + 1);
             model = new LayoutElement
             {
                 Id = id, Type = type, Name = $"新{LayoutElementTypes.Label(type)} {id[(id.IndexOf('-') + 1)..]}",
-                X = 1, Y = top, W = w, H = h, Rotation = 0, Height = height, Floor = CurrentFloor,
+                X = 1, Y = top, W = w, H = h, Rotation = 0, Height = height,
+                Floor = type == LayoutElementType.Elevator ? null : CurrentFloor,
+                ServedFloors = type == LayoutElementType.Elevator ? [.. FloorList] : null, // 電梯預設服務所有樓層（使用者決定）
                 Aliases = LayoutElement.CanHaveAliases(type) ? [] : null,
             };
             if (type == LayoutElementType.Rack)
@@ -671,7 +675,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             foreach (var e in shapes)
             {
                 map[e.Id] = e.Id = NextId(e.Type);
-                (e.X, e.Y, e.Floor) = (e.X + dx, e.Y + dy, floor);
+                (e.X, e.Y) = (e.X + dx, e.Y + dy);
+                if (e.Type != LayoutElementType.Elevator) e.Floor = floor; // 電梯維持服務的樓層
                 if (e.Points is { } pts) e.Points = RailPath.Shift(pts, dx, dy);
                 e.Rail = null; // 貼上的搬送機清除導軌指定（使用者決定）
                 added.Add(AttachNew(e));
@@ -866,7 +871,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             // 先以拖曳時的區域算好每個元素的目的地，再一起套用（套用時區域會重算）
             var moves = group.Select(d => d.Element).Select(e =>
             {
-                var r = SideBySide ? RegionAt(e.ViewX + e.W / 2, e.ViewY + e.H / 2) : new FloorRegion(FloorOf(e), e.OffsetX, e.OffsetY, 0, 0);
+                // 電梯並排時拖到別層不換樓層（ADR-0006 第 15 點）
+                var r = SideBySide && !e.IsElevator ? RegionAt(e.ViewX + e.W / 2, e.ViewY + e.H / 2) : new FloorRegion(FloorOf(e), e.OffsetX, e.OffsetY, 0, 0);
                 return (Element: e, r.Floor, X: Math.Max(0, SnapTo(e.ViewX - r.OffsetX)), Y: Math.Max(0, SnapTo(e.ViewY - r.OffsetY)));
             }).ToList();
             bool floorChanged = moves.Any(m => !SameFloor(FloorOf(m.Element), m.Floor));
@@ -995,7 +1001,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         if (alias.Length == 0) return false;
         if (!e.CanHaveAliases)
         {
-            Status = $"「{e.TypeLabel}」不能加別名；只有站點、搬送機、對接設備、防火門可以。";
+            Status = $"「{e.TypeLabel}」不能加別名；只有站點、搬送機、對接設備、防火門、電梯可以。";
             return false;
         }
         var owner = AliasOwner(alias);

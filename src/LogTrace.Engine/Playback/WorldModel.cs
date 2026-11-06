@@ -48,6 +48,9 @@ public sealed class WorldModel
     readonly string _presenceSignal;
     readonly List<(int EffectIndex, WorldState State)> _snapshots = [];
 
+    /// <summary>元素 id → 所在的樓層（電梯不在其中；ADR-0006 第 13 點）。</summary>
+    readonly Dictionary<string, string> _floorOf = new(StringComparer.Ordinal);
+
     /// <summary>有關聯輸送線的防火門：平時狀態（推估），以及每條輸送線的 id 與兩端元素 id。</summary>
     readonly List<(string Id, DoorState? Usual, IReadOnlyList<(string Conveyor, string From, string To)> Conveyors)> _doors;
 
@@ -62,6 +65,10 @@ public sealed class WorldModel
         foreach (var e in layout.Elements)
             foreach (var a in e.Aliases ?? [])
                 _byAlias.TryAdd(a.Trim(), e);
+        var floors = LayoutFloors.Of(layout);
+        var byId = layout.Elements.GroupBy(e => e.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        foreach (var e in layout.Elements.Where(e => e.Type != LayoutElementType.Elevator))
+            _floorOf.TryAdd(e.Id, LayoutFloors.FloorOf(e, floors, id => id is not null && byId.TryGetValue(id, out var x) ? x : null));
         var conveyors = layout.Elements.Where(e => e.Type == LayoutElementType.Conveyor && e.From is not null && e.To is not null)
             .GroupBy(e => e.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => (g.First().From!, g.First().To!), StringComparer.Ordinal);
         _doors = layout.Elements.Where(e => e.Type == LayoutElementType.FireDoor)
@@ -132,7 +139,8 @@ public sealed class WorldModel
         foreach (var x in _effects)
         {
             if (x.Effect is not (EffectKinds.AlarmRaised or EffectKinds.AlarmCleared)) continue;
-            var target = Resolve(x.Get(FieldKinds.Vehicle)) ?? Resolve(x.Get(FieldKinds.Station)) ?? Resolve(x.Get(FieldKinds.Dock));
+            var target = Resolve(x.Get(FieldKinds.Vehicle)) ?? Resolve(x.Get(FieldKinds.Station)) ?? Resolve(x.Get(FieldKinds.Dock))
+                ?? Resolve(x.Get(FieldKinds.Elevator));
             if (target is null) continue;
             if (open.Remove(target.Id, out var o)) list.Add((target.Id, o.Code, o.Start, x.Sequence));
             if (x.Effect == EffectKinds.AlarmRaised) open[target.Id] = (x.Get(FieldKinds.AlarmCode), x.Sequence);
@@ -173,6 +181,15 @@ public sealed class WorldModel
     static StationState StationOf(WorldState w, string id) => w.Stations.TryGetValue(id, out var s) ? s : w.Stations[id] = new StationState();
 
     static VehicleState VehicleOf(WorldState w, string id) => w.Vehicles.TryGetValue(id, out var v) ? v : w.Vehicles[id] = new VehicleState();
+
+    static ElevatorState ElevatorOf(WorldState w, string id) => w.Elevators.TryGetValue(id, out var v) ? v : w.Elevators[id] = new ElevatorState();
+
+    /// <summary>LOG 中的編號（站點等）所在的樓層；對應不到元素時為 null。</summary>
+    string? FloorOfCode(string? code) => Resolve(code) is { } e && _floorOf.TryGetValue(e.Id, out var f) ? f : null;
+
+    /// <summary>命令目前由哪一台電梯執行（派給電梯時記錄在命令的執行者）。</summary>
+    static string? ElevatorRunning(WorldState w, CommandState c) =>
+        c.Vehicle is { } id && w.Elevators.ContainsKey(id) ? id : null;
 
     static CommandState CommandOf(WorldState w, string id, long cause) =>
         w.Commands.TryGetValue(id, out var c) ? c : w.Commands[id] = new CommandState { Id = id, StatusCause = cause };
@@ -345,6 +362,8 @@ public sealed class WorldModel
                 // 執行中的搬送機回到閒置（取消後的實際動作待確認，不推測貨物位置）
                 if (c.Vehicle is { } vh && w.Vehicles.TryGetValue(vh, out var v) && v.Command == id)
                     (v.Work, v.WorkCause, v.Command, v.Destination) = (VehicleWork.Idle, seq, null, null);
+                if (c.Vehicle is { } ev && w.Elevators.TryGetValue(ev, out var e) && e.Command == id)
+                    StopElevator(w, ev, seq, ElevatorFloorBasis.Cancelled);
                 break;
             }
             case EffectKinds.CommandCompleted when x.Get(FieldKinds.Command) is { } id:
@@ -360,6 +379,47 @@ public sealed class WorldModel
                 if (x.Get(FieldKinds.Mode) is { } mode) (v.Mode, v.ModeCause) = (mode, seq);
                 break;
             }
+            // ---- 電梯（ADR-0005 第 11 點）：和搬送機分開記錄；目前樓層只有抵達時依 LOG ----
+            case EffectKinds.ElevatorDispatched when x.Get(FieldKinds.Command) is { } id && Element(FieldKinds.Elevator, LayoutElementType.Elevator) is { } ev:
+            {
+                var c = CommandOf(w, id, seq);
+                (c.Status, c.StatusCause, c.Segment, c.Vehicle, c.SegmentDestination) =
+                    (CommandStatus.SegmentRunning, seq, ParseInt(x.Get(FieldKinds.Segment)) ?? (c.Segment ?? 0) + 1, ev, x.Get(FieldKinds.Destination));
+                if (PalletOf(w, c, preexisting: true) is { } p) MovePallet(w, p, LocationKind.Elevator, ev, seq);
+                var e = ElevatorOf(w, ev);
+                (e.Work, e.WorkCause, e.Command, e.Destination) = (VehicleWork.Executing, seq, id, x.Get(FieldKinds.Destination));
+                // 出發樓層：目前樓層；未知時依來源站點的樓層推估（使用者決定）
+                if (e.Floor is null && FloorOfCode(x.Get(FieldKinds.Source)) is { } from)
+                    (e.Floor, e.FloorCause, e.FloorBasis) = (from, seq, ElevatorFloorBasis.EstimatedFromSource);
+                (e.FromFloor, e.ToFloor) = (e.Floor, FloorOfCode(x.Get(FieldKinds.Destination)));
+                break;
+            }
+            case EffectKinds.ElevatorArrived when x.Get(FieldKinds.Command) is { } id && x.Get(FieldKinds.Destination) is { } dest:
+            {
+                var c = CommandOf(w, id, seq);
+                var ev = Element(FieldKinds.Elevator, LayoutElementType.Elevator) ?? ElevatorRunning(w, c);
+                var (kind, at) = Locate(dest);
+                if (c.Pallet is { } pid && w.Pallets.TryGetValue(pid, out var p)) MovePallet(w, p, kind, at, seq);
+                if (kind == LocationKind.Station) StationOf(w, at);
+                (c.Status, c.StatusCause, c.Segment) = (kind == LocationKind.Delivered ? CommandStatus.Delivered : CommandStatus.SegmentArrived, seq,
+                    ParseInt(x.Get(FieldKinds.Segment)) ?? c.Segment);
+                if (ev is not null)
+                {
+                    var e = ElevatorOf(w, ev);
+                    (e.Work, e.WorkCause, e.Command, e.Destination, e.FromFloor, e.ToFloor) = (VehicleWork.Idle, seq, null, null, null, null);
+                    if (FloorOfCode(dest) is { } floor) (e.Floor, e.FloorCause, e.FloorBasis) = (floor, seq, ElevatorFloorBasis.Arrived);
+                }
+                break;
+            }
+            case EffectKinds.ElevatorFinished when x.Get(FieldKinds.Command) is { } id:
+            {
+                // LOG 沒有記錄地點：不推導位置，停在出發的樓層（和 #53 一致）
+                var c = CommandOf(w, id, seq);
+                var ev = Element(FieldKinds.Elevator, LayoutElementType.Elevator) ?? ElevatorRunning(w, c);
+                (c.Status, c.StatusCause, c.Segment) = (CommandStatus.SegmentFinished, seq, ParseInt(x.Get(FieldKinds.Segment)) ?? c.Segment);
+                if (ev is not null) StopElevator(w, ev, seq, ElevatorFloorBasis.FinishedNoLocation);
+                break;
+            }
             case EffectKinds.FireDoorOpened or EffectKinds.FireDoorClosed when Element(FieldKinds.FireDoor, LayoutElementType.FireDoor) is { } fd:
             {
                 var d = DoorOf(w, fd);
@@ -368,13 +428,22 @@ public sealed class WorldModel
             }
             case EffectKinds.AlarmRaised or EffectKinds.AlarmCleared:
             {
-                var target = Resolve(x.Get(FieldKinds.Vehicle)) ?? Resolve(x.Get(FieldKinds.Station)) ?? Resolve(x.Get(FieldKinds.Dock));
+                var target = Resolve(x.Get(FieldKinds.Vehicle)) ?? Resolve(x.Get(FieldKinds.Station)) ?? Resolve(x.Get(FieldKinds.Dock))
+                    ?? Resolve(x.Get(FieldKinds.Elevator));
                 if (target is null) break;
                 if (x.Effect == EffectKinds.AlarmRaised) w.Alarms[target.Id] = new AlarmState(x.Get(FieldKinds.AlarmCode), seq);
                 else w.Alarms.Remove(target.Id);
                 break;
             }
         }
+    }
+
+    /// <summary>電梯停下（作業完成或取消）：回到閒置，目前樓層維持出發的樓層並記錄依據。</summary>
+    static void StopElevator(WorldState w, string id, long seq, ElevatorFloorBasis basis)
+    {
+        var e = ElevatorOf(w, id);
+        if (e.FromFloor is { } from) (e.Floor, e.FloorCause, e.FloorBasis) = (from, seq, basis);
+        (e.Work, e.WorkCause, e.Command, e.Destination, e.FromFloor, e.ToFloor) = (VehicleWork.Idle, seq, null, null, null, null);
     }
 
     static int? ParseInt(string? s) => int.TryParse(s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : null;

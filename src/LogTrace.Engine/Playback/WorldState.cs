@@ -79,6 +79,40 @@ public sealed class FireDoorState
     public FireDoorState Clone() => (FireDoorState)MemberwiseClone();
 }
 
+/// <summary>電梯目前樓層的依據（ADR-0005 第 11 點）。</summary>
+public enum ElevatorFloorBasis
+{
+    /// <summary>依 LOG：抵達的站點所在的樓層。</summary>
+    Arrived,
+    /// <summary>推估：派送時目前樓層未知，依來源站點的樓層。</summary>
+    EstimatedFromSource,
+    /// <summary>作業完成（LOG 沒有地點）：停在出發的樓層。</summary>
+    FinishedNoLocation,
+    /// <summary>命令取消：停在出發的樓層。</summary>
+    Cancelled,
+}
+
+/// <summary>電梯的狀態（ADR-0005 第 11 點）：和搬送機分開記錄。樓層為 null＝未取得資訊。</summary>
+public sealed class ElevatorState
+{
+    public VehicleWork Work { get; set; }
+    public long? WorkCause { get; set; }
+    public string? Command { get; set; }
+    public string? Destination { get; set; }
+
+    public string? Floor { get; set; }
+    public long? FloorCause { get; set; }
+    public ElevatorFloorBasis? FloorBasis { get; set; }
+
+    /// <summary>移動中的出發與前往樓層（派送時設定，抵達或結束時清除）。</summary>
+    public string? FromFloor { get; set; }
+    public string? ToFloor { get; set; }
+
+    public bool IsMoving => Work == VehicleWork.Executing;
+
+    public ElevatorState Clone() => (ElevatorState)MemberwiseClone();
+}
+
 /// <summary>未復歸的警報（ADR-0005 第 5 點）。</summary>
 public sealed record AlarmState(string? Code, long Cause);
 
@@ -92,6 +126,8 @@ public enum LocationKind
     Storage,
     /// <summary>已交給對接設備（已交出），從畫面上移除。</summary>
     Delivered,
+    /// <summary>在電梯上（ADR-0005 第 11 點）。</summary>
+    Elevator,
 }
 
 /// <summary>貨物（棧板與桶清單，ADR-0005 第 1、2 點）。</summary>
@@ -174,6 +210,9 @@ public sealed class WorldState
 
     public SortedDictionary<string, CommandState> Commands { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>電梯的元素 id → 狀態；沒有的電梯＝還沒有 LOG 事件。</summary>
+    public SortedDictionary<string, ElevatorState> Elevators { get; } = new(StringComparer.Ordinal);
+
     /// <summary>防火門的元素 id → 狀態；沒有的門＝還沒有 LOG 事件。</summary>
     public SortedDictionary<string, FireDoorState> Doors { get; } = new(StringComparer.Ordinal);
 
@@ -187,6 +226,7 @@ public sealed class WorldState
         foreach (var (k, v) in Storage) c.Storage[k] = v;
         foreach (var (k, v) in Commands) c.Commands[k] = v.Clone();
         foreach (var (k, v) in Doors) c.Doors[k] = v.Clone();
+        foreach (var (k, v) in Elevators) c.Elevators[k] = v.Clone();
         return c;
     }
 
@@ -212,6 +252,8 @@ public sealed class WorldState
         foreach (var (k, v) in Storage) sb.Append($"sg {k}={v.Pallet ?? "(空)"}@{v.Cause}\n");
         foreach (var (k, c) in Commands)
             sb.Append($"cm {k} {c.Type} {c.Pallet} {c.Source}->{c.Destination} {c.Status}@{c.StatusCause} seg={c.Segment} {c.Vehicle}->{c.SegmentDestination}\n");
+        foreach (var (k, v) in Elevators)
+            sb.Append($"ev {k} w={v.Work}@{v.WorkCause} {v.Command}->{v.Destination} f={v.Floor}@{v.FloorCause}:{v.FloorBasis} {v.FromFloor}->{v.ToFloor}\n");
         foreach (var (k, d) in Doors)
             sb.Append($"fd {k} {d.State}@{d.StateCause} x={d.LastCrossing}\n");
         return sb.ToString();

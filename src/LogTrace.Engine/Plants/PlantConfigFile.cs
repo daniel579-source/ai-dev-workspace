@@ -190,7 +190,7 @@ public static class PlantConfigFile
         if (floors.Any(string.IsNullOrWhiteSpace)) issues.Add(new("有空白的樓層名稱。", []));
         foreach (var g in floors.Where(f => !string.IsNullOrWhiteSpace(f)).GroupBy(f => f.Trim(), LayoutFloors.NameComparer).Where(g => g.Count() > 1))
             issues.Add(new($"樓層「{g.Key}」重複（大小寫視為相同）。", []));
-        foreach (var e in elements.Where(e => e.Type != LayoutElementType.Conveyor && e.Floor is not null && LayoutFloors.Canonical(e.Floor, floors) is null))
+        foreach (var e in elements.Where(e => e.Type is not (LayoutElementType.Conveyor or LayoutElementType.Elevator) && e.Floor is not null && LayoutFloors.Canonical(e.Floor, floors) is null))
             issues.Add(new($"「{Label(e)}」的樓層「{e.Floor}」不在樓層清單中。", [e.Id]));
 
         var aliasOwners = elements
@@ -210,7 +210,7 @@ public static class PlantConfigFile
         foreach (var e in elements)
         {
             if (e.Aliases is { Count: > 0 } && !LayoutElement.CanHaveAliases(e.Type))
-                issues.Add(new($"「{Label(e)}」不能有別名；只有站點、搬送機、對接設備、防火門可以。", [e.Id]));
+                issues.Add(new($"「{Label(e)}」不能有別名；只有站點、搬送機、對接設備、防火門、電梯可以。", [e.Id]));
             if (e.Aliases?.Any(string.IsNullOrWhiteSpace) == true)
                 issues.Add(new($"「{Label(e)}」有空白的別名。", [e.Id]));
             if (e.Rotation is { } r && !AllowedRotations.Contains(r))
@@ -225,6 +225,14 @@ public static class PlantConfigFile
                     issues.Add(new($"輸送線「{Label(e)}」連到搬送機的那一端沒有交接點。", [e.Id]));
                 else if (!LayoutFloors.NameComparer.Equals(LayoutFloors.FloorOf(from, floors, _ => null), LayoutFloors.FloorOf(to, floors, _ => null)))
                     issues.Add(new($"輸送線「{Label(e)}」的兩端不在同一層；跨樓層的搬送請用電梯。", [e.Id, from.Id, to.Id]));
+            }
+            if (e.Type == LayoutElementType.Elevator)
+            {
+                var served = (e.ServedFloors ?? []).Select(f => f.Trim()).ToList();
+                if (served.Distinct(LayoutFloors.NameComparer).Count() < 2)
+                    issues.Add(new($"電梯「{Label(e)}」至少要服務兩個樓層。", [e.Id]));
+                foreach (var f in served.Where(f => LayoutFloors.Canonical(f, floors) is null).Distinct(LayoutFloors.NameComparer))
+                    issues.Add(new($"電梯「{Label(e)}」服務的樓層「{f}」不在樓層清單中。", [e.Id]));
             }
             if (e.Type == LayoutElementType.Rail)
             {

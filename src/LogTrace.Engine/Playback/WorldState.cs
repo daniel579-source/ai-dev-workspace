@@ -58,6 +58,27 @@ public sealed class VehicleState
     public VehicleState Clone() => (VehicleState)MemberwiseClone();
 }
 
+/// <summary>貨物在關著的防火門所關聯的輸送線兩端之間移動（不判斷哪一邊才對）。</summary>
+/// <param name="Conveyor">輸送線的元素 id。</param>
+/// <param name="Cause">貨物移動的事件序號；只在這一筆事件的時刻標示不一致。</param>
+public sealed record DoorCrossing(string Pallet, string Conveyor, long Cause);
+
+/// <summary>
+/// 防火門的狀態（ADR-0006 第 1 點 2026-11-06 補充）。State 為 LOG 事件確定的開關；
+/// 沒有任何 LOG 事件的門不在 WorldState.Doors 中，畫面改用 Layout 的平時狀態（推估）。
+/// </summary>
+public sealed class FireDoorState
+{
+    /// <summary>LOG 確定的開關；null＝還沒有 LOG 事件（只記錄了穿越）。</summary>
+    public Plants.DoorState? State { get; set; }
+    public long? StateCause { get; set; }
+
+    /// <summary>最近一次門關著時的穿越。</summary>
+    public DoorCrossing? LastCrossing { get; set; }
+
+    public FireDoorState Clone() => (FireDoorState)MemberwiseClone();
+}
+
 /// <summary>未復歸的警報（ADR-0005 第 5 點）。</summary>
 public sealed record AlarmState(string? Code, long Cause);
 
@@ -153,6 +174,9 @@ public sealed class WorldState
 
     public SortedDictionary<string, CommandState> Commands { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>防火門的元素 id → 狀態；沒有的門＝還沒有 LOG 事件。</summary>
+    public SortedDictionary<string, FireDoorState> Doors { get; } = new(StringComparer.Ordinal);
+
     public WorldState Clone()
     {
         var c = new WorldState { Sequence = Sequence };
@@ -162,6 +186,7 @@ public sealed class WorldState
         foreach (var (k, v) in Pallets) c.Pallets[k] = v.Clone();
         foreach (var (k, v) in Storage) c.Storage[k] = v;
         foreach (var (k, v) in Commands) c.Commands[k] = v.Clone();
+        foreach (var (k, v) in Doors) c.Doors[k] = v.Clone();
         return c;
     }
 
@@ -187,6 +212,8 @@ public sealed class WorldState
         foreach (var (k, v) in Storage) sb.Append($"sg {k}={v.Pallet ?? "(空)"}@{v.Cause}\n");
         foreach (var (k, c) in Commands)
             sb.Append($"cm {k} {c.Type} {c.Pallet} {c.Source}->{c.Destination} {c.Status}@{c.StatusCause} seg={c.Segment} {c.Vehicle}->{c.SegmentDestination}\n");
+        foreach (var (k, d) in Doors)
+            sb.Append($"fd {k} {d.State}@{d.StateCause} x={d.LastCrossing}\n");
         return sb.ToString();
     }
 }

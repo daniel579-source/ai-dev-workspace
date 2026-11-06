@@ -48,6 +48,9 @@ public sealed class WorldModel
     readonly string _presenceSignal;
     readonly List<(int EffectIndex, WorldState State)> _snapshots = [];
 
+    /// <summary>有關聯輸送線的防火門：平時狀態（推估），以及每條輸送線的 id 與兩端元素 id。</summary>
+    readonly List<(string Id, DoorState? Usual, IReadOnlyList<(string Conveyor, string From, string To)> Conveyors)> _doors;
+
     /// <param name="effects">依事件序號排列的效果。</param>
     /// <param name="layout">廠別設定的 Layout：LOG 中的編號以別名（不分大小寫）對應到元素。</param>
     public WorldModel(IReadOnlyList<EventEffect> effects, LayoutSection layout, string presenceSignal, int snapshotEvery = DefaultSnapshotEvery)
@@ -59,6 +62,12 @@ public sealed class WorldModel
         foreach (var e in layout.Elements)
             foreach (var a in e.Aliases ?? [])
                 _byAlias.TryAdd(a.Trim(), e);
+        var conveyors = layout.Elements.Where(e => e.Type == LayoutElementType.Conveyor && e.From is not null && e.To is not null)
+            .GroupBy(e => e.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => (g.First().From!, g.First().To!), StringComparer.Ordinal);
+        _doors = layout.Elements.Where(e => e.Type == LayoutElementType.FireDoor)
+            .Select(e => (e.Id, e.DoorState, Conveyors: (IReadOnlyList<(string, string, string)>)(e.Conveyors ?? [])
+                .Where(conveyors.ContainsKey).Distinct(StringComparer.Ordinal).Select(c => (c, conveyors[c].Item1, conveyors[c].Item2)).ToList()))
+            .Where(d => d.Conveyors.Count > 0).ToList();
 
         var state = new WorldState();
         _snapshots.Add((0, state.Clone()));
@@ -166,13 +175,42 @@ public sealed class WorldModel
     /// 移動棧板。離開儲位時該儲位變成「空」（LOG 記載已取出）；放進儲位時，原本記錄在那裡的另一個棧板
     /// 位置改為不明（LOG 記載儲位已有別的棧板，不推測它去了哪裡，ADR-0005 第 2 點 2026-11-04 補充）。
     /// </summary>
-    static void MovePallet(WorldState w, PalletState p, LocationKind kind, string id, long cause)
+    void MovePallet(WorldState w, PalletState p, LocationKind kind, string id, long cause)
     {
         if (p.Location == LocationKind.Storage && p.LocationId is { } old && old != id && w.Storage.TryGetValue(old, out var there) && there.Pallet == p.Id)
             w.Storage[old] = new StorageSlotState(null, cause);
+        CheckDoorCrossing(w, p, kind, id, cause);
         (p.Location, p.LocationId, p.LocationCause) = (kind, id, cause);
         if (kind == LocationKind.Storage) PutInStorage(w, id, p.Id, cause);
     }
+
+    /// <summary>位置對應到的 Layout 元素 id（站點、搬送機、已交出的對接設備）；儲位與不明為 null。</summary>
+    static string? ElementAt(LocationKind kind, string? id) =>
+        kind is LocationKind.Station or LocationKind.Vehicle or LocationKind.Delivered ? id : null;
+
+    /// <summary>防火門在此刻是否關著：LOG 確定的狀態優先，沒有 LOG 事件時用平時狀態（推估）。</summary>
+    public static bool IsClosed(WorldState w, string doorId, DoorState? usual) =>
+        (w.Doors.TryGetValue(doorId, out var d) && d.State is { } s ? s : usual) == DoorState.Closed;
+
+    /// <summary>
+    /// 防火門關著（含推估）時，貨物在它關聯的輸送線兩端之間移動（不看輸送線方向）：記錄穿越，只在這一筆事件標示不一致。
+    /// </summary>
+    void CheckDoorCrossing(WorldState w, PalletState p, LocationKind kind, string id, long cause)
+    {
+        if (_doors.Count == 0 || ElementAt(p.Location, p.LocationId) is not { } a || ElementAt(kind, id) is not { } b || a == b) return;
+        foreach (var (door, usual, conveyors) in _doors)
+        {
+            if (!IsClosed(w, door, usual)) continue;
+            foreach (var (conveyor, from, to) in conveyors)
+                if ((from == a && to == b) || (from == b && to == a))
+                {
+                    DoorOf(w, door).LastCrossing = new DoorCrossing(p.Id, conveyor, cause);
+                    break;
+                }
+        }
+    }
+
+    static FireDoorState DoorOf(WorldState w, string id) => w.Doors.TryGetValue(id, out var d) ? d : w.Doors[id] = new FireDoorState();
 
     static void PutInStorage(WorldState w, string slot, string? pallet, long cause)
     {
@@ -314,6 +352,12 @@ public sealed class WorldModel
                 var v = VehicleOf(w, vh);
                 if (x.Get(FieldKinds.Online) is { } online) (v.Connection, v.ConnectionCause) = (online, seq);
                 if (x.Get(FieldKinds.Mode) is { } mode) (v.Mode, v.ModeCause) = (mode, seq);
+                break;
+            }
+            case EffectKinds.FireDoorOpened or EffectKinds.FireDoorClosed when Element(FieldKinds.FireDoor, LayoutElementType.FireDoor) is { } fd:
+            {
+                var d = DoorOf(w, fd);
+                (d.State, d.StateCause) = (x.Effect == EffectKinds.FireDoorOpened ? DoorState.Open : DoorState.Closed, seq);
                 break;
             }
             case EffectKinds.AlarmRaised or EffectKinds.AlarmCleared:

@@ -20,6 +20,15 @@ public enum LayoutElementType
     Area,
     /// <summary>文字（輔助）。</summary>
     Label,
+    /// <summary>防火門（有 LOG 意義，可以有別名）：開或關；可以關聯穿過它的輸送線（ADR-0006 第 1 點 2026-11-06 補充）。</summary>
+    FireDoor,
+}
+
+/// <summary>防火門的開關狀態。JSON 中以小寫英文字串保存（open、closed）。</summary>
+public enum DoorState
+{
+    Open,
+    Closed,
 }
 
 /// <summary>
@@ -32,7 +41,7 @@ public sealed class LayoutElement
     public LayoutElementType Type { get; set; }
     public string? Name { get; set; }
 
-    /// <summary>別名：只有站點、搬送機、對接設備有（ADR-0006 第 2 點）。</summary>
+    /// <summary>別名：只有站點、搬送機、對接設備、防火門有（ADR-0006 第 2 點）。</summary>
     public List<string>? Aliases { get; set; }
 
     public double? X { get; set; }
@@ -62,6 +71,14 @@ public sealed class LayoutElement
     public LayoutPoint? FromPoint { get; set; }
     public LayoutPoint? ToPoint { get; set; }
 
+    // 防火門（ADR-0006 第 1 點 2026-11-06 補充）
+
+    /// <summary>平時的狀態（在編輯器手動設定）；回放時還沒有 LOG 事件時以它為「推估」。null＝不設定。</summary>
+    public DoorState? DoorState { get; set; }
+
+    /// <summary>穿過這扇防火門的輸送線 id；門關上時這些輸送線畫成阻斷。</summary>
+    public List<string>? Conveyors { get; set; }
+
     /// <summary>自訂屬性（ADR-0006 第 6 點）：鍵＝值，值一律是文字；保持輸入順序。</summary>
     public List<KeyValuePair<string, string>>? Props { get; set; }
 
@@ -70,7 +87,7 @@ public sealed class LayoutElement
     public Dictionary<string, JsonElement>? Extra { get; set; }
 
     public static bool CanHaveAliases(LayoutElementType type) =>
-        type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Dock;
+        type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Dock or LayoutElementType.FireDoor;
 
     /// <summary>可以當作輸送線兩端的元素：站點、對接設備、搬送機。</summary>
     public static bool CanBeConveyorEnd(LayoutElementType type) =>
@@ -186,14 +203,17 @@ public sealed class LayoutSection
 public sealed class PlantConfigDocument
 {
     /// <summary>
-    /// 程式能讀寫的格式版本。2：輸送線的 bidirectional 與交接點（#63）。
-    /// 存檔時只有用到版本 2 的功能才寫 2，其他仍寫 1，讓舊版程式照常開啟（ADR-0006 第 7 點）。
+    /// 程式能讀寫的格式版本。2：輸送線的 bidirectional 與交接點（#63）。3：防火門（舊版程式不認得 fireDoor 這個種類）。
+    /// 存檔時只寫實際用到的最低版本，讓舊版程式照常開啟（ADR-0006 第 7 點）。
     /// </summary>
-    public const int CurrentFormatVersion = 2;
+    public const int CurrentFormatVersion = 3;
 
-    /// <summary>這份設定需要的格式版本：有雙向或連到搬送機（有交接點）的輸送線時為 2，否則為 1。</summary>
+    /// <summary>
+    /// 這份設定需要的格式版本：有防火門時為 3；有雙向或連到搬送機（有交接點）的輸送線時為 2；否則為 1。
+    /// </summary>
     public int RequiredFormatVersion() =>
-        Layout.Elements.Any(e => e.Type == LayoutElementType.Conveyor && (e.Bidirectional == true || e.FromPoint is not null || e.ToPoint is not null)) ? 2 : 1;
+        Layout.Elements.Any(e => e.Type == LayoutElementType.FireDoor) ? 3
+        : Layout.Elements.Any(e => e.Type == LayoutElementType.Conveyor && (e.Bidirectional == true || e.FromPoint is not null || e.ToPoint is not null)) ? 2 : 1;
 
     public int FormatVersion { get; set; } = CurrentFormatVersion;
     public string Plant { get; set; } = "";

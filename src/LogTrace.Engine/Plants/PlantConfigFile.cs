@@ -125,7 +125,7 @@ public static class PlantConfigFile
         }
     }
 
-    /// <summary>存檔前的檢查：別名在整份設定中不可重複（大小寫視為相同）、id 不可重複、旋轉角度、輸送線的兩端與交接點。</summary>
+    /// <summary>存檔前的檢查：別名在整份設定中不可重複（大小寫視為相同）、id 不可重複、旋轉角度、輸送線的兩端與交接點、防火門關聯的輸送線。</summary>
     public static IReadOnlyList<PlantConfigIssue> Validate(PlantConfigDocument doc)
     {
         var issues = new List<PlantConfigIssue>();
@@ -201,7 +201,7 @@ public static class PlantConfigFile
         foreach (var e in elements)
         {
             if (e.Aliases is { Count: > 0 } && !LayoutElement.CanHaveAliases(e.Type))
-                issues.Add(new($"「{Label(e)}」不能有別名；只有站點、搬送機、對接設備可以。", [e.Id]));
+                issues.Add(new($"「{Label(e)}」不能有別名；只有站點、搬送機、對接設備、防火門可以。", [e.Id]));
             if (e.Aliases?.Any(string.IsNullOrWhiteSpace) == true)
                 issues.Add(new($"「{Label(e)}」有空白的別名。", [e.Id]));
             if (e.Rotation is { } r && !AllowedRotations.Contains(r))
@@ -214,6 +214,14 @@ public static class PlantConfigFile
                     issues.Add(new($"輸送線「{Label(e)}」的兩端必須是站點、對接設備或搬送機。", [e.Id]));
                 else if ((from.Type == LayoutElementType.Vehicle && e.FromPoint is null) || (to.Type == LayoutElementType.Vehicle && e.ToPoint is null))
                     issues.Add(new($"輸送線「{Label(e)}」連到搬送機的那一端沒有交接點。", [e.Id]));
+            }
+            if (e.Type == LayoutElementType.FireDoor)
+            {
+                foreach (var id in e.Conveyors ?? [])
+                    if (!elements.Any(x => x.Id == id && x.Type == LayoutElementType.Conveyor))
+                        issues.Add(new($"防火門「{Label(e)}」關聯的輸送線「{id}」不存在。", [e.Id]));
+                foreach (var g in (e.Conveyors ?? []).GroupBy(id => id, StringComparer.Ordinal).Where(g => g.Count() > 1))
+                    issues.Add(new($"防火門「{Label(e)}」重複關聯輸送線「{g.Key}」。", [e.Id]));
             }
             if (e.Props is { } props)
                 foreach (var g in props.GroupBy(p => p.Key, StringComparer.Ordinal).Where(g => g.Count() > 1 || string.IsNullOrWhiteSpace(g.Key)))

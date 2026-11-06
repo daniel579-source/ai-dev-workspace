@@ -114,7 +114,7 @@
                                 AutomationProperties.AutomationId="LoadCaseCompare" />
                         <TextBlock Text="{Binding CompareCaseName, StringFormat=目前比對：{0}, TargetNullValue=''}" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#777" />
                     </StackPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="案件 LOG 中出現、但還沒有元素以它為別名的編號。把編號拖到畫布上的站點、搬送機或對接設備，即可加為別名。"
+                    <TextBlock DockPanel.Dock="Top" Text="案件 LOG 中出現、但還沒有元素以它為別名的編號。把編號拖到畫布上的站點、搬送機、對接設備或防火門，即可加為別名。"
                                Foreground="#777" Margin="0,4,0,4" TextWrapping="Wrap" />
                     <ListBox x:Name="UnmappedList" ItemsSource="{Binding Unmapped}" AutomationProperties.AutomationId="UnmappedList"
                              PreviewMouseLeftButtonDown="Unmapped_PreviewMouseLeftButtonDown" PreviewMouseMove="Unmapped_PreviewMouseMove">
@@ -225,6 +225,7 @@
                                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False">
                                                 <TextBlock Text="{Binding Name}" FontSize="11" TextAlignment="Center" />
                                                 <TextBlock Text="{Binding AliasesText}" FontSize="10" Foreground="#2A6CB0" TextAlignment="Center" />
+                                                <TextBlock Text="{Binding DoorStateText}" FontSize="10" Foreground="#9F1239" TextAlignment="Center" />
                                             </StackPanel>
                                             <!-- 拖右下角的方塊調整大小 -->
                                             <Rectangle x:Name="ResizeHandle" Tag="resize" Width="8" Height="8" Fill="#F59E0B"
@@ -244,6 +245,10 @@
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding Type}" Value="Dock">
                                         <Setter TargetName="Shape" Property="Background" Value="#F3E8FF" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Type}" Value="FireDoor">
+                                        <Setter TargetName="Shape" Property="Background" Value="#FFE4E6" />
+                                        <Setter TargetName="Shape" Property="BorderBrush" Value="#E11D48" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding Type}" Value="Area">
                                         <Setter TargetName="Shape" Property="Background" Value="#0F94A3B8" />
@@ -315,6 +320,43 @@
                             <CheckBox Content="雙向" IsChecked="{Binding Bidirectional}" Margin="0,4,0,0" AutomationProperties.AutomationId="ConveyorBidirectional" />
                             <TextBlock Text="{Binding TransferPointsText, StringFormat=交接點：{0}, TargetNullValue=''}" TextWrapping="Wrap" Margin="0,4,0,0" />
                             <TextBlock Text="輸送線表示貨物流向（單向為起點 → 終點），不和 LOG 對應，也不從 LOG 推導狀態。連到搬送機時，線畫到交接點，拖曳線端的橘點調整。" TextWrapping="Wrap" Foreground="#777" Margin="0,4,0,0" />
+                        </StackPanel>
+
+                        <!-- 防火門（ADR-0006 第 1 點 2026-11-06 補充） -->
+                        <StackPanel Visibility="{Binding IsFireDoor, Converter={StaticResource Visible}}">
+                            <DockPanel>
+                                <TextBlock Text="平時狀態" Style="{StaticResource Field}" />
+                                <ComboBox ItemsSource="{Binding DataContext.DoorStateChoices, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          SelectedIndex="{Binding DoorStateIndex}" AutomationProperties.AutomationId="DoorState" />
+                            </DockPanel>
+                            <TextBlock Text="回放時還沒有 LOG 事件，就以平時狀態顯示，並標為「推估」；不設定時顯示「未取得資訊」。" TextWrapping="Wrap" Foreground="#777" Margin="0,2,0,6" />
+                            <TextBlock Text="穿過這扇門的輸送線" FontWeight="SemiBold" />
+                            <ItemsControl ItemsSource="{Binding DataContext.SelectedDoorConveyors, RelativeSource={RelativeSource AncestorType=Window}}" Margin="0,4,0,0"
+                                          AutomationProperties.AutomationId="DoorConveyors">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel Margin="0,0,0,2">
+                                            <Button DockPanel.Dock="Right" Content="×" Padding="6,0" Margin="4,0,0,0" ToolTip="移除關聯"
+                                                    Command="{Binding DataContext.RemoveDoorConveyorCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}" />
+                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <DockPanel Margin="0,2,0,0">
+                                <Button DockPanel.Dock="Right" Content="加入" Padding="8,1" Margin="4,0,0,0"
+                                        Command="{Binding DataContext.AddDoorConveyorCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        AutomationProperties.AutomationId="AddDoorConveyor" />
+                                <ComboBox ItemsSource="{Binding DataContext.ConveyorChoices, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="Name"
+                                          SelectedItem="{Binding DataContext.NewDoorConveyor, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          AutomationProperties.AutomationId="NewDoorConveyor" />
+                            </DockPanel>
+                            <Button Content="依位置帶入" HorizontalAlignment="Left" Padding="8,1" Margin="0,4,0,0"
+                                    ToolTip="把線段碰到這扇門範圍的輸送線加入關聯"
+                                    Command="{Binding DataContext.SuggestDoorConveyorsCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    AutomationProperties.AutomationId="SuggestDoorConveyors" />
+                            <TextBlock Text="門關上時（含推估），這些輸送線在回放時畫成阻斷；貨物在輸送線兩端之間移動時，在那一筆事件標示「不一致」。" TextWrapping="Wrap" Foreground="#777" Margin="0,4,0,6" />
                         </StackPanel>
 
                         <!-- 位置、尺寸、旋轉 -->

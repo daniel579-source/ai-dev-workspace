@@ -13,6 +13,7 @@
         <local:CollapsedWhenTrueConverter x:Key="Collapsed" />
         <local:MetersToPixelsConverter x:Key="Px" />
         <local:PositiveConverter x:Key="Positive" />
+        <local:RailGeometryConverter x:Key="RailGeometry" />
         <DataTemplate x:Key="Choice">
             <CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected}" Margin="0,1" />
         </DataTemplate>
@@ -496,6 +497,11 @@
                                                         <Setter Property="Canvas.Left" Value="0" />
                                                         <Setter Property="Canvas.Top" Value="0" />
                                                     </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsRail}" Value="True">
+                                                        <Setter Property="Canvas.Left" Value="0" />
+                                                        <Setter Property="Canvas.Top" Value="0" />
+                                                        <Setter Property="Panel.ZIndex" Value="-1" />
+                                                    </DataTrigger>
                                                     <DataTrigger Binding="{Binding Type}" Value="Area">
                                                         <Setter Property="Panel.ZIndex" Value="-1" />
                                                     </DataTrigger>
@@ -509,6 +515,9 @@
                                                           X2="{Binding LineX2, Converter={StaticResource Px}}" Y2="{Binding LineY2, Converter={StaticResource Px}}"
                                                           x:Name="ConveyorLine" Stroke="#94A3B8" StrokeThickness="3" StrokeDashArray="3 2" IsHitTestVisible="False"
                                                           Visibility="{Binding IsConveyor, Converter={StaticResource Visible}}" />
+                                                    <!-- 導軌（ADR-0006 第 14 點）：輔助元素，只畫出來 -->
+                                                    <Path Data="{Binding RailPathData, Converter={StaticResource RailGeometry}}" Stroke="#CBD5E1" StrokeThickness="5"
+                                                          StrokeLineJoin="Round" IsHitTestVisible="False" Visibility="{Binding IsRail, Converter={StaticResource Visible}}" />
                                                     <Border x:Name="Shape" Tag="{Binding}" Cursor="Hand" MouseLeftButtonUp="PlaybackElement_Click"
                                                             Width="{Binding W, Converter={StaticResource Px}}" Height="{Binding H, Converter={StaticResource Px}}"
                                                             BorderBrush="#64748B" BorderThickness="1" Background="#E5E7EB" RenderTransformOrigin="0.5,0.5"

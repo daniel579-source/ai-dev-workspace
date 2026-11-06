@@ -120,6 +120,7 @@ public sealed partial class LayoutEditorViewModel
                 (c.LineX2, c.LineY2) = b.Type == LayoutElementType.Vehicle && c.ToPoint is { } q
                     ? (q.X + b.OffsetX, q.Y + b.OffsetY) : (b.CenterX + b.OffsetX, b.CenterY + b.OffsetY);
         }
+        RefreshRails();
         (CanvasWidth, CanvasHeight) = _regions.Count == 0 ? (LayoutGeometry.MinCanvasWidth, LayoutGeometry.MinCanvasHeight)
             : (_regions.Max(r => r.OffsetX + r.Width), _regions.Max(r => r.OffsetY + r.Height));
         var regions = _regions.Select(r => new FloorRegionViewModel(r.Floor, r.OffsetX, r.OffsetY, r.Width, r.Height, SameFloor(r.Floor, CurrentFloor), SideBySide)).ToList();
@@ -248,7 +249,7 @@ public sealed partial class LayoutEditorViewModel
     void MoveSelectionToFloor()
     {
         if (MoveTargetFloor is not { } target) return;
-        var items = Selection.Where(e => e.HasGeometry).ToList();
+        var items = Selection.Where(e => e.HasGeometry || e.IsRail).ToList();
         Batch(() =>
         {
             foreach (var e in items) e.Floor = target;

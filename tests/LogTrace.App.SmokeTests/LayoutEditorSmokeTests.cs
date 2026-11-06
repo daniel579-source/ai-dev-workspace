@@ -207,6 +207,54 @@ public sealed class LayoutEditorSmokeTests : IDisposable
     }
 
     [Fact]
+    public void 導軌_新增跑道形導軌_插入點_搬送機指定導軌後存檔()
+    {
+        var dataRoot = Path.Combine(_tmp.Path, "AppData");
+        using var app = FlaUI.Core.Application.Launch(new ProcessStartInfo(ImportSmokeTests.AppExe(), $"--data-root \"{dataRoot}\""));
+        using var automation = new UIA3Automation();
+        try
+        {
+            var main = app.GetMainWindow(automation, TimeSpan.FromSeconds(30));
+            Assert.NotNull(main);
+            var cf = main.ConditionFactory;
+            var desktop = automation.GetDesktop();
+            AutomationElement In(AutomationElement root, string id) =>
+                Retry.WhileNull(() => root.FindFirstDescendant(cf.ByAutomationId(id)), TimeSpan.FromSeconds(10)).Result
+                ?? throw new InvalidOperationException($"找不到 {id}");
+            In(main, "OpenLayoutEditor").AsButton().Invoke();
+            var editor = Retry.WhileNull(
+                () => main.FindFirstChild(cf.ByAutomationId("LayoutEditor")) ?? desktop.FindFirstChild(cf.ByAutomationId("LayoutEditor")),
+                TimeSpan.FromSeconds(10)).Result ?? throw new InvalidOperationException("找不到 Layout 編輯器視窗");
+
+            In(editor, "PlantName").AsTextBox().Text = "導軌測試廠";
+            In(editor, "Add_RailLoop").AsButton().Invoke();
+            Assert.True(In(editor, "RailClosed").AsCheckBox().IsChecked);
+            In(editor, "RailSegment").AsComboBox().Select(0);
+            In(editor, "InsertRailPoint").AsButton().Invoke();
+            Assert.True(Retry.WhileFalse(() => In(editor, "EditorStatus").Name.Contains("插入一點"), TimeSpan.FromSeconds(5)).Result,
+                In(editor, "EditorStatus").Name);
+
+            In(editor, "Add_Vehicle").AsButton().Invoke();
+            In(editor, "VehicleRail").AsComboBox().Select(0);
+            In(editor, "SaveConfig").AsButton().Invoke();
+            Assert.True(Retry.WhileFalse(() => In(editor, "EditorStatus").Name.Contains("修訂 1"), TimeSpan.FromSeconds(10)).Result,
+                In(editor, "EditorStatus").Name);
+
+            var json = File.ReadAllText(Path.Combine(dataRoot, "Plants", "導軌測試廠.json"));
+            Assert.Contains("\"formatVersion\": 4", json);
+            Assert.Contains("\"type\": \"rail\"", json);
+            Assert.Contains("\"closed\": true", json);
+            Assert.Contains("\"rail\": \"rl-1\"", json);
+            editor.AsWindow().Close();
+        }
+        finally
+        {
+            app.Close();
+            if (!app.HasExited) app.Kill();
+        }
+    }
+
+    [Fact]
     public void 沒有LOG的門檻_從下拉選單選擇模組_存檔後重新開啟仍在()
     {
         var dataRoot = Path.Combine(_tmp.Path, "AppData");

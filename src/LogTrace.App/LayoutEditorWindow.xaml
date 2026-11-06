@@ -9,6 +9,7 @@
         <local:MetersToPixelsConverter x:Key="Px" />
         <local:ElementTypeLabelConverter x:Key="TypeLabel" />
         <local:FileNameConverter x:Key="FileName" />
+        <local:RailGeometryConverter x:Key="RailGeometry" />
         <BooleanToVisibilityConverter x:Key="Visible" />
         <!-- 輸送線起點、終點選單的項目：類型＋名稱（和元素清單一樣） -->
         <DataTemplate x:Key="EndpointItem">
@@ -86,6 +87,9 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+                <!-- 導軌的範本（ADR-0006 第 14 點）：「導軌」按鈕是直線，這個是跑道形環 -->
+                <Button DockPanel.Dock="Top" Content="導軌（跑道形）" Command="{Binding AddRailLoopCommand}" HorizontalAlignment="Left" Padding="8,2"
+                        AutomationProperties.AutomationId="Add_RailLoop" />
 
                 <TextBlock DockPanel.Dock="Top" Text="元素清單" FontWeight="SemiBold" Margin="0,8,0,4" />
                 <ListBox ItemsSource="{Binding ElementList}" SelectedItem="{Binding SelectedElement}" AutomationProperties.AutomationId="ElementList">
@@ -245,6 +249,11 @@
                                         <Setter Property="Canvas.Top" Value="0" />
                                         <Setter Property="Panel.ZIndex" Value="1" />
                                     </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsRail}" Value="True">
+                                        <Setter Property="Canvas.Left" Value="0" />
+                                        <Setter Property="Canvas.Top" Value="0" />
+                                        <Setter Property="Panel.ZIndex" Value="0" />
+                                    </DataTrigger>
                                     <DataTrigger Binding="{Binding Type}" Value="Area">
                                         <Setter Property="Panel.ZIndex" Value="-1" />
                                     </DataTrigger>
@@ -273,6 +282,41 @@
                                             <Ellipse.RenderTransform><TranslateTransform X="-5" Y="-5" /></Ellipse.RenderTransform>
                                         </Ellipse>
                                     </Canvas>
+                                    <!-- 導軌（ADR-0006 第 14 點）：拖曳線條整條移動，雙擊插入點；選取時畫出點（方）與中點（圓）的把手 -->
+                                    <Path x:Name="RailLine" Data="{Binding RailPathData, Converter={StaticResource RailGeometry}}" Tag="{Binding}" Cursor="SizeAll"
+                                          Stroke="#64748B" StrokeThickness="5" StrokeLineJoin="Round" Visibility="{Binding IsRail, Converter={StaticResource Visible}}"
+                                          AutomationProperties.AutomationId="{Binding Id, StringFormat=Rail_{0}}" />
+                                    <ItemsControl ItemsSource="{Binding RailHandles}" Visibility="{Binding IsRail, Converter={StaticResource Visible}}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <Canvas />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemContainerStyle>
+                                            <Style TargetType="ContentPresenter">
+                                                <Setter Property="Canvas.Left" Value="{Binding X, Converter={StaticResource Px}}" />
+                                                <Setter Property="Canvas.Top" Value="{Binding Y, Converter={StaticResource Px}}" />
+                                            </Style>
+                                        </ItemsControl.ItemContainerStyle>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Rectangle x:Name="Handle" Tag="railHandle" Width="10" Height="10" Fill="#F59E0B" Stroke="White" Cursor="SizeAll">
+                                                    <Rectangle.RenderTransform><TranslateTransform X="-5" Y="-5" /></Rectangle.RenderTransform>
+                                                </Rectangle>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding IsPoint}" Value="False">
+                                                        <Setter TargetName="Handle" Property="RadiusX" Value="5" />
+                                                        <Setter TargetName="Handle" Property="RadiusY" Value="5" />
+                                                        <Setter TargetName="Handle" Property="Fill" Value="#FDE68A" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                        <Setter TargetName="Handle" Property="Stroke" Value="#2563EB" />
+                                                        <Setter TargetName="Handle" Property="StrokeThickness" Value="2" />
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
                                     <Border x:Name="Shape" Tag="{Binding}" Cursor="SizeAll"
                                             Width="{Binding W, Converter={StaticResource Px}}" Height="{Binding H, Converter={StaticResource Px}}"
                                             BorderBrush="#475569" BorderThickness="1" Background="#E2E8F0"
@@ -323,6 +367,10 @@
                                         <Setter TargetName="Shape" Property="BorderBrush" Value="#2563EB" />
                                         <Setter TargetName="Shape" Property="BorderThickness" Value="2" />
                                         <Setter TargetName="ResizeHandle" Property="Visibility" Value="Visible" />
+                                        <Setter TargetName="RailLine" Property="Stroke" Value="#2563EB" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding HasIssue}" Value="True">
+                                        <Setter TargetName="RailLine" Property="Stroke" Value="#DC2626" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding HasIssue}" Value="True">
                                         <Setter TargetName="Shape" Property="BorderBrush" Value="#DC2626" />
@@ -391,6 +439,44 @@
                             <TextBlock Text="{Binding TransferPointsText, StringFormat=交接點：{0}, TargetNullValue=''}" TextWrapping="Wrap" Margin="0,4,0,0" />
                             <TextBlock Text="輸送線表示貨物流向（單向為起點 → 終點），不和 LOG 對應，也不從 LOG 推導狀態。連到搬送機時，線畫到交接點，拖曳線端的橘點調整。" TextWrapping="Wrap" Foreground="#777" Margin="0,4,0,0" />
                         </StackPanel>
+
+                        <!-- 導軌（ADR-0006 第 14 點） -->
+                        <StackPanel Visibility="{Binding IsRail, Converter={StaticResource Visible}}">
+                            <DockPanel>
+                                <TextBlock Text="樓層" Style="{StaticResource Field}" />
+                                <ComboBox ItemsSource="{Binding DataContext.Floors, RelativeSource={RelativeSource AncestorType=Window}}" SelectedItem="{Binding Floor}" />
+                            </DockPanel>
+                            <CheckBox Content="閉合（頭尾相接）" IsChecked="{Binding Closed}" Margin="0,4,0,0" AutomationProperties.AutomationId="RailClosed" />
+                            <TextBlock Text="{Binding DataContext.RailSelectionText, RelativeSource={RelativeSource AncestorType=Window}}" Margin="0,6,0,2"
+                                       AutomationProperties.AutomationId="RailSelection" />
+                            <DockPanel>
+                                <TextBlock Text="段" Style="{StaticResource Field}" />
+                                <ComboBox ItemsSource="{Binding DataContext.RailSegments, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          SelectedValuePath="Index" DisplayMemberPath="Label"
+                                          SelectedValue="{Binding DataContext.SelectedRailSegment, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          AutomationProperties.AutomationId="RailSegment" />
+                            </DockPanel>
+                            <WrapPanel Margin="0,4,0,0">
+                                <Button Content="插入點" Command="{Binding DataContext.InsertRailPointCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        Padding="8,1" Margin="0,0,4,4" ToolTip="在選取的段的中點插入一點" AutomationProperties.AutomationId="InsertRailPoint" />
+                                <Button Content="刪除點" Command="{Binding DataContext.DeleteRailPointCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        Padding="8,1" Margin="0,0,4,4" AutomationProperties.AutomationId="DeleteRailPoint" />
+                                <Button Content="這段改直線" Command="{Binding DataContext.StraightenRailSegmentCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        Padding="8,1" Margin="0,0,4,4" AutomationProperties.AutomationId="StraightenRailSegment" />
+                                <Button Content="轉 90°" Command="{Binding DataContext.RotateClockwiseCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        Padding="8,1" Margin="0,0,4,4" AutomationProperties.AutomationId="RotateRail" />
+                            </WrapPanel>
+                            <TextBlock Text="拖曳方形把手移動點，拖曳圓形把手（每段的中點）把直線變弧線、調整彎度（最多半圓）；雙擊導軌插入點；拖曳線條整條移動。導軌是輔助元素，不和 LOG 對應。" TextWrapping="Wrap" Foreground="#777" Margin="0,4,0,6" />
+                        </StackPanel>
+
+                        <!-- 搬送機所走的導軌（ADR-0006 第 14 點）：只列同一層的導軌 -->
+                        <DockPanel Visibility="{Binding IsVehicle, Converter={StaticResource Visible}}">
+                            <TextBlock Text="導軌" Style="{StaticResource Field}" />
+                            <Button DockPanel.Dock="Right" Content="×" Padding="6,0" Margin="4,0,0,0" ToolTip="清除導軌指定"
+                                    Command="{Binding DataContext.ClearVehicleRailCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                            <ComboBox ItemsSource="{Binding DataContext.RailChoices, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="Name"
+                                      SelectedValuePath="Id" SelectedValue="{Binding Rail}" AutomationProperties.AutomationId="VehicleRail" />
+                        </DockPanel>
 
                         <!-- 防火門（ADR-0006 第 1 點 2026-11-06 補充） -->
                         <StackPanel Visibility="{Binding IsFireDoor, Converter={StaticResource Visible}}">

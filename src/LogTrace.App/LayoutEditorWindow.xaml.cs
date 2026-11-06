@@ -19,6 +19,7 @@ public partial class LayoutEditorWindow : Window
     Point? _dragStart;
     bool _resizing;
     bool _movingPoint;
+    bool _movingRailHandle;
     Point? _boxStart;
 
     public LayoutEditorWindow(LayoutEditorViewModel vm)
@@ -37,6 +38,25 @@ public partial class LayoutEditorWindow : Window
     {
         LayoutCanvas.Focus(); // 讓 Ctrl+C／Ctrl+V／Del／Ctrl+Z 作用在畫布，而不是之前輸入的文字框
         var hit = e.OriginalSource as FrameworkElement;
+        const double ppm = MetersToPixelsConverter.PixelsPerMeter;
+        // 導軌的把手（ADR-0006 第 14 點）
+        if (hit is { Tag: "railHandle", DataContext: RailHandleViewModel handle })
+        {
+            _vm.BeginRailHandleDrag(handle);
+            _movingRailHandle = true;
+            _dragStart = e.GetPosition(LayoutCanvas);
+            LayoutCanvas.CaptureMouse();
+            e.Handled = true;
+            return;
+        }
+        // 雙擊導軌：在雙擊處插入一點
+        if (e.ClickCount == 2 && FindElement(hit) is { IsRail: true } rail)
+        {
+            var p = e.GetPosition(LayoutCanvas);
+            _vm.InsertRailPointAt(rail, p.X / ppm, p.Y / ppm);
+            e.Handled = true;
+            return;
+        }
         if (hit is { Tag: "fromPoint" or "toPoint", DataContext: LayoutElementViewModel conveyor })
         {
             _vm.BeginTransferPointDrag(conveyor, hit.Tag is "fromPoint");
@@ -83,6 +103,11 @@ public partial class LayoutEditorWindow : Window
         }
         if (_dragStart is not { } start) return;
         var p = e.GetPosition(LayoutCanvas);
+        if (_movingRailHandle)
+        {
+            _vm.DragRailHandleTo(p.X / MetersToPixelsConverter.PixelsPerMeter, p.Y / MetersToPixelsConverter.PixelsPerMeter);
+            return;
+        }
         if (_movingPoint)
         {
             _vm.DragTransferPointTo(p.X / MetersToPixelsConverter.PixelsPerMeter, p.Y / MetersToPixelsConverter.PixelsPerMeter);
@@ -115,6 +140,7 @@ public partial class LayoutEditorWindow : Window
         if (_dragStart is null) return;
         _dragStart = null;
         _movingPoint = false;
+        _movingRailHandle = false;
         _vm.EndDrag();
         LayoutCanvas.ReleaseMouseCapture();
     }
@@ -222,6 +248,23 @@ public partial class LayoutEditorWindow : Window
     {
         if (ConfigList.SelectedItem is string path) _vm.OpenConfigCommand.Execute(path);
     }
+}
+
+/// <summary>
+/// 導軌的路徑（WPF 路徑語法，公尺）轉成畫布上的圖形：放大成像素（1 公尺 = 32 像素）；線寬不跟著放大。
+/// </summary>
+public sealed class RailGeometryConverter : IValueConverter
+{
+    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is not string data || data.Length == 0) return null;
+        var geometry = System.Windows.Media.Geometry.Parse(data).Clone();
+        geometry.Transform = new System.Windows.Media.ScaleTransform(MetersToPixelsConverter.PixelsPerMeter, MetersToPixelsConverter.PixelsPerMeter);
+        geometry.Freeze();
+        return geometry;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
 }
 
 /// <summary>公尺轉成畫布上的像素（1 公尺 = 32 像素）。</summary>

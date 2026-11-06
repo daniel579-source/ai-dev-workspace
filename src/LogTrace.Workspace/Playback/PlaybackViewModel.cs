@@ -40,7 +40,8 @@ public enum EquipmentSort
 
 /// <summary>設備狀態表的一列（ADR-0008 第 6 點）：站點、搬送機、對接設備、防火門在目前時刻的狀態。</summary>
 /// <param name="IsAbnormal">異常中（有未復歸的警報）或不一致。</param>
-public sealed record EquipmentRowViewModel(string Id, string Name, string TypeLabel, string Aliases, string State, bool IsAbnormal, ElementLook Look);
+/// <param name="Floor">所在的樓層（ADR-0006 第 13 點）。</param>
+public sealed record EquipmentRowViewModel(string Id, string Name, string TypeLabel, string Aliases, string State, bool IsAbnormal, ElementLook Look, string Floor = "");
 
 /// <summary>詳細資訊的一列：狀態，以及造成這個狀態的事件（可以跳過去）。</summary>
 public sealed record StateLineViewModel(string Label, string Value, long? Cause, string? CauseText);
@@ -68,12 +69,14 @@ public sealed record RackLevelViewModel(int Level, string? StorageCode, string? 
 /// <summary>Layout 面板上的一個元素與它在目前時刻的狀態。</summary>
 public sealed partial class PlaybackElementViewModel : ObservableObject
 {
-    public PlaybackElementViewModel(LayoutElement e, IReadOnlyDictionary<string, LayoutElement> byId)
+    /// <param name="floors">Layout 的樓層清單（ADR-0006 第 13 點）；null 時為只有 1F。</param>
+    public PlaybackElementViewModel(LayoutElement e, IReadOnlyDictionary<string, LayoutElement> byId, IReadOnlyList<string>? floors = null)
     {
         Model = e;
         (X, Y, W, H, Rotation) = (e.X ?? 0, e.Y ?? 0, e.W ?? 0, e.H ?? 0, e.Rotation ?? 0);
+        Floor = LayoutFloors.FloorOf(e, floors ?? [LayoutFloors.Default], id => id is not null && byId.TryGetValue(id, out var x) ? x : null);
         if (e.Type == LayoutElementType.Conveyor && e.From is { } f && e.To is { } t && byId.TryGetValue(f, out var a) && byId.TryGetValue(t, out var b))
-            ((LineX1, LineY1), (LineX2, LineY2)) = (End(a, e.FromPoint), End(b, e.ToPoint));
+            ((_lineX1, _lineY1), (_lineX2, _lineY2)) = (End(a, e.FromPoint), End(b, e.ToPoint));
         if (e.Type == LayoutElementType.Rack && e.ColFrom is { } from && e.ColTo is { } to && to >= from)
             for (int c = from; c <= to; c++) Cells.Add(new RackCellViewModel(c, e.Levels ?? 0));
         Look = IsAuxiliary ? ElementLook.Auxiliary : ElementLook.Unknown;
@@ -102,10 +105,31 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     public double W { get; }
     public double H { get; }
     public int Rotation { get; }
-    public double LineX1 { get; }
-    public double LineY1 { get; }
-    public double LineX2 { get; }
-    public double LineY2 { get; }
+
+    /// <summary>所在的樓層（輸送線取起點的樓層）。</summary>
+    public string Floor { get; }
+
+    readonly double _lineX1, _lineY1, _lineX2, _lineY2;
+
+    // 畫面上的位置：並排檢視時加上所在樓層區域的位移；單層檢視時其他樓層的元素不顯示（ADR-0006 第 13 點）
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ViewX), nameof(LineX1), nameof(LineX2))]
+    public partial double OffsetX { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ViewY), nameof(LineY1), nameof(LineY2))]
+    public partial double OffsetY { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsOnCanvas { get; set; } = true;
+
+    public double ViewX => X + OffsetX;
+    public double ViewY => Y + OffsetY;
+    public double LineX1 => _lineX1 + OffsetX;
+    public double LineY1 => _lineY1 + OffsetY;
+    public double LineX2 => _lineX2 + OffsetX;
+    public double LineY2 => _lineY2 + OffsetY;
 
     /// <summary>料架的各列。</summary>
     public ObservableCollection<RackCellViewModel> Cells { get; } = [];
@@ -255,10 +279,11 @@ public sealed partial class PlaybackViewModel : ObservableObject
         _stationModeNames = (stationModeNames ?? []).GroupBy(p => p.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Value, StringComparer.Ordinal);
         _storageRule = layout.StorageCodeRule;
         _events = events.ToDictionary(e => e.Sequence);
-        var byId = layout.Elements.ToDictionary(e => e.Id, StringComparer.Ordinal);
+        var byId = layout.Elements.GroupBy(e => e.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        LoadFloors(layout);
         Elements.Clear();
-        foreach (var e in layout.Elements) Elements.Add(new PlaybackElementViewModel(e, byId));
-        (CanvasWidth, CanvasHeight) = LayoutGeometry.CanvasSize(layout.Elements);
+        foreach (var e in layout.Elements) Elements.Add(new PlaybackElementViewModel(e, byId, Floors));
+        RefreshFloorView();
         SelectedElement = null;
         Message = hasStateRules ? null : "廠別設定的解析規則中，只有在席等少數狀態變化；命令、搬送機、警報等需要在規則中設定「效果」才能推導。";
         SetMoment(0);
@@ -283,6 +308,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
     {
         if (oldValue is not null) oldValue.IsSelected = false;
         if (newValue is not null) newValue.IsSelected = true;
+        if (newValue is not null) Follow(newValue.Floor);
         if (newValue is null || !newValue.IsRack) SelectRackCell(null);
         UpdateDetail();
     }
@@ -406,6 +432,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
         Detail.Clear();
         if (SelectedElement is not { } el || _model is null) return;
         var w = _state;
+        if (Floors.Count > 1) Detail.Add(Line("樓層", el.Floor, null));
         switch (el.Type)
         {
             case LayoutElementType.Station:
@@ -515,7 +542,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
     void UpdateEquipment()
     {
         var rows = Elements.Where(e => e.Type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Dock or LayoutElementType.FireDoor)
-            .Select(e => new EquipmentRowViewModel(e.Id, e.Name, e.TypeLabel, e.Aliases, EquipmentState(e), _state.Alarms.ContainsKey(e.Id) || e.IsInconsistent, e.Look))
+            .Select(e => new EquipmentRowViewModel(e.Id, e.Name, e.TypeLabel, e.Aliases, EquipmentState(e), _state.Alarms.ContainsKey(e.Id) || e.IsInconsistent, e.Look, e.Floor))
             .Where(r => !OnlyAbnormal || r.IsAbnormal);
         Func<EquipmentRowViewModel, string> key = SortBy switch
         {

@@ -29,8 +29,12 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     (LayoutElementViewModel Conveyor, bool From)? _pointDrag;
 
     /// <param name="cases">「載入案件比對」可以選的案件；null 時不提供。</param>
-    public LayoutEditorViewModel(PlantConfigLibrary library, IUserInteraction ui, CaseLibrary? cases = null)
+    /// <param name="view">樓層檢視的本機設定；saveView 在使用者切換單層／並排、橫向／垂直時呼叫。</param>
+    public LayoutEditorViewModel(PlantConfigLibrary library, IUserInteraction ui, CaseLibrary? cases = null,
+        FloorViewSettings? view = null, Action<FloorViewSettings>? saveView = null)
     {
+        if (view is not null) UseViewSettings(view, null);
+        _saveView = saveView;
         _library = library;
         _ui = ui;
         _cases = cases;
@@ -191,6 +195,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         if (_selecting) return;
         foreach (var e in Elements) e.IsSelected = e == newValue;
         OnSelectionChanged();
+        if (newValue is not null && !SameFloor(FloorOf(newValue), CurrentFloor)) CurrentFloor = FloorOf(newValue); // 例如從元素清單選了別層的元素
     }
 
     void RefreshDoorConveyors()
@@ -219,6 +224,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             _document = doc;
             SelectedElement = null;
             Elements.Clear();
+            LoadFloors(doc.Layout);
             foreach (var e in doc.Layout.Elements) Attach(new LayoutElementViewModel(e));
         }
         finally
@@ -305,6 +311,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         _document.Plant = PlantName.Trim();
         _document.Layout.StorageCodeRule = string.IsNullOrWhiteSpace(StorageCodeRule) ? null : StorageCodeRule.Trim();
         _document.Layout.Elements = Elements.Select(e => e.ToModel()).ToList();
+        _document.Layout.Floors = [.. FloorList];
         _document.ModuleOrder = Lines(ModuleOrderText);
         _document.KnownLoggers = Lines(KnownLoggersText);
         _document.Encodings = EncodingRules.Select(r => r.ToModel()).ToList();
@@ -374,7 +381,9 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             or nameof(LayoutElementViewModel.LineX2) or nameof(LayoutElementViewModel.LineY2)
             or nameof(LayoutElementViewModel.CenterX) or nameof(LayoutElementViewModel.CenterY)
             or nameof(LayoutElementViewModel.HasFromPoint) or nameof(LayoutElementViewModel.HasToPoint)
-            or nameof(LayoutElementViewModel.TransferPointsText) or nameof(LayoutElementViewModel.DoorStateText) or nameof(LayoutElementViewModel.DoorStateIndex))
+            or nameof(LayoutElementViewModel.TransferPointsText) or nameof(LayoutElementViewModel.DoorStateText) or nameof(LayoutElementViewModel.DoorStateIndex)
+            or nameof(LayoutElementViewModel.OffsetX) or nameof(LayoutElementViewModel.OffsetY) or nameof(LayoutElementViewModel.ViewX)
+            or nameof(LayoutElementViewModel.ViewY) or nameof(LayoutElementViewModel.IsOnCanvas))
             return;
         IsDirty = true;
         _suppressUndo++; // 連帶的變更（交接點、線端）和這次修改算同一步
@@ -396,7 +405,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     {
         if (propertyName is nameof(LayoutElementViewModel.X) or nameof(LayoutElementViewModel.Y) or nameof(LayoutElementViewModel.W)
             or nameof(LayoutElementViewModel.H) or nameof(LayoutElementViewModel.From) or nameof(LayoutElementViewModel.To)
-            or nameof(LayoutElementViewModel.Name) or nameof(LayoutElementViewModel.FromPoint) or nameof(LayoutElementViewModel.ToPoint))
+            or nameof(LayoutElementViewModel.Name) or nameof(LayoutElementViewModel.FromPoint) or nameof(LayoutElementViewModel.ToPoint)
+            or nameof(LayoutElementViewModel.Floor))
         {
             if (propertyName is nameof(LayoutElementViewModel.Name)) RefreshElementList();
             RefreshEndpoints();
@@ -407,11 +417,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             RefreshCanvasSize();
     }
 
-    /// <summary>依元素範圍重算畫布大小：拖到靠近邊緣時跟著變大。</summary>
-    void RefreshCanvasSize()
-    {
-        (CanvasWidth, CanvasHeight) = LayoutGeometry.CanvasSize(Elements.Select(e => e.ToModel()));
-    }
+    /// <summary>依元素範圍重算畫布大小：拖到靠近邊緣時跟著變大（並排時每層各自計算，ADR-0006 第 13 點）。</summary>
+    void RefreshCanvasSize() => RefreshLayoutView();
 
     LayoutElementViewModel? Find(string? id) => id is null ? null : Elements.FirstOrDefault(e => e.Id == id && e.HasGeometry);
 
@@ -437,15 +444,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     /// <summary>更新輸送線兩端的位置，以及可以當作輸送線兩端的元素。</summary>
     void RefreshEndpoints()
     {
-        var byId = Elements.Where(e => e.HasGeometry).ToDictionary(e => e.Id);
-        foreach (var c in Elements.Where(e => e.IsConveyor))
-        {
-            if (c.From is { } f && byId.TryGetValue(f, out var a))
-                (c.LineX1, c.LineY1) = a.Type == LayoutElementType.Vehicle && c.FromPoint is { } p ? (p.X, p.Y) : (a.CenterX, a.CenterY);
-            if (c.To is { } t && byId.TryGetValue(t, out var b))
-                (c.LineX2, c.LineY2) = b.Type == LayoutElementType.Vehicle && c.ToPoint is { } q ? (q.X, q.Y) : (b.CenterX, b.CenterY);
-        }
-        RefreshCanvasSize();
+        RefreshLayoutView();
         SyncOrder(ConveyorEndpoints, Elements.Where(e => LayoutElement.CanBeConveyorEnd(e.Type)).Order(LayoutElementTypes.ListOrder).ToList());
         SyncOrder(ConveyorChoices, Elements.Where(e => e.IsConveyor).Order(LayoutElementTypes.ListOrder).ToList());
         RefreshDoorConveyors();
@@ -502,11 +501,11 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         {
             var (w, h, height) = LayoutElementTypes.DefaultSize(type);
             // 放在現有元素的下方，避免疊在一起
-            var top = SnapTo(Elements.Where(e => e.HasGeometry).Select(e => e.Y + e.H).DefaultIfEmpty(0).Max() + 1);
+            var top = SnapTo(Elements.Where(e => e.HasGeometry && SameFloor(FloorOf(e), CurrentFloor)).Select(e => e.Y + e.H).DefaultIfEmpty(0).Max() + 1);
             model = new LayoutElement
             {
                 Id = id, Type = type, Name = $"新{LayoutElementTypes.Label(type)} {id[(id.IndexOf('-') + 1)..]}",
-                X = 1, Y = top, W = w, H = h, Rotation = 0, Height = height,
+                X = 1, Y = top, W = w, H = h, Rotation = 0, Height = height, Floor = CurrentFloor,
                 Aliases = LayoutElement.CanHaveAliases(type) ? [] : null,
             };
             if (type == LayoutElementType.Rack)
@@ -587,6 +586,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         _lastEditKey = null; // 換了選取後的修改另算一步
         OnPropertyChanged(nameof(SelectionCount));
         OnPropertyChanged(nameof(SelectionHint));
+        OnPropertyChanged(nameof(HasMultipleSelection));
         DeleteSelectedCommand.NotifyCanExecuteChanged();
         CopyCommand.NotifyCanExecuteChanged();
     }
@@ -596,13 +596,13 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         SetSelection(element.IsSelected ? Selection.Where(e => e != element) : Selection.Append(element));
 
     /// <summary>
-    /// 框選（公尺）：框碰到的元素就算選到，碰到的輸送線也算。add 為 true（按住 Ctrl）時加到原本的選取。
+    /// 框選（畫面上的公尺）：框碰到的元素就算選到，碰到的輸送線也算；並排時可以跨樓層。add 為 true（按住 Ctrl）時加到原本的選取。
     /// </summary>
     public void SelectInRect(double x1, double y1, double x2, double y2, bool add)
     {
         var rect = (Math.Min(x1, x2), Math.Min(y1, y2), Math.Max(x1, x2), Math.Max(y1, y2));
-        var hits = Elements.Where(e => e.HasGeometry
-            ? LayoutGeometry.RectsTouch(LayoutGeometry.Bounds(e.X, e.Y, e.W, e.H, e.Rotation), rect)
+        var hits = Elements.Where(e => e.IsOnCanvas).Where(e => e.HasGeometry
+            ? LayoutGeometry.RectsTouch(LayoutGeometry.Bounds(e.ViewX, e.ViewY, e.W, e.H, e.Rotation), rect)
             : LayoutGeometry.SegmentTouchesRect(e.LineX1, e.LineY1, e.LineX2, e.LineY2, rect)).ToList();
         SetSelection(add ? Selection.Concat(hits) : hits);
         if (SelectionCount > 1) Status = $"已選取 {SelectionCount} 個元素：拖曳一起移動，Del 刪除，Ctrl+C 複製。";
@@ -628,7 +628,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
 
     /// <summary>
     /// 貼上（Ctrl+V）：產生新的 id，名稱、尺寸、旋轉、自訂屬性與別名照抄（別名重複由存檔前檢查擋下）。
-    /// 以 (x, y)（公尺，滑鼠目前位置）當作整組的左上角；滑鼠不在畫布上（null）時放在原位置往右下 1 公尺。貼上後選取新元素。
+    /// 以 (x, y)（畫面上的公尺，滑鼠目前位置）當作整組的左上角，貼到滑鼠所在的樓層；
+    /// 滑鼠不在畫布上（null）時放在原位置往右下 1 公尺，貼到目前樓層。貼上後選取新元素。
     /// </summary>
     public void Paste(double? x, double? y)
     {
@@ -640,9 +641,13 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         var items = PlantConfigFile.DeserializeElements(_clipboard);
         var shapes = items.Where(e => e.Type != LayoutElementType.Conveyor).ToList();
         double dx = 1, dy = 1;
+        var floor = CurrentFloor;
         if (shapes.Count == 0) (dx, dy) = (0, 0);
-        else if (x is { } px && y is { } py)
+        else if (x is { } vx && y is { } vy)
         {
+            var region = RegionAt(vx, vy);
+            floor = region.Floor;
+            var (px, py) = (vx - region.OffsetX, vy - region.OffsetY);
             var bounds = shapes.Select(e => LayoutGeometry.Bounds(e.X ?? 0, e.Y ?? 0, e.W ?? 0, e.H ?? 0, e.Rotation ?? 0)).ToList();
             dx = Math.Max(0, SnapTo(px)) - bounds.Min(b => b.Left);
             dy = Math.Max(0, SnapTo(py)) - bounds.Min(b => b.Top);
@@ -655,7 +660,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             foreach (var e in shapes)
             {
                 map[e.Id] = e.Id = NextId(e.Type);
-                (e.X, e.Y) = (e.X + dx, e.Y + dy);
+                (e.X, e.Y, e.Floor) = (e.X + dx, e.Y + dy, floor);
                 added.Add(AttachNew(e));
             }
             foreach (var c in items.Where(e => e.Type == LayoutElementType.Conveyor))
@@ -678,8 +683,9 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             }
         });
         IsDirty = true;
+        CurrentFloor = floor;
         SetSelection(added);
-        Status = $"已貼上 {added.Count} 個元素；別名照抄，重複的別名存檔前會提示。";
+        Status = $"已貼上 {added.Count} 個元素到「{floor}」；別名照抄，重複的別名存檔前會提示。";
     }
 
     LayoutElementViewModel AttachNew(LayoutElement model)
@@ -694,13 +700,16 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     public const int MaxUndoSteps = 50;
 
     readonly List<string> _undo = [];
-    string _undoBaseline = "[]";
+    string _undoBaseline = "";
     string? _lastEditKey;
     int _suppressUndo;
 
     public int UndoCount => _undo.Count;
 
-    string Snapshot() => PlantConfigFile.SerializeElements(Elements.Select(e => e.ToModel()));
+    /// <summary>復原的狀態：樓層清單與元素（樓層改名會一併改元素，所以兩者一起記錄）。</summary>
+    sealed record UndoState(List<string> Floors, string Elements);
+
+    string Snapshot() => System.Text.Json.JsonSerializer.Serialize(new UndoState([.. FloorList], PlantConfigFile.SerializeElements(Elements.Select(e => e.ToModel()))));
 
     /// <summary>
     /// 記錄一次修改：把修改前的狀態放進復原堆疊。key 相同的連續修改（同一欄位連續輸入）合併成一步；
@@ -760,7 +769,11 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         {
             foreach (var e in Elements) Detach(e);
             Elements.Clear();
-            foreach (var m in PlantConfigFile.DeserializeElements(state)) Attach(new LayoutElementViewModel(m));
+            var restored = System.Text.Json.JsonSerializer.Deserialize<UndoState>(state)!;
+            var floor = CurrentFloor;
+            LoadFloors(new LayoutSection { Floors = restored.Floors });
+            CurrentFloor = LayoutFloors.Canonical(floor, FloorList) ?? FloorList[0];
+            foreach (var m in PlantConfigFile.DeserializeElements(restored.Elements)) Attach(new LayoutElementViewModel(m));
         }
         finally
         {
@@ -789,16 +802,19 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         _dragPrimary = element;
     }
 
-    /// <summary>移動：從開始拖曳的位置加上位移（公尺），吸附到格線，整組不超出畫布左上角。</summary>
+    /// <summary>
+    /// 移動：從開始拖曳的位置加上位移（公尺），吸附到格線，整組不超出畫布左上角。
+    /// 並排時可以拖到其他樓層的區域，放開時才換樓層（<see cref="EndDrag"/>）。
+    /// </summary>
     public void DragMoveBy(double dx, double dy)
     {
         if (_drag is not { Count: > 0 } group) return;
-        dx = Math.Max(dx, -group.Min(d => d.X));
-        dy = Math.Max(dy, -group.Min(d => d.Y));
+        dx = Math.Max(dx, -group.Min(d => d.X + d.Element.OffsetX));
+        dy = Math.Max(dy, -group.Min(d => d.Y + d.Element.OffsetY));
         foreach (var d in group)
         {
-            d.Element.X = Math.Max(0, SnapTo(d.X + dx));
-            d.Element.Y = Math.Max(0, SnapTo(d.Y + dy));
+            d.Element.X = Math.Max(-d.Element.OffsetX, SnapTo(d.X + dx));
+            d.Element.Y = Math.Max(-d.Element.OffsetY, SnapTo(d.Y + dy));
         }
     }
 
@@ -814,11 +830,45 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         d.Element.H = Math.Max(Snap, SnapTo(d.H + dy));
     }
 
+    /// <summary>
+    /// 放開：並排時，元素中心落在哪一層的區域（落在空白處時取最近的），就改到那一層，座標換算成該層的座標（ADR-0006 第 13 點）；
+    /// 座標不小於 0。整個拖曳算一步。
+    /// </summary>
     public void EndDrag()
     {
+        var group = _drag;
         _drag = null;
         _dragPrimary = null;
         _pointDrag = null;
+        if (group is { Count: > 0 })
+        {
+            // 先以拖曳時的區域算好每個元素的目的地，再一起套用（套用時區域會重算）
+            var moves = group.Select(d => d.Element).Select(e =>
+            {
+                var r = SideBySide ? RegionAt(e.ViewX + e.W / 2, e.ViewY + e.H / 2) : new FloorRegion(FloorOf(e), e.OffsetX, e.OffsetY, 0, 0);
+                return (Element: e, r.Floor, X: Math.Max(0, SnapTo(e.ViewX - r.OffsetX)), Y: Math.Max(0, SnapTo(e.ViewY - r.OffsetY)));
+            }).ToList();
+            bool floorChanged = moves.Any(m => !SameFloor(FloorOf(m.Element), m.Floor));
+            _suppressUndo++;
+            try
+            {
+                foreach (var m in moves)
+                {
+                    if (!SameFloor(FloorOf(m.Element), m.Floor)) m.Element.Floor = m.Floor;
+                    (m.Element.X, m.Element.Y) = (m.X, m.Y);
+                }
+            }
+            finally
+            {
+                _suppressUndo--;
+            }
+            if (floorChanged)
+            {
+                CurrentFloor = FloorOf(moves[0].Element);
+                Status = $"已移到「{CurrentFloor}」。";
+            }
+        }
+        RefreshEndpoints();
         Commit(null); // 整個拖曳算一步
     }
 
@@ -829,11 +879,13 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         if ((from ? conveyor.FromPoint : conveyor.ToPoint) is not null) _pointDrag = (conveyor, from);
     }
 
-    /// <summary>把交接點移到 (x, y)（公尺），吸附到格線，不小於 0。</summary>
+    /// <summary>把交接點移到 (x, y)（畫面上的公尺），換算成所在樓層的座標，吸附到格線，不小於 0。</summary>
     public void DragTransferPointTo(double x, double y)
     {
         if (_pointDrag is not { } d) return;
-        var p = new LayoutPoint(Math.Max(0, SnapTo(x)), Math.Max(0, SnapTo(y)));
+        var end = Find(d.From ? d.Conveyor.From : d.Conveyor.To);
+        var (ox, oy) = end is null ? (0d, 0d) : (end.OffsetX, end.OffsetY);
+        var p = new LayoutPoint(Math.Max(0, SnapTo(x - ox)), Math.Max(0, SnapTo(y - oy)));
         if (d.From) d.Conveyor.FromPoint = p;
         else d.Conveyor.ToPoint = p;
     }
@@ -887,8 +939,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     void SuggestDoorConveyors()
     {
         if (SelectedElement is not { IsFireDoor: true } door) return;
-        var bounds = LayoutGeometry.Bounds(door.X, door.Y, door.W, door.H, door.Rotation);
-        var hits = Elements.Where(e => e.IsConveyor && !door.Conveyors.Contains(e.Id)
+        var bounds = LayoutGeometry.Bounds(door.ViewX, door.ViewY, door.W, door.H, door.Rotation); // 輸送線的線端是畫面上的座標
+        var hits = Elements.Where(e => e.IsConveyor && !door.Conveyors.Contains(e.Id) && SameFloor(FloorOf(e), FloorOf(door))
             && LayoutGeometry.SegmentTouchesRect(e.LineX1, e.LineY1, e.LineX2, e.LineY2, bounds)).ToList();
         Batch(() =>
         {

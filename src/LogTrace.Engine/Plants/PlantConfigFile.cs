@@ -46,6 +46,7 @@ public static class PlantConfigFile
     public static string Serialize(PlantConfigDocument doc)
     {
         doc.FormatVersion = doc.RequiredFormatVersion();
+        LayoutFloors.Normalize(doc.Layout);
         return JsonSerializer.Serialize(doc, Options);
     }
 
@@ -184,6 +185,14 @@ public static class PlantConfigFile
         foreach (var g in elements.GroupBy(e => e.Id, StringComparer.Ordinal).Where(g => g.Count() > 1))
             issues.Add(new($"元素 id「{g.Key}」重複。", [g.Key]));
 
+        // 樓層（ADR-0006 第 13 點）
+        var floors = LayoutFloors.Of(doc.Layout);
+        if (floors.Any(string.IsNullOrWhiteSpace)) issues.Add(new("有空白的樓層名稱。", []));
+        foreach (var g in floors.Where(f => !string.IsNullOrWhiteSpace(f)).GroupBy(f => f.Trim(), LayoutFloors.NameComparer).Where(g => g.Count() > 1))
+            issues.Add(new($"樓層「{g.Key}」重複（大小寫視為相同）。", []));
+        foreach (var e in elements.Where(e => e.Type != LayoutElementType.Conveyor && e.Floor is not null && LayoutFloors.Canonical(e.Floor, floors) is null))
+            issues.Add(new($"「{Label(e)}」的樓層「{e.Floor}」不在樓層清單中。", [e.Id]));
+
         var aliasOwners = elements
             .SelectMany(e => (e.Aliases ?? []).Select(a => (Alias: a.Trim(), Element: e)))
             .GroupBy(x => x.Alias, StringComparer.OrdinalIgnoreCase)
@@ -214,6 +223,8 @@ public static class PlantConfigFile
                     issues.Add(new($"輸送線「{Label(e)}」的兩端必須是站點、對接設備或搬送機。", [e.Id]));
                 else if ((from.Type == LayoutElementType.Vehicle && e.FromPoint is null) || (to.Type == LayoutElementType.Vehicle && e.ToPoint is null))
                     issues.Add(new($"輸送線「{Label(e)}」連到搬送機的那一端沒有交接點。", [e.Id]));
+                else if (!LayoutFloors.NameComparer.Equals(LayoutFloors.FloorOf(from, floors, _ => null), LayoutFloors.FloorOf(to, floors, _ => null)))
+                    issues.Add(new($"輸送線「{Label(e)}」的兩端不在同一層；跨樓層的搬送請用電梯。", [e.Id, from.Id, to.Id]));
             }
             if (e.Type == LayoutElementType.FireDoor)
             {

@@ -49,8 +49,9 @@ public partial class LayoutEditorWindow : Window
         var element = FindElement(hit);
         if (element is null)
         {
-            // 空白處：開始框選（ADR-0006 第 10 點）
+            // 空白處：開始框選（ADR-0006 第 10 點）；並排時目前樓層改為點到的那一層（第 13 點）
             _boxStart = e.GetPosition(LayoutCanvas);
+            _vm.SetCurrentFloorAt(_boxStart.Value.X / MetersToPixelsConverter.PixelsPerMeter, _boxStart.Value.Y / MetersToPixelsConverter.PixelsPerMeter);
             LayoutCanvas.CaptureMouse();
             e.Handled = true;
             return;

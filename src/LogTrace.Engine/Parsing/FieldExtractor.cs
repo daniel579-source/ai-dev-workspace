@@ -11,6 +11,8 @@ public static class FieldKinds
     public const string Dock = "dock";
     /// <summary>防火門的編號（LOG 樣式待確認，ADR-0006 第 1 點 2026-11-06 補充）。</summary>
     public const string FireDoor = "fireDoor";
+    /// <summary>電梯的編號（LOG 樣式待確認，ADR-0005 第 11 點）；不和搬送機共用。</summary>
+    public const string Elevator = "elevator";
     public const string Storage = "storage";
     public const string Command = "command";
     public const string CommandType = "commandType";
@@ -32,7 +34,7 @@ public static class FieldKinds
     /// <summary>所有欄位種類與中文名稱（依畫面顯示順序）。</summary>
     public static IReadOnlyList<(string Kind, string Label)> All { get; } =
     [
-        (Station, "站點"), (Vehicle, "搬送機"), (Dock, "對接設備"), (FireDoor, "防火門"), (Storage, "儲位"),
+        (Station, "站點"), (Vehicle, "搬送機"), (Dock, "對接設備"), (FireDoor, "防火門"), (Elevator, "電梯"), (Storage, "儲位"),
         (Command, "命令"), (CommandType, "命令類型"), (Segment, "段"), (Source, "來源"), (Destination, "目的地"),
         (Pallet, "棧板"), (Bin, "桶"),
         (Signal, "訊號"), (SignalValue, "訊號值"), (StationMode, "站點模式"), (StationStatus, "運轉狀態"),
@@ -40,7 +42,7 @@ public static class FieldKinds
     ];
 
     /// <summary>可以對應到 Layout 元素別名的欄位（ADR-0006 第 2、3 點）。</summary>
-    public static IReadOnlyList<string> Identifiers { get; } = [Station, Vehicle, Dock, FireDoor];
+    public static IReadOnlyList<string> Identifiers { get; } = [Station, Vehicle, Dock, FireDoor, Elevator];
 
     public static bool IsKnown(string kind) => All.Any(k => k.Kind == kind);
 
@@ -75,6 +77,11 @@ public static class EffectKinds
     public const string FireDoorOpened = "fireDoorOpened";
     public const string FireDoorClosed = "fireDoorClosed";
 
+    /// <summary>電梯的效果（ADR-0005 第 11 點；LOG 樣式待確認）：派給電梯、電梯抵達、電梯作業完成。</summary>
+    public const string ElevatorDispatched = "elevatorDispatched";
+    public const string ElevatorArrived = "elevatorArrived";
+    public const string ElevatorFinished = "elevatorFinished";
+
     /// <summary>效果的名稱，以及規則必須有的欄位（「A|B」表示其中之一）。</summary>
     public static IReadOnlyList<(string Effect, string Label, string[] Required)> All { get; } =
     [
@@ -89,10 +96,13 @@ public static class EffectKinds
         (CommandCompleted, "命令完成", [FieldKinds.Command]),
         (CommandCancelled, "命令取消（樣式待確認）", [FieldKinds.Command]),
         (Connection, "搬送機連線狀態或自動／手動", [FieldKinds.Vehicle, $"{FieldKinds.Online}|{FieldKinds.Mode}"]),
-        (AlarmRaised, "警報發生", [$"{FieldKinds.Vehicle}|{FieldKinds.Station}|{FieldKinds.Dock}"]),
-        (AlarmCleared, "警報復歸", [$"{FieldKinds.Vehicle}|{FieldKinds.Station}|{FieldKinds.Dock}"]),
+        (AlarmRaised, "警報發生", [$"{FieldKinds.Vehicle}|{FieldKinds.Station}|{FieldKinds.Dock}|{FieldKinds.Elevator}"]),
+        (AlarmCleared, "警報復歸", [$"{FieldKinds.Vehicle}|{FieldKinds.Station}|{FieldKinds.Dock}|{FieldKinds.Elevator}"]),
         (FireDoorOpened, "防火門開（樣式待確認）", [FieldKinds.FireDoor]),
         (FireDoorClosed, "防火門關（樣式待確認）", [FieldKinds.FireDoor]),
+        (ElevatorDispatched, "命令的一段派給電梯（樣式待確認）", [FieldKinds.Command, FieldKinds.Elevator, FieldKinds.Destination]),
+        (ElevatorArrived, "電梯抵達目的地（樣式待確認）", [FieldKinds.Command, FieldKinds.Destination]),
+        (ElevatorFinished, "電梯作業完成（LOG 沒有記錄地點，樣式待確認）", [FieldKinds.Command]),
     ];
 
     public static bool IsKnown(string effect) => All.Any(e => e.Effect == effect);

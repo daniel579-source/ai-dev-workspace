@@ -255,6 +255,58 @@ public sealed class LayoutEditorSmokeTests : IDisposable
     }
 
     [Fact]
+    public void 電梯_新增後服務所有樓層_取消一層_存檔寫出服務的樓層()
+    {
+        var dataRoot = Path.Combine(_tmp.Path, "AppData");
+        using var app = FlaUI.Core.Application.Launch(new ProcessStartInfo(ImportSmokeTests.AppExe(), $"--data-root \"{dataRoot}\""));
+        using var automation = new UIA3Automation();
+        try
+        {
+            var main = app.GetMainWindow(automation, TimeSpan.FromSeconds(30));
+            Assert.NotNull(main);
+            var cf = main.ConditionFactory;
+            var desktop = automation.GetDesktop();
+            AutomationElement In(AutomationElement root, string id) =>
+                Retry.WhileNull(() => root.FindFirstDescendant(cf.ByAutomationId(id)), TimeSpan.FromSeconds(10)).Result
+                ?? throw new InvalidOperationException($"找不到 {id}");
+            In(main, "OpenLayoutEditor").AsButton().Invoke();
+            var editor = Retry.WhileNull(
+                () => main.FindFirstChild(cf.ByAutomationId("LayoutEditor")) ?? desktop.FindFirstChild(cf.ByAutomationId("LayoutEditor")),
+                TimeSpan.FromSeconds(10)).Result ?? throw new InvalidOperationException("找不到 Layout 編輯器視窗");
+
+            In(editor, "PlantName").AsTextBox().Text = "電梯測試廠";
+            In(editor, "AddFloor").AsButton().Invoke(); // 2F
+            In(editor, "AddFloor").AsButton().Invoke(); // 3F
+            In(editor, "Add_Elevator").AsButton().Invoke();
+            In(editor, "NewAlias").AsTextBox().Text = "L1"; // 虛構的編號
+            In(editor, "AddAlias").AsButton().Invoke();
+            var third = In(editor, "ServedFloor_3F").AsCheckBox();
+            Assert.True(third.IsChecked);
+            third.IsChecked = false;
+            Assert.True(Retry.WhileFalse(() => In(editor, "EditorStatus").Name.Contains("服務 1F、2F"), TimeSpan.FromSeconds(5)).Result,
+                In(editor, "EditorStatus").Name);
+            In(editor, "EditorSideBySide").AsCheckBox().IsChecked = true; // 並排：2F 畫出分身
+            In(editor, "SaveConfig").AsButton().Invoke();
+            Assert.True(Retry.WhileFalse(() => In(editor, "EditorStatus").Name.Contains("修訂 1"), TimeSpan.FromSeconds(10)).Result,
+                In(editor, "EditorStatus").Name);
+
+            var json = File.ReadAllText(Path.Combine(dataRoot, "Plants", "電梯測試廠.json"));
+            Assert.Contains("\"formatVersion\": 5", json);
+            Assert.Contains("\"type\": \"elevator\"", json);
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var elevator = doc.RootElement.GetProperty("layout").GetProperty("elements").EnumerateArray()
+                .Single(e => e.GetProperty("type").GetString() == "elevator");
+            Assert.Equal(["1F", "2F"], elevator.GetProperty("servedFloors").EnumerateArray().Select(f => f.GetString()!).ToArray());
+            editor.AsWindow().Close();
+        }
+        finally
+        {
+            app.Close();
+            if (!app.HasExited) app.Kill();
+        }
+    }
+
+    [Fact]
     public void 沒有LOG的門檻_從下拉選單選擇模組_存檔後重新開啟仍在()
     {
         var dataRoot = Path.Combine(_tmp.Path, "AppData");

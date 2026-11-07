@@ -74,7 +74,10 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     {
         Model = e;
         (X, Y, W, H, Rotation) = (e.X ?? 0, e.Y ?? 0, e.W ?? 0, e.H ?? 0, e.Rotation ?? 0);
-        Floor = LayoutFloors.FloorOf(e, floors ?? [LayoutFloors.Default], id => id is not null && byId.TryGetValue(id, out var x) ? x : null);
+        LayoutElement? Find(string? id) => id is not null && byId.TryGetValue(id, out var x) ? x : null;
+        ServedFloors = LayoutFloors.FloorsOf(e, floors ?? [LayoutFloors.Default], Find);
+        Floor = e.Type == LayoutElementType.Elevator ? ServedFloors.FirstOrDefault() ?? (floors ?? [LayoutFloors.Default])[0]
+            : LayoutFloors.FloorOf(e, floors ?? [LayoutFloors.Default], Find);
         if (e.Type == LayoutElementType.Conveyor && e.From is { } f && e.To is { } t && byId.TryGetValue(f, out var a) && byId.TryGetValue(t, out var b))
             ((_lineX1, _lineY1), (_lineX2, _lineY2)) = (End(a, e.FromPoint), End(b, e.ToPoint));
         if (e.Type == LayoutElementType.Rack && e.ColFrom is { } from && e.ColTo is { } to && to >= from)
@@ -110,8 +113,17 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     public double H { get; }
     public int Rotation { get; }
 
-    /// <summary>所在的樓層（輸送線取起點的樓層）。</summary>
+    /// <summary>所在的樓層（輸送線取起點的樓層；電梯取第一個服務的樓層）。</summary>
     public string Floor { get; }
+
+    /// <summary>畫在哪些樓層：電梯為服務的樓層，其他元素只有 Floor（ADR-0006 第 15 點）。</summary>
+    public IReadOnlyList<string> ServedFloors { get; }
+
+    public bool IsElevator => Type == LayoutElementType.Elevator;
+
+    /// <summary>設備狀態表的「樓層」欄：電梯為目前樓層（未取得資訊時為「—」），其他元素為所在的樓層。</summary>
+    [ObservableProperty]
+    public partial string? CurrentFloorText { get; set; }
 
     readonly double _lineX1, _lineY1, _lineX2, _lineY2;
 
@@ -326,7 +338,12 @@ public sealed partial class PlaybackViewModel : ObservableObject
     {
         if (oldValue is not null) oldValue.IsSelected = false;
         if (newValue is not null) newValue.IsSelected = true;
-        if (newValue is not null) Follow(newValue.Floor);
+        if (newValue is not null)
+        {
+            // 電梯：切到目前所在的樓層；未取得資訊時不切換（使用者決定）
+            if (newValue.IsElevator) { if (_state.Elevators.TryGetValue(newValue.Id, out var ev) && ev.Floor is { } f) Follow(f); }
+            else Follow(newValue.Floor);
+        }
         if (newValue is null || !newValue.IsRack) SelectRackCell(null);
         UpdateDetail();
     }
@@ -360,6 +377,21 @@ public sealed partial class PlaybackViewModel : ObservableObject
                 el.Look = w.Alarms.ContainsKey(el.Id) ? ElementLook.Alarm
                     : v?.Work == VehicleWork.Executing ? ElementLook.Executing
                     : v is null ? ElementLook.Unknown : ElementLook.Empty;
+                break;
+            }
+            case LayoutElementType.Elevator:
+            {
+                // ADR-0005 第 11 點：每一層的圖示都顯示同樣的狀態與載著的棧板
+                w.Elevators.TryGetValue(el.Id, out var e);
+                var load = w.PalletsAt(LocationKind.Elevator, el.Id).Select(p => p.Id).ToList();
+                el.CurrentFloorText = e?.Floor ?? "—";
+                el.IsEstimated = e?.IsMoving == true || e?.FloorBasis == ElevatorFloorBasis.EstimatedFromSource;
+                var where = e is null ? null : e.IsMoving ? $"移動中：{e.FromFloor ?? "?"} → {e.ToFloor ?? "?"}" : e.Floor is { } f ? $"在 {f}" : null;
+                el.Summary = string.Join("　", new[] { where, load.Count > 0 ? string.Join("、", load) : null }.OfType<string>()) is { Length: > 0 } t ? t : null;
+                el.Look = w.Alarms.ContainsKey(el.Id) ? ElementLook.Alarm
+                    : e?.IsMoving == true ? ElementLook.Executing
+                    : load.Count > 0 ? ElementLook.Occupied
+                    : e is null ? ElementLook.Unknown : ElementLook.Empty;
                 break;
             }
             case LayoutElementType.Dock:
@@ -407,6 +439,18 @@ public sealed partial class PlaybackViewModel : ObservableObject
 
     Dictionary<string, string> _stationModeNames = [];
     DateTime? _momentTime;
+
+    /// <summary>電梯目前樓層與依據的文字（ADR-0005 第 11 點）。</summary>
+    public static string ElevatorFloorText(ElevatorState? e) => e?.Floor is not { } floor ? "未取得資訊"
+        : e.IsMoving ? $"{floor}（移動中，推估）"
+        : e.FloorBasis switch
+        {
+            ElevatorFloorBasis.Arrived => $"{floor}（依 LOG：抵達的站點所在的樓層）",
+            ElevatorFloorBasis.EstimatedFromSource => $"{floor}（推估：依派送的來源站點）",
+            ElevatorFloorBasis.FinishedNoLocation => $"{floor}（作業完成，地點未記錄：停在出發的樓層）",
+            ElevatorFloorBasis.Cancelled => $"{floor}（命令取消：停在出發的樓層）",
+            _ => floor,
+        };
 
     /// <summary>搬送機位置依據的文字（ADR-0005 第 10 點）。</summary>
     public static string PlacementText(VehiclePositionBasis basis) => basis switch
@@ -464,7 +508,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
         Detail.Clear();
         if (SelectedElement is not { } el || _model is null) return;
         var w = _state;
-        if (Floors.Count > 1) Detail.Add(Line("樓層", el.Floor, null));
+        if (Floors.Count > 1 && !el.IsElevator) Detail.Add(Line("樓層", el.Floor, null));
         switch (el.Type)
         {
             case LayoutElementType.Station:
@@ -498,6 +542,21 @@ public sealed partial class PlaybackViewModel : ObservableObject
                     Detail.Add(Line("位置", PlacementText(pl.Basis), pl.ArrivalCause ?? pl.DispatchCause));
                     if (pl.DispatchCause is { } d && pl.ArrivalCause is not null) Detail.Add(Line("派送", "這一段的派送", d));
                 }
+                break;
+            }
+            case LayoutElementType.Elevator:
+            {
+                w.Elevators.TryGetValue(el.Id, out var e);
+                Detail.Add(Line("服務的樓層", string.Join("、", el.ServedFloors), null));
+                Detail.Add(Line("目前樓層", ElevatorFloorText(e), e?.FloorCause));
+                Detail.Add(Line("作業", e?.Work switch
+                {
+                    VehicleWork.Executing => $"執行中：命令 {e.Command} → {e.Destination}（移動中：{e.FromFloor ?? "?"} → {e.ToFloor ?? "?"}，推估）",
+                    VehicleWork.Idle => "閒置",
+                    _ => "未知",
+                }, e?.WorkCause));
+                foreach (var p in w.PalletsAt(LocationKind.Elevator, el.Id))
+                    Detail.Add(Line("載著", PalletText(p), p.LocationCause));
                 break;
             }
             case LayoutElementType.Dock:
@@ -578,8 +637,9 @@ public sealed partial class PlaybackViewModel : ObservableObject
 
     void UpdateEquipment()
     {
-        var rows = Elements.Where(e => e.Type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Dock or LayoutElementType.FireDoor)
-            .Select(e => new EquipmentRowViewModel(e.Id, e.Name, e.TypeLabel, e.Aliases, EquipmentState(e), _state.Alarms.ContainsKey(e.Id) || e.IsInconsistent, e.Look, e.Floor))
+        var rows = Elements.Where(e => e.Type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Dock or LayoutElementType.FireDoor or LayoutElementType.Elevator)
+            .Select(e => new EquipmentRowViewModel(e.Id, e.Name, e.TypeLabel, e.Aliases, EquipmentState(e), _state.Alarms.ContainsKey(e.Id) || e.IsInconsistent, e.Look,
+                e.IsElevator ? e.CurrentFloorText ?? "—" : e.Floor))
             .Where(r => !OnlyAbnormal || r.IsAbnormal);
         Func<EquipmentRowViewModel, string> key = SortBy switch
         {
@@ -625,6 +685,13 @@ public sealed partial class PlaybackViewModel : ObservableObject
             case LayoutElementType.Dock:
                 var delivered = w.PalletsAt(LocationKind.Delivered, e.Id).Count();
                 parts.Add(delivered > 0 ? $"已交出 {delivered}" : "未交出");
+                break;
+            case LayoutElementType.Elevator:
+                w.Elevators.TryGetValue(e.Id, out var ev);
+                parts.Add("目前樓層 " + ElevatorFloorText(ev));
+                parts.Add(ev?.IsMoving == true ? $"執行中 {ev.Command}（{ev.FromFloor ?? "?"} → {ev.ToFloor ?? "?"}）" : ev is null ? "作業未知" : "閒置");
+                var load = w.PalletsAt(LocationKind.Elevator, e.Id).Select(p => p.Id).ToList();
+                if (load.Count > 0) parts.Add("載著 " + string.Join("、", load));
                 break;
             case LayoutElementType.FireDoor:
                 var (state, _, estimated) = DoorStateOf(e);

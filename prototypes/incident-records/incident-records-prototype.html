@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>異常紀錄雛形</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1f2328; --muted: #6a737d; --line: #e1e4e8;
+    --accent: #2f6fde; --accent-soft: #e8f0fd;
+    --ai: #b35c00; --ai-soft: #fff3e0; --ok: #1a7f37; --ok-soft: #e6f4ea;
+    --bad: #c62828; --bad-soft: #fdecea; --warn: #8a6d00; --warn-soft: #fff8db;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161819; --panel: #1f2224; --text: #e6e6e3; --muted: #9aa1a8; --line: #33383c;
+      --accent: #7aa7ff; --accent-soft: #1d2a42;
+      --ai: #ffb35c; --ai-soft: #3a2a14; --ok: #5cc97a; --ok-soft: #173222;
+      --bad: #ff7b72; --bad-soft: #3d1c1a; --warn: #e3c55a; --warn-soft: #34301a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.6 "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif; }
+  main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 0 0 10px; }
+  h3 { font-size: 14px; margin: 14px 0 6px; color: var(--muted); font-weight: 600; }
+  .intro { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; margin: 12px 0 16px; }
+  .intro p { margin: 4px 0; }
+  .banner { display: inline-block; background: var(--warn-soft); color: var(--warn); border-radius: 4px; padding: 0 8px; font-size: 12px; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: 300px 1fr; gap: 16px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
+  .reclist button { display: block; width: 100%; text-align: left; margin: 0 0 6px; padding: 8px 10px;
+    border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); cursor: pointer; font: inherit; }
+  .reclist button.sel { border-color: var(--accent); background: var(--accent-soft); }
+  .tag { display: inline-block; border-radius: 4px; padding: 0 6px; font-size: 12px; margin-left: 4px; white-space: nowrap; }
+  .t-draft { background: var(--warn-soft); color: var(--warn); }
+  .t-reviewed { background: var(--ok-soft); color: var(--ok); }
+  .t-disabled { background: var(--bad-soft); color: var(--bad); }
+  .t-ai { background: var(--ai-soft); color: var(--ai); }
+  .t-src { background: var(--accent-soft); color: var(--accent); }
+  .t-revising { background: var(--accent-soft); color: var(--accent); }
+  .t-chg { background: var(--accent); color: #fff; font-weight: 600; }
+  .t-pend { background: var(--warn); color: #fff; font-weight: 600; }
+  .chg { background: var(--accent-soft); border-left: 3px solid var(--accent); padding-left: 6px; }
+  .pend { background: var(--warn-soft); border-left: 3px solid var(--warn); padding-left: 6px; }
+  .vers div { padding: 4px 0; border-bottom: 1px dashed var(--line); }
+  .vers del { color: var(--bad); } .vers ins { color: var(--ok); text-decoration: none; }
+  table.fields { width: 100%; border-collapse: collapse; }
+  table.fields th { text-align: left; width: 110px; vertical-align: top; color: var(--muted); font-weight: 600; padding: 5px 8px 5px 0; }
+  table.fields td { padding: 5px 0; border-bottom: 1px solid var(--line); }
+  tr.changed td, tr.changed th { background: var(--accent-soft); }
+  .empty { color: var(--muted); font-style: italic; }
+  .btns { display: flex; flex-wrap: wrap; gap: 6px; }
+  .btns button, .steps button, .tabs button { font: inherit; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); cursor: pointer; }
+  .btns button:hover, .steps button:hover { border-color: var(--accent); }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .steps ol { margin: 6px 0 0; padding-left: 22px; }
+  .steps li { margin: 6px 0; }
+  .steps li.done button { opacity: .5; }
+  .steps li.next button { border-color: var(--accent); background: var(--accent-soft); }
+  .log { max-height: 220px; overflow: auto; font-size: 13px; }
+  .log div { padding: 3px 0; border-bottom: 1px dashed var(--line); }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 700px) { .two { grid-template-columns: 1fr; } }
+  .hit { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; }
+  .hit .meta { color: var(--muted); font-size: 12px; }
+  .forward { color: var(--bad); font-weight: 600; }
+  .q { background: var(--bg); border-radius: 6px; padding: 6px 10px; font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>異常紀錄雛形 <span class="banner">雛形・全部為虛構資料</span></h1>
+  <div class="intro">
+    <p><b>要回答的問題（ADR-0016、#107）</b></p>
+    <p>1. 異常紀錄的候選欄位夠不夠用？包括從案件產生的紀錄，以及從過去維修紀錄整理的紀錄。</p>
+    <p>2. 「草稿 → 已審核 → 停用」的流程合不合理？審核時「AI 推測」要怎麼處理？已審核的紀錄修改時，舊版是否繼續有效、改過的地方是否顯眼、能否看到全部修正經過？停用後能否恢復？</p>
+    <p class="empty">第 2 版（2026-11-13）：依使用者回覆修改：查詢不列草稿；修改期間舊版有效；最新一版改過的欄位顯眼標示；修訂經過；停用可恢復（退回草稿重新審核）；新增停機時間、處理人、照片或文件。</p>
+    <p class="empty">第 3 版（2026-11-13）：新增「待審核清單」：列出草稿與修訂中（含還不能審核的），可以審核的排前面，同類依等待時間由久到新。</p>
+    <p>3. 查詢「過去相似的異常」時，工程師和第一線各看到什麼？草稿、AI 推測、停用的紀錄有沒有確實擋在第一線之外？</p>
+    <p class="warn">以下規則都是根據 ADR-0016 寫出來的<b>假設</b>，看到「不應該這樣」的地方，就是要討論的點。</p>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <h2 id="queue-title">待審核清單</h2>
+        <div id="queue" class="reclist"></div>
+      </div>
+      <div class="panel">
+        <h2>異常紀錄</h2>
+        <div id="reclist" class="reclist"></div>
+      </div>
+      <div class="panel">
+        <h2>操作（任意順序）</h2>
+        <h3>新增</h3>
+        <div class="btns" id="btn-new"></div>
+        <h3>對目前選取的紀錄</h3>
+        <div class="btns" id="btn-rec"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h2>引導情境</h2>
+        <div class="tabs" id="tabs"></div>
+        <div class="steps" id="steps"></div>
+      </div>
+
+      <div class="panel">
+        <h2 id="rec-title">選取的紀錄</h2>
+        <div id="rec-detail"></div>
+      </div>
+
+      <div class="panel">
+        <h2>查詢「過去相似的異常」</h2>
+        <div class="q" id="query"></div>
+        <div class="two" style="margin-top:10px">
+          <div><h3>工程師看到的</h3><div id="view-eng"></div></div>
+          <div><h3>第一線看到的</h3><div id="view-front"></div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>操作紀錄</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+/* =====================================================================
+ * 純邏輯模組（不碰 DOM）：異常紀錄的資料形狀、版本、狀態轉換與相似查詢。
+ * 雛形；規則為依 ADR-0016 與使用者 2026-11-13 回覆的假設。
+ * ===================================================================== */
+const IncidentModel = (() => {
+  const ORIGIN = { ai: 'AI 推測', engineer: '工程師', case: '案件事件', qa: '問答紀錄', maint: '維修紀錄原文' };
+  const STATUS = { draft: '草稿', reviewed: '已審核', revising: '修訂中', disabled: '停用' };
+  const FIELDS = [
+    ['symptom', '現象'], ['from', '開始'], ['to', '結束'], ['plant', '廠別'], ['caseName', '案件'],
+    ['events', '相關事件'], ['alarms', '警報代碼'], ['devices', '相關設備'],
+    ['downtime', '停機時間'], ['handler', '處理人'], ['attachments', '照片或文件'],
+    ['cause', '原因'], ['disposal', '處置'], ['executor', '執行者'], ['result', '結果'],
+  ];
+  const LABEL = Object.fromEntries(FIELDS);
+  const clone = (x) => JSON.parse(JSON.stringify(x));
+  const uniq = (a) => [...new Set(a)];
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const REVIEWER = '王工程師（虛構）';
+  const TODAY = '2026-11-13';
+  // 模擬時鐘：0 分鐘 = 2026-11-13 09:00（虛構）；每個操作經過 3 分鐘
+  function clockText(min) {
+    const t = new Date(Date.UTC(2026, 10, 13, 9, 0) + min * 60000);
+    const p = (n) => String(n).padStart(2, '0');
+    return `${t.getUTCMonth() + 1}/${t.getUTCDate()} ${p(t.getUTCHours())}:${p(t.getUTCMinutes())}`;
+  }
+  function waitText(min) {
+    if (min < 60) return `${min} 分鐘`;
+    if (min < 60 * 24) return `${Math.floor(min / 60)} 小時`;
+    return `${Math.floor(min / 60 / 24)} 天`;
+  }
+
+  // 虛構：發生異常的案件與問答紀錄
+  const CASE = {
+    name: '範例案件-1101（虛構）', plant: '範例廠（虛構）',
+    events: [
+      { seq: 1204, time: '08:15:02.120', device: 'ST-02', alarm: 'E101', text: '輸送逾時（虛構）' },
+      { seq: 1206, time: '08:15:02.450', device: 'CV-03', alarm: '',     text: '在席與命令不一致（虛構）' },
+      { seq: 1210, time: '08:15:05.000', device: 'VH-01', alarm: '',     text: '等待交接（虛構）' },
+    ],
+    qa: { id: 'Q-0007', text: 'CV-03 那邊棧板不動了（虛構）' },
+  };
+  const SAFETY = [{ alarm: 'E301', instruction: '安全門開啟中，請勿進入設備區，立即聯絡工程師（虛構）' }];
+  const QUERY = { alarms: ['E101'], devices: ['CV-03'], text: '新的異常：E101，設備 CV-03（虛構）' };
+
+  function data(d) {
+    return Object.assign({
+      symptom: { text: '', origin: '' }, from: '', to: '', plant: '', caseName: '',
+      events: [], alarms: [], devices: [], downtime: '', handler: '', attachments: [],
+      cause: { text: '', origin: '' }, disposal: { text: '', origin: '' }, executor: '', result: '',
+    }, d);
+  }
+  function diff(a, b) { return FIELDS.map(([k]) => k).filter((k) => !same(a[k], b[k])); }
+
+  // versions: 每一版都是審核通過時的完整內容
+  function rec(id, source, status, author, vers, extra) {
+    const versions = [];
+    vers.forEach(([d, reviewer, at]) => {
+      const prev = versions.length ? versions[versions.length - 1].data : null;
+      versions.push({ rev: versions.length + 1, data: d, changed: prev ? diff(prev, d) : [], reviewer, at });
+    });
+    return Object.assign({ id, source, status, author, work: clone(vers[vers.length - 1][0]), versions, disabledReason: '', history: [], queuedAt: null }, extra || {});
+  }
+
+  function initial() {
+    const base1 = data({
+      symptom: { text: 'CV-03 入口棧板停住，ST-02 報 E101（虛構）', origin: 'engineer' },
+      from: '2026-09-02 10:01', to: '2026-09-02 10:20', plant: '範例廠（虛構）', caseName: '範例案件-0902（虛構）',
+      events: [{ seq: 88, time: '10:01:13.000', device: 'ST-02', alarm: 'E101', text: '輸送逾時（虛構）' }],
+      alarms: ['E101'], devices: ['ST-02', 'CV-03'], downtime: '19 分鐘', handler: '現場 A 班（虛構）',
+      cause: { text: 'CV-03 入口光電感測器髒污，在席誤判（虛構）', origin: 'engineer' },
+      disposal: { text: '清潔 CV-03 入口光電感測器，在操作面板按重置（虛構）', origin: 'engineer' },
+      executor: '現場可執行', result: '重置後恢復運轉（虛構）',
+    });
+    const r1 = rec('R-001', 'case', 'reviewed', 'AI 草稿', [[base1, REVIEWER, '2026-09-03']]);
+
+    const base2 = data({
+      symptom: { text: 'CV-05 停止，ST-04 報 E101（虛構）', origin: 'engineer' },
+      from: '2026-10-11 14:30', to: '2026-10-11 15:40', plant: '範例廠（虛構）', caseName: '範例案件-1011（虛構）',
+      events: [{ seq: 512, time: '14:30:44.200', device: 'ST-04', alarm: 'E101', text: '輸送逾時（虛構）' }],
+      alarms: ['E101'], devices: ['ST-04', 'CV-05'], downtime: '70 分鐘', handler: '李工程師（虛構）',
+      cause: { text: 'CV-05 馬達過載保護動作（虛構）', origin: 'engineer' },
+      disposal: { text: '在操作面板復歸過載保護（虛構）', origin: 'engineer' },
+      executor: '現場可執行', result: '復歸後恢復（虛構）',
+    });
+    const base2b = Object.assign(clone(base2), {
+      disposal: { text: '檢查馬達與減速機後才可復歸（虛構）', origin: 'engineer' },
+      executor: '限工程師', result: '更換減速機後恢復（虛構）', attachments: ['減速機照片.jpg（虛構）'],
+    });
+    const r2 = rec('R-002', 'case', 'reviewed', 'AI 草稿', [[base2, REVIEWER, '2026-10-12'], [base2b, '李工程師（虛構）', '2026-10-20']]);
+
+    const base4 = data({
+      symptom: { text: 'CV-03 棧板停住（虛構）', origin: 'engineer' }, plant: '範例廠（虛構）', caseName: '範例案件-0815（虛構）',
+      events: [{ seq: 30, time: '09:00:00.000', device: 'CV-03', alarm: 'E101', text: '輸送逾時（虛構）' }],
+      alarms: ['E101'], devices: ['CV-03'],
+      cause: { text: 'PLC 通訊中斷（虛構）', origin: 'engineer' },
+      disposal: { text: '重新啟動 PLC（虛構）', origin: 'engineer' }, executor: '現場可執行', result: '（虛構）',
+    });
+    const r4 = rec('R-004', 'case', 'disabled', 'AI 草稿', [[base4, '李工程師（虛構）', '2026-08-16']],
+      { disabledReason: '原因判斷錯誤，後來確認是感測器（虛構）' });
+
+    const base5 = data({
+      symptom: { text: 'CV-03 旁安全門開啟，整線停止（虛構）', origin: 'engineer' }, plant: '範例廠（虛構）', caseName: '範例案件-0920（虛構）',
+      events: [{ seq: 77, time: '13:12:00.000', device: 'CV-03', alarm: 'E301', text: '安全門開啟（虛構）' }],
+      alarms: ['E301'], devices: ['CV-03'],
+      cause: { text: '人員未依程序開門（虛構）', origin: 'engineer' },
+      disposal: { text: '確認區內無人後關門並復歸（虛構）', origin: 'engineer' }, executor: '現場可執行', result: '復歸（虛構）',
+    });
+    const r5 = rec('R-005', 'case', 'reviewed', 'AI 草稿', [[base5, REVIEWER, '2026-09-21']]);
+    const r3 = {
+      id: 'R-003', source: 'case', status: 'draft', author: 'AI 草稿', versions: [], disabledReason: '',
+      history: ['由 AI 從 範例案件-1109（虛構） 產生草稿'], queuedAt: -60 * 24 * 2 - 30,
+      work: data({
+        symptom: { text: 'ST-06 出庫口滿載，VH-02 等待（虛構）', origin: 'qa' },
+        from: '2026-11-09 16:02', to: '2026-11-09 16:35', plant: '範例廠（虛構）', caseName: '範例案件-1109（虛構）',
+        events: [{ seq: 2051, time: '16:02:10.300', device: 'ST-06', alarm: 'E140', text: '出庫口滿載（虛構）' }],
+        alarms: ['E140'], devices: ['ST-06', 'VH-02'],
+        cause: { text: '下游對接設備未取貨（AI 推測，虛構）', origin: 'ai' },
+        disposal: { text: '聯絡對接設備負責人（AI 推測，虛構）', origin: 'ai' },
+      }),
+    };
+    return { records: [r1, r2, r3, r4, r5], selected: 'R-001', nextId: 6, query: QUERY, now: 0 };
+  }
+
+  const find = (state, id) => state.records.find((r) => r.id === id);
+  const last = (r) => r.versions[r.versions.length - 1];
+  // 目前有效的內容：已審核或修訂中才有
+  const effective = (r) => (r.status === 'reviewed' || r.status === 'revising') && r.versions.length ? last(r) : null;
+  // 修改中（未審核）的欄位：相對於最後審核的版本
+  const pending = (r) => (r.status === 'draft' || r.status === 'revising') && r.versions.length ? diff(last(r).data, r.work) : [];
+
+  function reviewCheck(r) {
+    const w = r.work, blocks = [], warnings = [];
+    if (r.status !== 'draft' && r.status !== 'revising') blocks.push('只有草稿或修訂中的紀錄可以審核');
+    if (!w.symptom.text) blocks.push('現象是空的');
+    if (w.symptom.origin === 'ai') blocks.push('現象仍是 AI 推測，要先確認或改寫');
+    if (!w.cause.text) blocks.push('原因是空的');
+    if (w.cause.origin === 'ai') blocks.push('原因仍是 AI 推測，要先確認或改寫');
+    if (!w.disposal.text) blocks.push('處置是空的');
+    if (w.disposal.origin === 'ai') blocks.push('處置仍是 AI 推測，要先確認或改寫');
+    if (!w.result) blocks.push('結果是空的');
+    if (w.events.length === 0 && r.source !== 'maint') blocks.push('沒有相關事件，無法追溯');
+    if (w.events.length === 0 && r.source === 'maint') warnings.push('維修紀錄沒有事件序號，只能靠警報代碼與設備比對');
+    if (!w.executor) warnings.push('執行者空白，視為「限工程師」（ADR-0014 第 4 點）');
+    if (r.author && r.author === REVIEWER) warnings.push('撰寫者與審核者是同一人');
+    if (r.versions.length && pending(r).length === 0) warnings.push('和第 ' + last(r).rev + ' 版相比沒有任何修改');
+    return { blocks, warnings };
+  }
+
+  function reduce(prev, action) {
+    const state = clone(prev);
+    const log = [];
+    const ok = (t) => log.push({ kind: 'ok', text: t });
+    const bad = (t) => log.push({ kind: 'bad', text: t });
+    const warn = (t) => log.push({ kind: 'warn', text: t });
+    if (action.type !== 'select') state.now += 3;
+    const r = find(state, state.selected);
+    const note = (t) => r.history.push(t);
+    const editable = () => {
+      if (!r) { bad('沒有選取紀錄'); return false; }
+      if (r.status === 'reviewed') { bad('已審核的紀錄要先按「修改已審核紀錄」才能修改'); return false; }
+      if (r.status === 'disabled') { bad('停用的紀錄要先「恢復」才能修改'); return false; }
+      return true;
+    };
+    const newRec = (source, d, author, msg) => {
+      const id = 'R-' + String(state.nextId++).padStart(3, '0');
+      state.records.push({ id, source, status: 'draft', author, work: data(d), versions: [], disabledReason: '', history: [msg], queuedAt: state.now });
+      state.selected = id; return id;
+    };
+
+    switch (action.type) {
+      case 'select': state.selected = action.id; break;
+
+      case 'draftFromCase': {
+        const id = newRec('case', {
+          symptom: { text: CASE.qa.text, origin: 'qa' },
+          from: '2026-11-01 08:14', to: '2026-11-01 08:40', plant: CASE.plant, caseName: CASE.name,
+          events: clone(CASE.events), alarms: uniq(CASE.events.map((e) => e.alarm).filter(Boolean)),
+          devices: uniq(CASE.events.map((e) => e.device)),
+          cause: { text: 'CV-03 入口在席與命令不一致，可能是感測器誤判；與 R-001 相似（AI 推測，虛構）', origin: 'ai' },
+          disposal: { text: '比照 R-001：清潔入口光電感測器後重置（AI 推測，虛構）', origin: 'ai' },
+        }, 'AI 草稿', `由 AI 從 ${CASE.name} 與 ${CASE.qa.id} 產生草稿`);
+        ok(`AI 產生草稿 ${id}：事件、警報代碼、設備來自案件；現象來自問答紀錄；原因與處置標為 AI 推測`);
+        break;
+      }
+      case 'importMaint': {
+        const id = newRec('maint', {
+          symptom: { text: 'VH-01 取貨時停止，報 E205（維修單原文，虛構）', origin: 'maint' },
+          from: '2025-06-03', plant: '範例廠（虛構）', alarms: ['E205'], devices: ['VH-01'],
+          downtime: '約 2 小時（維修單原文，虛構）', handler: '外包廠商（虛構）',
+          cause: { text: '貨叉定位感測器鬆脫（維修單原文，虛構）', origin: 'maint' },
+          disposal: { text: '鎖緊感測器並重新校正（維修單原文，虛構）', origin: 'maint' },
+          result: '恢復（維修單原文，虛構）',
+        }, REVIEWER, '從過去維修紀錄整理（沒有案件、沒有事件序號）');
+        ok(`匯入過去維修紀錄成草稿 ${id}：沒有案件與事件序號，時間只有日期`);
+        break;
+      }
+      case 'confirm': {
+        if (!editable()) break;
+        const f = r.work[action.field];
+        if (f.origin !== 'ai') { warn(`${LABEL[action.field]}不是 AI 推測，不需要確認`); break; }
+        f.origin = 'engineer'; note(`工程師採用 AI 推測的${LABEL[action.field]}`);
+        ok(`${LABEL[action.field]}：工程師採用 AI 推測`); break;
+      }
+      case 'set': {
+        if (!editable()) break;
+        r.work[action.field] = clone(action.value);
+        note(`修改${LABEL[action.field]}`); ok(`修改${LABEL[action.field]}`); break;
+      }
+      case 'approve': {
+        if (!r) { bad('沒有選取紀錄'); break; }
+        const c = reviewCheck(r);
+        if (c.blocks.length) { c.blocks.forEach((b) => bad('不能審核：' + b)); break; }
+        c.warnings.forEach((w) => warn('提醒：' + w));
+        const prev = r.versions.length ? last(r).data : null;
+        const v = { rev: r.versions.length + 1, data: clone(r.work), changed: prev ? diff(prev, r.work) : [], reviewer: REVIEWER, at: TODAY };
+        r.versions.push(v); r.status = 'reviewed'; r.disabledReason = ''; r.queuedAt = null;
+        note(`${REVIEWER} 審核通過，成為第 ${v.rev} 版`);
+        ok(`${r.id} 審核通過，第 ${v.rev} 版生效` + (v.changed.length ? `（改了：${v.changed.map((k) => LABEL[k]).join('、')}）` : '')); break;
+      }
+      case 'revise': {
+        if (!r) { bad('沒有選取紀錄'); break; }
+        if (r.status !== 'reviewed') { bad('只有已審核的紀錄可以開始修改'); break; }
+        r.status = 'revising'; r.work = clone(last(r).data); r.queuedAt = state.now;
+        note(`開始修改（第 ${last(r).rev} 版仍然有效）`);
+        ok(`${r.id} 修訂中：審核通過前，查詢仍顯示第 ${last(r).rev} 版`); break;
+      }
+      case 'cancelRevise': {
+        if (!r || r.status !== 'revising') { bad('只有修訂中的紀錄可以放棄修改'); break; }
+        r.status = 'reviewed'; r.work = clone(last(r).data); r.queuedAt = null; note('放棄修改'); ok('放棄修改，回到第 ' + last(r).rev + ' 版'); break;
+      }
+      case 'disable': {
+        if (!r) { bad('沒有選取紀錄'); break; }
+        if (r.status === 'disabled') { bad('已經停用'); break; }
+        if (r.status === 'revising') { r.work = clone(last(r).data); warn('修訂中的修改一併放棄'); }
+        r.status = 'disabled'; r.disabledReason = action.reason; r.queuedAt = null;
+        note(`停用：${action.reason}`); ok(`${r.id} 停用（不刪除），不再出現在查詢中`); break;
+      }
+      case 'restore': {
+        if (!r) { bad('沒有選取紀錄'); break; }
+        if (r.status !== 'disabled') { bad('只有停用的紀錄可以恢復'); break; }
+        r.status = 'draft'; r.queuedAt = state.now; note('恢復：退回草稿，要重新審核');
+        warn(`${r.id} 退回草稿：重新審核通過前，查詢中仍然沒有這筆`); break;
+      }
+      default: bad('未知的操作');
+    }
+    return { state, log };
+  }
+
+  function similar(state) {
+    const q = state.query;
+    return state.records.map((r) => ({ r, v: effective(r) })).filter((h) => h.v).map((h) => {
+      const a = h.v.data.alarms.filter((x) => q.alarms.includes(x));
+      const d = h.v.data.devices.filter((x) => q.devices.includes(x));
+      return Object.assign(h, { a, d, score: a.length * 2 + d.length });
+    }).filter((h) => h.score > 0).sort((x, y) => y.score - x.score || x.r.id.localeCompare(y.r.id));
+  }
+
+  // 工程師：只列目前有效的版本（草稿不列，停用只列編號）
+  function engineerView(state) {
+    return { shown: similar(state), hiddenDisabled: state.records.filter((r) => r.status === 'disabled').map((r) => r.id) };
+  }
+  function frontlineView(state) {
+    return similar(state).map((h) => {
+      const d = h.v.data;
+      const safety = SAFETY.find((s) => d.alarms.includes(s.alarm));
+      if (safety) return Object.assign(h, { kind: 'safety', text: safety.instruction });
+      if (d.executor === '現場可執行') return Object.assign(h, { kind: 'dispose', text: d.disposal.text });
+      return Object.assign(h, { kind: 'forward', text: '這類處置限工程師，已轉交工程師，請聯絡工程師' });
+    });
+  }
+  // 待審核清單：草稿與修訂中（含還不能審核的）；可以審核的排前面，同類依等待時間由久到新
+  function kindOf(r) {
+    if (r.status === 'revising') return '修訂中';
+    if (r.versions.length) return '恢復';
+    return r.source === 'maint' ? '維修紀錄' : '新草稿';
+  }
+  function reviewQueue(state) {
+    return state.records.filter((r) => r.status === 'draft' || r.status === 'revising').map((r) => {
+      const c = reviewCheck(r);
+      return { r, kind: kindOf(r), ready: c.blocks.length === 0, blocks: c.blocks, warnings: c.warnings,
+        since: clockText(r.queuedAt), wait: waitText(Math.max(0, state.now - r.queuedAt)), queuedAt: r.queuedAt };
+    }).sort((a, b) => (a.ready === b.ready ? 0 : a.ready ? -1 : 1) || a.queuedAt - b.queuedAt);
+  }
+  // 每一版的變更明細（修訂經過）
+  function revisionLog(r) {
+    return r.versions.map((v, i) => ({
+      rev: v.rev, reviewer: v.reviewer, at: v.at,
+      changes: i === 0 ? [] : v.changed.map((k) => ({ field: LABEL[k], from: r.versions[i - 1].data[k], to: v.data[k] })),
+    }));
+  }
+
+  return { ORIGIN, STATUS, FIELDS, LABEL, initial, reduce, reviewCheck, engineerView, frontlineView, find, last, effective, pending, revisionLog, reviewQueue, clockText };
+})();
+
+/* =====================================================================
+ * 頁面（可丟棄）
+ * ===================================================================== */
+const M = IncidentModel;
+let S = M.initial();
+let LOG = [];
+
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function dispatch(action) { const res = M.reduce(S, action); S = res.state; LOG = res.log.concat(LOG).slice(0, 80); render(); }
+
+const ACT = {
+  confirmCause: { type: 'confirm', field: 'cause' },
+  confirmDisp: { type: 'confirm', field: 'disposal' },
+  rewriteCause: { type: 'set', field: 'cause', value: { text: 'CV-03 入口光電感測器髒污（工程師確認，虛構）', origin: 'engineer' } },
+  rewriteCause2: { type: 'set', field: 'cause', value: { text: 'CV-03 入口光電感測器髒污，且安裝角度偏移（工程師確認，虛構）', origin: 'engineer' } },
+  rewriteDisp: { type: 'set', field: 'disposal', value: { text: '清潔入口光電感測器並重置；三次以上請工程師調整角度（工程師確認，虛構）', origin: 'engineer' } },
+  symptom: { type: 'set', field: 'symptom', value: { text: 'CV-03 入口棧板停住，ST-02 報 E101，現場另聽到異音（虛構）', origin: 'engineer' } },
+  exField: { type: 'set', field: 'executor', value: '現場可執行' },
+  exEng: { type: 'set', field: 'executor', value: '限工程師' },
+  exBlank: { type: 'set', field: 'executor', value: '' },
+  result: { type: 'set', field: 'result', value: '清潔後恢復運轉（虛構）' },
+  downtime: { type: 'set', field: 'downtime', value: '26 分鐘' },
+  handler: { type: 'set', field: 'handler', value: '現場 B 班（虛構）' },
+  attach: { type: 'set', field: 'attachments', value: ['感測器照片.jpg（虛構）'] },
+  approve: { type: 'approve' }, revise: { type: 'revise' }, cancelRevise: { type: 'cancelRevise' },
+  disable: { type: 'disable', reason: '原因判斷錯誤（虛構）' }, restore: { type: 'restore' },
+};
+const ACTIONS_NEW = [['從案件產生草稿（AI）', { type: 'draftFromCase' }], ['匯入一筆過去維修紀錄', { type: 'importMaint' }]];
+const ACTIONS_REC = [
+  ['採用 AI 推測的原因', ACT.confirmCause], ['改寫原因', ACT.rewriteCause], ['再改寫原因', ACT.rewriteCause2],
+  ['採用 AI 推測的處置', ACT.confirmDisp], ['改寫處置', ACT.rewriteDisp], ['補充現象', ACT.symptom],
+  ['執行者：現場可執行', ACT.exField], ['執行者：限工程師', ACT.exEng], ['執行者：空白', ACT.exBlank],
+  ['填寫結果', ACT.result], ['填寫停機時間', ACT.downtime], ['填寫處理人', ACT.handler], ['加入照片', ACT.attach],
+  ['審核通過', ACT.approve], ['修改已審核紀錄', ACT.revise], ['放棄修改', ACT.cancelRevise],
+  ['停用', ACT.disable], ['恢復（退回草稿）', ACT.restore],
+];
+
+const SCENARIOS = [
+  { name: '1. 正常流程',
+    desc: '從案件產生草稿，工程師確認原因、改寫處置、補上執行者、結果、停機時間、處理人，再審核通過。觀察：審核後第一線能看到這筆的處置。',
+    steps: [['從案件產生草稿（AI）', { type: 'draftFromCase' }], ['採用 AI 推測的原因', ACT.confirmCause], ['改寫處置', ACT.rewriteDisp],
+      ['執行者：現場可執行', ACT.exField], ['填寫結果', ACT.result], ['填寫停機時間', ACT.downtime], ['填寫處理人', ACT.handler], ['審核通過', ACT.approve]] },
+  { name: '2. 還有 AI 推測就審核',
+    desc: '草稿一產生就按審核，預期被擋下。觀察：草稿在審核通過前，不會出現在工程師或第一線的查詢中。',
+    steps: [['從案件產生草稿（AI）', { type: 'draftFromCase' }], ['審核通過', ACT.approve],
+      ['採用 AI 推測的原因', ACT.confirmCause], ['採用 AI 推測的處置', ACT.confirmDisp], ['填寫結果', ACT.result], ['審核通過', ACT.approve]] },
+  { name: '3. 多次修改',
+    desc: '修改已審核的 R-001 兩次。觀察：修訂中時查詢仍顯示舊版；每次審核後，查詢結果與詳細畫面把最新一版改過的欄位標示出來；下方「修訂經過」列出每一版改了什麼。',
+    steps: [['選取 R-001', { type: 'select', id: 'R-001' }], ['修改已審核紀錄', ACT.revise], ['改寫原因', ACT.rewriteCause], ['加入照片', ACT.attach],
+      ['審核通過（第 2 版）', ACT.approve], ['修改已審核紀錄', ACT.revise], ['再改寫原因', ACT.rewriteCause2], ['改寫處置', ACT.rewriteDisp],
+      ['審核通過（第 3 版）', ACT.approve]] },
+  { name: '4. 停用後恢復',
+    desc: 'R-004 因原因判斷錯誤已停用。恢復後退回草稿，改寫原因再審核，成為第 2 版。觀察：恢復後、審核前，查詢中仍然沒有這筆。',
+    steps: [['選取 R-004', { type: 'select', id: 'R-004' }], ['恢復（退回草稿）', ACT.restore], ['改寫原因', ACT.rewriteCause], ['審核通過', ACT.approve]] },
+  { name: '5. 過去維修紀錄',
+    desc: '匯入沒有案件、沒有事件序號的維修紀錄。維修紀錄原文審核通過就算確認；撰寫者與審核者同一人只提醒。',
+    steps: [['匯入一筆過去維修紀錄', { type: 'importMaint' }], ['審核通過', ACT.approve]] },
+  { name: '6. 執行者與安全清單',
+    desc: 'R-002 第 2 版把執行者改成「限工程師」，第一線只看到轉交；R-005 的警報代碼在安全清單上，第一線只看到安全清單的指示。',
+    steps: [['選取 R-002', { type: 'select', id: 'R-002' }], ['選取 R-005', { type: 'select', id: 'R-005' }]] },
+  { name: '7. 待審核清單',
+    desc: '一開始清單只有放了兩天的 R-003（還不能審核）。依序加入新草稿、維修紀錄、修訂中的 R-001、恢復的 R-004，觀察：可以審核的排前面、同類依等待時間由久到新；審核或放棄修改後就離開清單。',
+    steps: [['從案件產生草稿（AI）', { type: 'draftFromCase' }], ['匯入一筆過去維修紀錄', { type: 'importMaint' }],
+      ['選取 R-001', { type: 'select', id: 'R-001' }], ['修改已審核紀錄', ACT.revise], ['改寫原因', ACT.rewriteCause],
+      ['選取 R-004', { type: 'select', id: 'R-004' }], ['恢復（退回草稿）', ACT.restore],
+      ['選取 R-001', { type: 'select', id: 'R-001' }], ['審核通過', ACT.approve],
+      ['選取 R-007（維修紀錄）', { type: 'select', id: 'R-007' }], ['審核通過', ACT.approve]] },
+];
+let scen = 0, stepIdx = 0;
+function startScenario(i) { scen = i; stepIdx = 0; S = M.initial(); LOG = [{ kind: 'warn', text: `開始情境「${SCENARIOS[i].name}」：重設為初始資料` }]; render(); }
+
+function originTag(o) { return o ? `<span class="tag ${o === 'ai' ? 't-ai' : 't-src'}">${esc(M.ORIGIN[o])}</span>` : ''; }
+function statusTag(s) { return `<span class="tag t-${s}">${M.STATUS[s]}</span>`; }
+function fmt(k, v) {
+  if (v && typeof v === 'object' && 'text' in v) return (v.text ? esc(v.text) : '<span class="empty">（空白）</span>') + originTag(v.origin);
+  if (k === 'events') return v.length ? v.map((e) => `#${e.seq} ${esc(e.time)} ${esc(e.device)} ${esc(e.alarm)} ${esc(e.text)}`).join('<br>') : '<span class="empty">（沒有事件序號）</span>';
+  if (Array.isArray(v)) return v.length ? esc(v.join('、')) : '<span class="empty">（空白）</span>';
+  if (k === 'executor' && !v) return '<span class="empty">（空白，視為限工程師）</span>';
+  return v ? esc(v) : '<span class="empty">（空白）</span>';
+}
+function plain(v) {
+  if (v && typeof v === 'object' && 'text' in v) return v.text || '（空白）';
+  if (Array.isArray(v)) return v.map((x) => (typeof x === 'object' ? '#' + x.seq : x)).join('、') || '（空白）';
+  return v || '（空白）';
+}
+// 已修訂過的紀錄：最新一版改過的欄位
+function chgMark(r, v, k) { return v && v.rev > 1 && v.changed.includes(k) ? `<span class="tag t-chg">第 ${v.rev} 版修改</span>` : ''; }
+
+function render() {
+  document.getElementById('reclist').innerHTML = S.records.map((r) => {
+    const v = M.last(r);
+    return `<button class="${r.id === S.selected ? 'sel' : ''}" data-id="${r.id}">${r.id}${statusTag(r.status)}${r.source === 'maint' ? '<span class="tag t-src">維修紀錄</span>' : ''}${v ? `<span class="tag t-src">第 ${v.rev} 版</span>` : ''}<br><small>${esc(r.work.symptom.text || '（沒有現象）')}</small></button>`;
+  }).join('');
+  document.querySelectorAll('#reclist button').forEach((b) => b.onclick = () => dispatch({ type: 'select', id: b.dataset.id }));
+
+  const q = M.reviewQueue(S);
+  const nReady = q.filter((x) => x.ready).length;
+  document.getElementById('queue-title').innerHTML = `待審核清單 <small class="empty">${q.length} 筆，可以審核 ${nReady} 筆｜現在 ${M.clockText(S.now)}</small>`;
+  document.getElementById('queue').innerHTML = q.length ? q.map((x) => `<button class="${x.r.id === S.selected ? 'sel' : ''}" data-id="${x.r.id}">
+      ${x.r.id}<span class="tag ${x.kind === '修訂中' ? 't-revising' : 't-draft'}">${x.kind}</span>${x.ready ? '<span class="tag t-reviewed">可以審核</span>' : `<span class="tag t-disabled">還不能審核 ${x.blocks.length} 項</span>`}
+      <br><small>${esc(x.r.work.symptom.text || '（沒有現象）')}</small>
+      <br><small class="empty">${x.since} 起，等待 ${x.wait}</small>
+      ${x.blocks.map((b) => `<br><small class="bad">✗ ${esc(b)}</small>`).join('')}${x.warnings.map((w) => `<br><small class="warn">! ${esc(w)}</small>`).join('')}</button>`).join('') : '<p class="empty">沒有待審核的紀錄</p>';
+  document.querySelectorAll('#queue button').forEach((b) => b.onclick = () => dispatch({ type: 'select', id: b.dataset.id }));
+
+  const mk = (list, el) => { el.innerHTML = ''; list.forEach(([t, a]) => { const b = document.createElement('button'); b.textContent = t; b.onclick = () => dispatch(a); el.appendChild(b); }); };
+  mk(ACTIONS_NEW, document.getElementById('btn-new'));
+  mk(ACTIONS_REC, document.getElementById('btn-rec'));
+
+  document.getElementById('tabs').innerHTML = SCENARIOS.map((s, i) => `<button class="${i === scen ? 'on' : ''}" data-i="${i}">${s.name}</button>`).join('');
+  document.querySelectorAll('#tabs button').forEach((b) => b.onclick = () => startScenario(+b.dataset.i));
+  const sc = SCENARIOS[scen];
+  document.getElementById('steps').innerHTML = `<p>${esc(sc.desc)}</p><ol>${sc.steps.map(([t], i) =>
+    `<li class="${i < stepIdx ? 'done' : i === stepIdx ? 'next' : ''}"><button data-i="${i}">${esc(t)}</button></li>`).join('')}</ol>`;
+  document.querySelectorAll('#steps button').forEach((b) => b.onclick = () => { const i = +b.dataset.i; stepIdx = i + 1; dispatch(sc.steps[i][1]); });
+
+  // 詳細畫面：顯示工作中的內容；修改中（未審核）的欄位與最新一版改過的欄位分別標示
+  const r = M.find(S, S.selected);
+  const det = document.getElementById('rec-detail');
+  if (!r) { det.innerHTML = '<p class="empty">沒有選取</p>'; } else {
+    const v = M.last(r), pend = M.pending(r);
+    const eff = M.effective(r);
+    document.getElementById('rec-title').innerHTML = `選取的紀錄：${r.id}${statusTag(r.status)}` +
+      (eff ? ` <small class="empty">目前有效：第 ${eff.rev} 版${r.status === 'revising' ? '（下方為修改中的內容）' : ''}</small>` : ' <small class="empty">目前沒有有效版本</small>');
+    const rows = M.FIELDS.map(([k, label]) => {
+      const isPend = pend.includes(k);
+      const isChg = !isPend && r.status !== 'draft' && v && v.rev > 1 && v.changed.includes(k);
+      return `<tr><th>${label}</th><td class="${isPend ? 'pend' : isChg ? 'chg' : ''}">${fmt(k, r.work[k])}${isPend ? '<span class="tag t-pend">修改中，未審核</span>' : ''}${isChg ? chgMark(r, v, k) : ''}</td></tr>`;
+    }).join('');
+    const chk = M.reviewCheck(r);
+    const rl = M.revisionLog(r);
+    det.innerHTML = `<table class="fields">
+      <tr><th>來源</th><td>${r.source === 'maint' ? '過去維修紀錄' : '案件'}</td></tr>${rows}
+      <tr><th>撰寫者</th><td>${fmt('', r.author)}</td></tr>
+      ${r.status === 'disabled' ? `<tr><th>停用原因</th><td class="bad">${esc(r.disabledReason)}</td></tr>` : ''}
+    </table>
+    ${(r.status === 'draft' || r.status === 'revising') ? `<h3>審核前檢查</h3>${chk.blocks.length ? chk.blocks.map((b) => `<div class="bad">✗ ${esc(b)}</div>`).join('') : '<div class="ok">✓ 可以審核</div>'}${chk.warnings.map((w) => `<div class="warn">! ${esc(w)}</div>`).join('')}` : ''}
+    <h3>修訂經過${rl.length > 1 ? `（已修訂 ${rl.length - 1} 次）` : ''}</h3>
+    <div class="vers">${rl.length ? rl.map((x) => `<div><b>第 ${x.rev} 版</b>　${esc(x.reviewer)} 審核，${esc(x.at)}${x.rev === 1 ? '　初版' : x.changes.length ? x.changes.map((c) => `<br>　${esc(c.field)}：<del>${esc(plain(c.from))}</del> → <ins>${esc(plain(c.to))}</ins>`).join('') : '　（內容沒有變更）'}</div>`).join('') : '<div class="empty">尚未審核過</div>'}</div>
+    <h3>操作經過</h3><div class="vers">${r.history.length ? r.history.map((h) => `<div>${esc(h)}</div>`).join('') : '<div class="empty">（初始資料）</div>'}</div>`;
+  }
+
+  // 相似查詢：只用目前有效的版本
+  document.getElementById('query').textContent = `查詢條件：${S.query.text}　（比對分數＝相同警報代碼 ×2 ＋ 相同設備 ×1；只列已審核的有效版本，不列草稿）`;
+  const verLine = (r, v) => `<span class="tag t-src">第 ${v.rev} 版</span>${v.rev > 1 ? `<span class="tag t-chg">已修訂 ${v.rev - 1} 次</span>` : ''}${r.status === 'revising' ? '<span class="tag t-revising">修訂中，顯示目前有效版本</span>' : ''}`;
+  const line = (r, v, k, label, html) => `<div class="${v.rev > 1 && v.changed.includes(k) ? 'chg' : ''}">${label}：${html}${chgMark(r, v, k)}</div>`;
+  const ev = M.engineerView(S);
+  document.getElementById('view-eng').innerHTML = (ev.shown.length ? ev.shown.map(({ r, v, a, d, score }) => `<div class="hit">
+      <b>過去相似的異常 ${r.id}</b>${verLine(r, v)}<div class="meta">分數 ${score}｜相同警報 ${a.join('、') || '—'}｜相同設備 ${d.join('、') || '—'}</div>
+      ${line(r, v, 'symptom', '現象', fmt('symptom', v.data.symptom))}${line(r, v, 'cause', '原因', fmt('cause', v.data.cause))}${line(r, v, 'disposal', '處置', fmt('disposal', v.data.disposal))}${line(r, v, 'executor', '執行者', fmt('executor', v.data.executor))}${line(r, v, 'attachments', '照片或文件', fmt('attachments', v.data.attachments))}</div>`).join('') : '<p class="empty">沒有</p>')
+    + (ev.hiddenDisabled.length ? `<p class="empty">停用不列入：${ev.hiddenDisabled.join('、')}</p>` : '');
+  const fv = M.frontlineView(S);
+  document.getElementById('view-front').innerHTML = fv.length ? fv.map(({ r, v, kind, text }) => `<div class="hit">
+      <b>過去相似的異常 ${r.id}</b>${verLine(r, v)}<div class="meta">出處：異常紀錄 ${r.id} 第 ${v.rev} 版（${esc(v.reviewer)} 審核）</div>
+      ${kind === 'dispose' ? line(r, v, 'disposal', '處置', esc(text)) : `<div class="forward ${v.rev > 1 && v.changed.includes('executor') ? 'chg' : ''}">${kind === 'safety' ? '安全清單：' : '轉交：'}${esc(text)}${kind === 'forward' ? chgMark(r, v, 'executor') : ''}</div>`}</div>`).join('') : '<p class="empty">沒有已審核的相似紀錄</p>';
+
+  document.getElementById('log').innerHTML = LOG.map((l) => `<div class="${l.kind}">${esc(l.text)}</div>`).join('') || '<div class="empty">（尚無操作）</div>';
+}
+
+startScenario(0);
+</script>
+</body>
+</html>

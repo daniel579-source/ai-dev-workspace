@@ -1,6 +1,6 @@
 // Layout 回放 3D（ADR-0017）：依 C# 傳來的場景資料與目前時刻的狀態繪製，回報載入完成、錯誤與點選的元素。
 // 不推導任何狀態（世界模型在 C# 引擎，ADR-0005）。操作：左鍵旋轉、右鍵平移、滾輪縮放。
-import { THREE, LOOK, COLOR, post, listen, setColor, unitBox, createViewer } from './common.js';
+import { THREE, LOOK, COLOR, post, listen, setColor, setCargoLabel, unitBox, createViewer } from './common.js';
 
 const pick = (id, column) => post({ kind: 'pick', id, column });
 const v = createViewer({ onLabelClick: (id) => pick(id, null) });
@@ -70,6 +70,8 @@ function applyState(state) {
         setColor(item.body, color, faded);
         break;
     }
+    // 搬送中貨物的標示（#125）：搬送機、RM、電梯上的貨箱
+    if (e.type === 'vehicle' || e.type === 'rm' || e.type === 'elevator') setCargoLabel(item, s.loaded ? s.cargoLabel : null);
     if (item.label) {
       const l = item.label;
       l.name.textContent = (s.badge ? `[${s.badge}] ` : '') + e.name + (s.inconsistent ? ' ⚠' : '') + (s.estimated && (e.type === 'vehicle' || e.type === 'rm') ? '（推估位置）' : '');

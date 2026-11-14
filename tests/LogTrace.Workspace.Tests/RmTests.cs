@@ -138,6 +138,29 @@ public sealed class RmPlaybackTests
     }
 
     [Fact]
+    public void 搬送中貨物的標示_預設命令編號_可切換棧板編號並記在本機_放下後不標示()
+    {
+        var p = Load();
+        var saved = new List<FloorViewSettings>();
+        p.UseViewSettings(new FloorViewSettings(), saved.Add);
+
+        p.SetMoment(2); // 貨物在 RM 上
+        Assert.Equal("C-1", p.SceneNow.Elements.Single(e => e.Id == "rm-1").CargoLabel);
+
+        p.CargoLabelIndex = 1;
+        Assert.True(p.CargoByPallet);
+        Assert.Equal(new FloorViewSettings(CargoByPallet: true), saved[^1]);
+        Assert.Equal("P-001", p.SceneNow.Elements.Single(e => e.Id == "rm-1").CargoLabel);
+
+        p.SetMoment(3); // 放進儲位：不再是搬送中的貨物
+        Assert.Null(p.SceneNow.Elements.Single(e => e.Id == "rm-1").CargoLabel);
+
+        var reopened = Load();
+        reopened.UseViewSettings(saved[^1], null);
+        Assert.Equal(1, reopened.CargoLabelIndex); // 下次開啟時沿用
+    }
+
+    [Fact]
     public void 雙深料架的側視圖每層分淺深兩格()
     {
         var p = Load();

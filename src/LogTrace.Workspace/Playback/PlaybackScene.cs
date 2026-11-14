@@ -34,6 +34,7 @@ public sealed record SceneLayout(IReadOnlyList<SceneFloor> Floors, IReadOnlyList
 /// X、Y：沿導軌移動的搬送機的位置（中心，公尺；推估時 Estimated）；其他元素為 null。
 /// ElevatorFloor：電梯目前的樓層；移動中時為 null，改用 MovingFrom、MovingTo（推估）。
 /// RackSlots：料架有貨的儲位（[列, 層]）。Lift：RM 載貨台的高度（公尺，推估）。
+/// CargoLabel：搬送中的貨物（在搬送機、RM、電梯上）的標示，命令編號或棧板編號（#125）；沒有貨物時為 null。
 /// </summary>
 public sealed record SceneElementState(
     string Id, string Look, bool Selected = false,
@@ -41,7 +42,7 @@ public sealed record SceneElementState(
     bool Blocked = false, bool BlockedEstimated = false, bool Loaded = false, bool Executing = false,
     string? Summary = null, double? X = null, double? Y = null,
     string? ElevatorFloor = null, string? MovingFrom = null, string? MovingTo = null,
-    IReadOnlyList<int[]>? RackSlots = null, int? SelectedColumn = null, double? Lift = null);
+    IReadOnlyList<int[]>? RackSlots = null, int? SelectedColumn = null, double? Lift = null, string? CargoLabel = null);
 
 /// <summary>場景的目前時刻狀態；目前時刻或選取改變時傳。</summary>
 public sealed record SceneState(long Sequence, IReadOnlyList<SceneElementState> Elements)
@@ -136,7 +137,7 @@ public static class PlaybackScene
     }
 
     /// <summary>目前時刻的狀態：沿用 Layout 回放面板已推導的元素狀態（<see cref="PlaybackViewModel"/>），不另外推導。</summary>
-    public static SceneState StateOf(IEnumerable<PlaybackElementViewModel> elements, WorldState world, PlaybackElementViewModel? selected, RackCellViewModel? selectedCell, string? storageRule)
+    public static SceneState StateOf(IEnumerable<PlaybackElementViewModel> elements, WorldState world, PlaybackElementViewModel? selected, RackCellViewModel? selectedCell, string? storageRule, bool cargoByPallet = false)
     {
         var list = new List<SceneElementState>();
         foreach (var e in elements)
@@ -150,7 +151,8 @@ public static class PlaybackScene
                     world.Vehicles.TryGetValue(e.Id, out var v);
                     list.Add(new SceneElementState(e.Id, look, isSelected, Inconsistent: e.IsInconsistent, Estimated: e.IsEstimated,
                         Loaded: world.PalletsAt(LocationKind.Vehicle, e.Id).Any(), Executing: v?.Work == VehicleWork.Executing,
-                        Summary: e.Summary, X: e.Placement?.X, Y: e.Placement?.Y, Lift: e.Placement?.Lift));
+                        Summary: e.Summary, X: e.Placement?.X, Y: e.Placement?.Y, Lift: e.Placement?.Lift,
+                        CargoLabel: CargoLabel(world, LocationKind.Vehicle, e.Id, cargoByPallet)));
                     break;
                 }
                 case LayoutElementType.Elevator:
@@ -159,7 +161,8 @@ public static class PlaybackScene
                     bool moving = ev?.IsMoving == true;
                     list.Add(new SceneElementState(e.Id, look, isSelected, Estimated: e.IsEstimated,
                         Loaded: world.PalletsAt(LocationKind.Elevator, e.Id).Any(), Executing: moving, Summary: e.Summary,
-                        ElevatorFloor: moving ? null : ev?.Floor, MovingFrom: moving ? ev!.FromFloor : null, MovingTo: moving ? ev!.ToFloor : null));
+                        ElevatorFloor: moving ? null : ev?.Floor, MovingFrom: moving ? ev!.FromFloor : null, MovingTo: moving ? ev!.ToFloor : null,
+                        CargoLabel: CargoLabel(world, LocationKind.Elevator, e.Id, cargoByPallet)));
                     break;
                 }
                 case LayoutElementType.Rack:
@@ -184,6 +187,19 @@ public static class PlaybackScene
             }
         }
         return new SceneState(world.Sequence, list);
+    }
+
+    /// <summary>
+    /// 搬送中貨物的標示（#125）：設備上所有棧板，以「、」分隔；命令編號模式下取棧板所屬的命令（優先未完成的、最近的），
+    /// 找不到命令時顯示「—」（未取得資訊）。沒有貨物時為 null。
+    /// </summary>
+    public static string? CargoLabel(WorldState world, LocationKind kind, string id, bool byPallet)
+    {
+        var pallets = world.PalletsAt(kind, id).Select(p => p.Id).Order(StringComparer.Ordinal).ToList();
+        if (pallets.Count == 0) return null;
+        if (byPallet) return string.Join("、", pallets);
+        return string.Join("、", pallets.Select(pid => world.Commands.Values.Where(c => c.Pallet == pid)
+            .OrderBy(c => c.IsFinished).ThenByDescending(c => c.StatusCause).FirstOrDefault()?.Id ?? "—"));
     }
 
     static bool RackSlotOccupied(WorldState world, string? storageRule, PlaybackElementViewModel rack, int column, int level) =>

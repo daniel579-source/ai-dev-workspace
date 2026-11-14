@@ -32,6 +32,7 @@ public sealed partial class PlaybackViewModel
         try
         {
             FollowFocus = settings.Follow;
+            CargoByPallet = settings.CargoByPallet;
         }
         finally
         {
@@ -40,10 +41,32 @@ public sealed partial class PlaybackViewModel
         _saveView = save;
     }
 
-    partial void OnFollowFocusChanged(bool value)
+    partial void OnFollowFocusChanged(bool value) => SaveView();
+
+    void SaveView()
     {
         if (_applyingView) return;
-        _saveView?.Invoke(new FloorViewSettings(Follow: FollowFocus));
+        _saveView?.Invoke(new FloorViewSettings(Follow: FollowFocus, CargoByPallet: CargoByPallet));
+    }
+
+    /// <summary>搬送中貨物的標示（#125）：false＝命令編號（預設）、true＝棧板編號；記在本機。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CargoLabelIndex))]
+    public partial bool CargoByPallet { get; set; }
+
+    /// <summary>工具列下拉選單的索引：0＝命令編號、1＝棧板編號。</summary>
+    public int CargoLabelIndex
+    {
+        get => CargoByPallet ? 1 : 0;
+        set => CargoByPallet = value == 1;
+    }
+
+    public static IReadOnlyList<string> CargoLabelChoices { get; } = ["命令編號", "棧板編號"];
+
+    partial void OnCargoByPalletChanged(bool value)
+    {
+        SaveView();
+        RefreshSceneState();
     }
 
     void LoadFloors(LayoutSection layout)

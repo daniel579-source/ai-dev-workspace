@@ -73,7 +73,7 @@ public sealed class ConveyorTests : IDisposable
 
         Assert.Equal(2, issues.Count);
         Assert.Contains(issues, i => i.Message.Contains("交接點") && i.ElementIds.SequenceEqual(["cv-1"]));
-        Assert.Contains(issues, i => i.Message.Contains("站點、對接設備或搬送機") && i.ElementIds.SequenceEqual(["cv-2"]));
+        Assert.Contains(issues, i => i.Message.Contains("站點、Conv 或搬送機") && i.ElementIds.SequenceEqual(["cv-2"]));
     }
 
     [Theory]

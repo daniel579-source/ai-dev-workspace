@@ -38,6 +38,8 @@ export const COLOR = {
 };
 
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
+/** 半徑 1、長 1、軸沿 z 的圓柱（滾筒、車輪）。 */
+const rollerGeometry = new THREE.CylinderGeometry(1, 1, 1, 12).rotateX(Math.PI / 2);
 export { unitBox };
 
 export function box(w, h, d, material, x = 0, y = 0, z = 0) {
@@ -129,37 +131,114 @@ export function createViewer(opts = {}) {
     return { obj, div, name, summary };
   }
 
-  // ---- 各種元素的外觀（簡化的幾何，ADR-0017 第 11 點） ----
+  // ---- 各種元素的外觀（簡化的幾何，ADR-0017 第 11 點；設備特徵 2026-11-14 補充） ----
+  // 一般自動倉儲設備的樣式，不使用任何廠商的模型或標誌。回放的狀態顏色只塗在主體（item.body），
+  // 滾筒、立柱、車輪、保險桿等細節維持固定顏色，俯視時也看得出種類。
+
+  const frameMat = mat(COLOR.frame);
+  const rollerMat = mat(0x94A3B8);
+  const darkMat = mat(0x1F2937);
+  const bumperMat = mat(0xFACC15);
+  const markMat = mat(0xF59E0B);
+
+  function instanced(matrices, material, geometry = unitBox) {
+    const m = new THREE.InstancedMesh(geometry, material, Math.max(matrices.length, 1));
+    matrices.forEach((x, i) => m.setMatrixAt(i, x));
+    m.count = matrices.length;
+    m.instanceMatrix.needsUpdate = true;
+    return m;
+  }
+
+  const q0 = new THREE.Quaternion();
+  const at = (x, y, z, sx, sy, sz) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), q0, new THREE.Vector3(sx, sy, sz));
+
+  /** 滾筒：軸沿 z（深度方向），沿 x 依間距排列；length 為排列的長度、width 為滾筒長度。 */
+  function rollers(length, width, y, pitch = 0.18, r = 0.04) {
+    const n = Math.max(1, Math.min(400, Math.floor(length / pitch)));
+    const step = length / n;
+    const list = [];
+    for (let i = 0; i < n; i++) list.push(at(-length / 2 + step * (i + 0.5), y, 0, r, r, width));
+    return instanced(list, rollerMat, rollerGeometry);
+  }
+
+  /** 四支腳：寬 w、深 d 的四角，高 h。 */
+  function legs(w, d, h, size = 0.07) {
+    const list = [];
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) list.push(at(sx * (w / 2 - size), h / 2, sz * (d / 2 - size), size, h, size));
+    return instanced(list, frameMat);
+  }
 
   function buildStation(e, item) {
-    item.body = box(e.w, e.height, e.h, mat(LOOK.unknown), 0, e.height / 2, 0);
+    // 輸送站：四支腳、兩側護欄、台面（狀態顏色）與上面的滾筒
+    const top = e.height;
+    item.group.add(legs(e.w, e.h, top - 0.1));
+    item.body = box(e.w - 0.08, 0.05, e.h - 0.08, mat(LOOK.unknown), 0, top - 0.11, 0);
     item.group.add(item.body);
+    item.group.add(instanced([at(0, top - 0.02, -e.h / 2 + 0.03, e.w, 0.1, 0.06), at(0, top - 0.02, e.h / 2 - 0.03, e.w, 0.1, 0.06)], frameMat));
+    item.group.add(rollers(e.w - 0.1, e.h - 0.16, top - 0.05));
     item.light = new THREE.Mesh(new THREE.SphereGeometry(Math.min(0.18, Math.min(e.w, e.h) / 4), 12, 8), mat(COLOR.presenceUnknown, { transparent: true, opacity: 0.6 }));
-    item.light.position.set(e.w / 2 - 0.2, e.height + 0.12, -e.h / 2 + 0.2);
+    item.light.position.set(e.w / 2 - 0.2, top + 0.12, -e.h / 2 + 0.2);
     item.group.add(item.light);
-    item.cargo = box(Math.min(e.w, 1.1) * 0.8, 0.8, Math.min(e.h, 1.1) * 0.8, mat(COLOR.cargo), 0, e.height + 0.4, 0);
+    item.cargo = box(Math.min(e.w, 1.1) * 0.8, 0.8, Math.min(e.h, 1.1) * 0.8, mat(COLOR.cargo), 0, top + 0.4, 0);
     item.cargo.visible = false;
     item.group.add(item.cargo);
   }
 
   function buildVehicle(e, item) {
-    // 低矮的軌道車：車體加上方的輸送面
-    const bodyH = e.height * 0.75;
-    item.body = box(e.w, bodyH, e.h, mat(LOOK.unknown, { transparent: true }), 0, bodyH / 2, 0);
+    // 軌道車：低矮的車體（狀態顏色）、四個車輪、兩端黃色保險桿、頂面的輸送滾筒
+    const bodyH = e.height * 0.7;
+    const clearance = 0.08;
+    item.body = box(e.w - 0.16, bodyH - clearance, e.h * 0.85, mat(LOOK.unknown, { transparent: true }), 0, clearance + (bodyH - clearance) / 2, 0);
     item.group.add(item.body);
-    item.top = box(e.w * 0.9, e.height - bodyH, e.h * 0.7, mat(0x475569, { transparent: true }), 0, bodyH + (e.height - bodyH) / 2, 0);
+    const wr = Math.min(0.14, bodyH / 2);
+    const wheels = [];
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) wheels.push(at(sx * (e.w / 2 - 0.3), wr, sz * (e.h * 0.425 + 0.03), wr, wr, 0.08));
+    item.group.add(instanced(wheels, darkMat, rollerGeometry));
+    item.group.add(instanced([at(-e.w / 2 + 0.04, clearance + bodyH * 0.35, 0, 0.08, bodyH * 0.5, e.h * 0.85), at(e.w / 2 - 0.04, clearance + bodyH * 0.35, 0, 0.08, bodyH * 0.5, e.h * 0.85)], bumperMat));
+    item.top = box(e.w * 0.8, e.height - bodyH, e.h * 0.7, mat(0x475569, { transparent: true }), 0, bodyH + (e.height - bodyH) / 2, 0);
     item.group.add(item.top);
-    item.cargo = box(Math.min(e.w, 1.1) * 0.8, 0.8, Math.min(e.h, 1.1) * 0.8, mat(COLOR.cargo, { transparent: true }), 0, e.height + 0.4, 0);
+    item.group.add(rollers(e.w * 0.78, e.h * 0.62, e.height + 0.02, 0.18, 0.035));
+    item.cargo = box(Math.min(e.w, 1.1) * 0.8, 0.8, Math.min(e.h, 1.1) * 0.8, mat(COLOR.cargo, { transparent: true }), 0, e.height + 0.45, 0);
     item.cargo.visible = false;
     item.group.add(item.cargo);
   }
 
-  function instanced(matrices, material) {
-    const m = new THREE.InstancedMesh(unitBox, material, Math.max(matrices.length, 1));
-    matrices.forEach((x, i) => m.setMatrixAt(i, x));
-    m.count = matrices.length;
-    m.instanceMatrix.needsUpdate = true;
-    return m;
+  function buildDock(e, item) {
+    // Conv（對接設備，例如升降移載機）：底座、兩支立柱與頂部橫樑、中間的升降平台（狀態顏色）與滾筒
+    const mast = Math.min(0.14, e.w / 6);
+    item.group.add(box(e.w, 0.08, e.h, darkMat, 0, 0.04, 0));
+    item.group.add(instanced([at(-e.w / 2 + mast / 2, e.height / 2, 0, mast, e.height, e.h * 0.9), at(e.w / 2 - mast / 2, e.height / 2, 0, mast, e.height, e.h * 0.9)], frameMat));
+    item.group.add(box(e.w, 0.1, mast, frameMat, 0, e.height - 0.05, 0));
+    item.body = box(e.w - mast * 2 - 0.04, 0.12, e.h * 0.85, mat(LOOK.unknown), 0, e.height * 0.45, 0);
+    item.group.add(item.body);
+    item.group.add(rollers(e.w - mast * 2 - 0.1, e.h * 0.75, e.height * 0.45 + 0.08, 0.18, 0.035));
+  }
+
+  function buildFireDoor(e, item) {
+    // 防火門：兩端的門框立柱與門板（狀態顏色：開綠、關紅）
+    const along = e.w >= e.h;
+    const len = along ? e.w : e.h;
+    const t = Math.max(along ? e.h : e.w, 0.1);
+    const post = Math.min(0.18, len / 6);
+    const posts = along
+      ? [at(-len / 2 + post / 2, e.height / 2, 0, post, e.height, t + 0.1), at(len / 2 - post / 2, e.height / 2, 0, post, e.height, t + 0.1)]
+      : [at(0, e.height / 2, -len / 2 + post / 2, t + 0.1, e.height, post), at(0, e.height / 2, len / 2 - post / 2, t + 0.1, e.height, post)];
+    item.group.add(instanced(posts, frameMat));
+    item.body = along
+      ? box(len - post * 2, e.height * 0.95, t, mat(LOOK.unknown, { transparent: true }), 0, e.height * 0.475, 0)
+      : box(t, e.height * 0.95, len - post * 2, mat(LOOK.unknown, { transparent: true }), 0, e.height * 0.475, 0);
+    item.group.add(item.body);
+  }
+
+  function buildArea(e, item) {
+    // 區域：地板上的淡色塊加黃色邊線
+    item.body = box(e.w, 0.02, e.h, mat(LOOK.auxiliary, { transparent: true, opacity: 0.15, depthWrite: false }), 0, 0.03, 0);
+    item.group.add(item.body);
+    const t = 0.08;
+    item.group.add(instanced([
+      at(0, 0.045, -e.h / 2 + t / 2, e.w, 0.01, t), at(0, 0.045, e.h / 2 - t / 2, e.w, 0.01, t),
+      at(-e.w / 2 + t / 2, 0.045, 0, t, 0.01, e.h), at(e.w / 2 - t / 2, 0.045, 0, t, 0.01, e.h),
+    ], markMat));
   }
 
   function buildRack(e, item) {
@@ -169,16 +248,19 @@ export function createViewer(opts = {}) {
     item.cols = cols;
     const postSize = 0.08;
     const posts = [];
+    const ties = [];
     for (let c = 0; c <= cols; c++) {
       const x = -e.w / 2 + (e.w / cols) * c;
-      for (const z of [-e.h / 2, e.h / 2]) posts.push(new THREE.Matrix4().compose(new THREE.Vector3(x, e.height / 2, z), new THREE.Quaternion(), new THREE.Vector3(postSize, e.height, postSize)));
+      for (const z of [-e.h / 2, e.h / 2]) posts.push(at(x, e.height / 2, z, postSize, e.height, postSize));
+      // 前後立柱之間的連桿（頂部與底部）：俯視時看得出每一列
+      ties.push(at(x, e.height - 0.03, 0, 0.05, 0.05, e.h), at(x, 0.1, 0, 0.05, 0.05, e.h));
     }
     const beams = [];
     for (let l = 0; l <= levels; l++) {
       const y = Math.min(l * lh, e.height - 0.04) + 0.04;
-      for (const z of [-e.h / 2, e.h / 2]) beams.push(new THREE.Matrix4().compose(new THREE.Vector3(0, y, z), new THREE.Quaternion(), new THREE.Vector3(e.w, 0.08, 0.06)));
+      for (const z of [-e.h / 2, e.h / 2]) beams.push(at(0, y, z, e.w, 0.08, 0.06));
     }
-    item.group.add(instanced(posts, mat(COLOR.frame)), instanced(beams, mat(COLOR.beam)));
+    item.group.add(instanced(posts, frameMat), instanced(ties, frameMat), instanced(beams, mat(COLOR.beam)));
     // 點選用的透明外框（料架的列由點到的位置換算）
     item.body = box(e.w, e.height, e.h, new THREE.MeshBasicMaterial({ visible: false }), 0, e.height / 2, 0);
     item.group.add(item.body);
@@ -193,34 +275,46 @@ export function createViewer(opts = {}) {
     const elevations = served.map((f) => floors.get(f).elevation);
     const bottom = elevations.length ? Math.min(...elevations) : 0;
     const top = elevations.length ? Math.max(...elevations) + e.height + 0.3 : e.height;
-    // 透明的垂直井道跨越服務的樓層
-    const shaft = box(e.w, top - bottom, e.h, mat(COLOR.shaft, { transparent: true, opacity: 0.12, depthWrite: false }), 0, (top - bottom) / 2, 0);
-    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(unitBox), new THREE.LineBasicMaterial({ color: 0x60A5FA }));
-    edges.scale.copy(shaft.scale);
-    edges.position.copy(shaft.position);
-    item.group.add(shaft, edges);
+    const H = top - bottom;
+    // 垂直井道跨越服務的樓層：四角立柱、頂部橫樑、透明壁面
+    const shaft = box(e.w, H, e.h, mat(COLOR.shaft, { transparent: true, opacity: 0.1, depthWrite: false }), 0, H / 2, 0);
+    item.group.add(shaft);
+    const p = 0.1;
+    const corners = [];
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) corners.push(at(sx * (e.w / 2 - p / 2), H / 2, sz * (e.h / 2 - p / 2), p, H, p));
+    item.group.add(instanced(corners, frameMat));
+    item.group.add(instanced([at(0, H - 0.05, -e.h / 2 + p / 2, e.w, 0.1, p), at(0, H - 0.05, e.h / 2 - p / 2, e.w, 0.1, p)], frameMat));
     item.group.position.y = bottom;
     item.bottom = bottom;
+    // 台車：車廂（狀態顏色）加頂面滾筒
     item.car = new THREE.Group();
-    item.body = box(e.w * 0.9, e.height, e.h * 0.9, mat(LOOK.unknown, { transparent: true }), 0, e.height / 2, 0);
-    item.cargo = box(Math.min(e.w, 1.1) * 0.7, 0.8, Math.min(e.h, 1.1) * 0.7, mat(COLOR.cargo, { transparent: true }), 0, e.height / 2, 0);
+    item.body = box(e.w * 0.8, e.height * 0.85, e.h * 0.8, mat(LOOK.unknown, { transparent: true }), 0, e.height * 0.425, 0);
+    item.cargo = box(Math.min(e.w, 1.1) * 0.6, 0.8, Math.min(e.h, 1.1) * 0.6, mat(COLOR.cargo, { transparent: true }), 0, e.height + 0.4, 0);
     item.cargo.visible = false;
-    item.car.add(item.body, item.cargo);
+    item.car.add(item.body, item.cargo, rollers(e.w * 0.75, e.h * 0.7, e.height * 0.85 + 0.04, 0.18, 0.035));
     item.group.add(item.car);
   }
 
   function buildConveyor(e, item) {
+    // 輸送線：台面（阻斷時變紅）、兩側護欄、滾筒、每 2 公尺一對腳與方向箭頭
     const [[x1, y1], [x2, y2]] = e.path;
     const len = Math.max(Math.hypot(x2 - x1, y2 - y1), 0.01);
+    const width = 0.8;
     item.group.position.set((x1 + x2) / 2, elevationOf(e.floor), (y1 + y2) / 2);
     item.group.rotation.y = -Math.atan2(y2 - y1, x2 - x1);
-    item.body = box(len, e.height, 0.8, mat(COLOR.conveyor, { transparent: true, opacity: 0.85 }), 0, e.height / 2, 0);
+    item.body = box(len, 0.05, width - 0.1, mat(COLOR.conveyor, { transparent: true, opacity: 0.85 }), 0, e.height - 0.1, 0);
     item.group.add(item.body);
+    item.group.add(instanced([at(0, e.height - 0.02, -width / 2 + 0.03, len, 0.1, 0.06), at(0, e.height - 0.02, width / 2 - 0.03, len, 0.1, 0.06)], frameMat));
+    item.group.add(rollers(len, width - 0.16, e.height - 0.05));
+    const n = Math.max(1, Math.round(len / 2));
+    const legList = [];
+    for (let i = 0; i <= n; i++) for (const sz of [-1, 1]) legList.push(at(-len / 2 + (len / n) * i, (e.height - 0.1) / 2, sz * (width / 2 - 0.05), 0.06, e.height - 0.1, 0.06));
+    item.group.add(instanced(legList, frameMat));
     // 方向箭頭：單向在終點，雙向兩端都有
     const arrow = (dir) => {
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.7, 12), mat(0x475569));
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.6, 12), mat(0x475569));
       cone.rotation.z = -dir * Math.PI / 2;
-      cone.position.set(dir * (len / 2 - 0.35), e.height + 0.15, 0);
+      cone.position.set(dir * (len / 2 - 0.3), e.height + 0.15, 0);
       return cone;
     };
     item.group.add(arrow(1));
@@ -228,16 +322,19 @@ export function createViewer(opts = {}) {
   }
 
   function buildRail(e, item) {
+    // 導軌：兩條平行的鋼軌（間距 0.7 公尺）
     const elevation = elevationOf(e.floor);
     const pts = e.path || [];
-    const material = mat(COLOR.rail);
+    const material = mat(0x64748B);
     for (let i = 0; i + 1 < pts.length; i++) {
       const [x1, y1] = pts[i];
       const [x2, y2] = pts[i + 1];
       const len = Math.hypot(x2 - x1, y2 - y1);
       if (len < 1e-6) continue;
-      const seg = box(len + 0.05, 0.04, 0.3, material, (x1 + x2) / 2, elevation + 0.02, (y1 + y2) / 2);
+      const seg = new THREE.Group();
+      seg.position.set((x1 + x2) / 2, elevation, (y1 + y2) / 2);
       seg.rotation.y = -Math.atan2(y2 - y1, x2 - x1);
+      seg.add(box(len + 0.05, 0.06, 0.07, material, 0, 0.03, -0.35), box(len + 0.05, 0.06, 0.07, material, 0, 0.03, 0.35));
       item.group.add(seg);
     }
   }
@@ -260,21 +357,9 @@ export function createViewer(opts = {}) {
       case 'elevator': place(item.group, e, 0); buildElevator(e, item); break;
       case 'conveyor': buildConveyor(e, item); break;
       case 'rail': buildRail(e, item); break;
-      case 'dock':
-        place(item.group, e, elevation);
-        item.body = box(e.w, e.height, e.h, mat(LOOK.unknown), 0, e.height / 2, 0);
-        item.group.add(item.body);
-        break;
-      case 'fireDoor':
-        place(item.group, e, elevation);
-        item.body = box(e.w, e.height, e.h, mat(LOOK.unknown, { transparent: true }), 0, e.height / 2, 0);
-        item.group.add(item.body);
-        break;
-      case 'area':
-        place(item.group, e, elevation);
-        item.body = box(e.w, 0.02, e.h, mat(LOOK.auxiliary, { transparent: true, opacity: 0.15, depthWrite: false }), 0, 0.03, 0);
-        item.group.add(item.body);
-        break;
+      case 'dock': place(item.group, e, elevation); buildDock(e, item); break;
+      case 'fireDoor': place(item.group, e, elevation); buildFireDoor(e, item); break;
+      case 'area': place(item.group, e, elevation); buildArea(e, item); break;
       case 'label':
         place(item.group, e, elevation);
         // 文字：點選用的透明範圍

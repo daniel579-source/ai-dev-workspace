@@ -354,7 +354,7 @@ public static class LayoutElementTypes
         LayoutElementType.Station => "站點",
         LayoutElementType.Rack => "料架",
         LayoutElementType.Vehicle => "搬送機",
-        LayoutElementType.Dock => "對接設備",
+        LayoutElementType.Dock => "Conv", // 設定檔的 type 仍為 dock（2026-11-14 使用者決定改名）
         LayoutElementType.FireDoor => "防火門",
         LayoutElementType.Rail => "導軌",
         LayoutElementType.Elevator => "電梯",

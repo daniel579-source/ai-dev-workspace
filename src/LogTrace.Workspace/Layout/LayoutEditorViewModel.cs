@@ -461,7 +461,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             var ends = Elements.Where(e => LayoutElement.CanBeConveyorEnd(e.Type)).ToList(); // 依加入的順序，不受清單排序影響
             if (ends.Count < 2)
             {
-                Status = "輸送線需要至少兩個站點、對接設備或搬送機。";
+                Status = "輸送線需要至少兩個站點、Conv 或搬送機。";
                 return;
             }
             model = new LayoutElement { Id = id, Type = type, Name = $"輸送線 {id[(id.IndexOf('-') + 1)..]}", From = ends[0].Id, To = ends[1].Id };
@@ -950,7 +950,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         if (alias.Length == 0) return false;
         if (!e.CanHaveAliases)
         {
-            Status = $"「{e.TypeLabel}」不能加別名；只有站點、搬送機、對接設備、防火門、電梯可以。";
+            Status = $"「{e.TypeLabel}」不能加別名；只有站點、搬送機、Conv、防火門、電梯可以。";
             return false;
         }
         var owner = AliasOwner(alias);

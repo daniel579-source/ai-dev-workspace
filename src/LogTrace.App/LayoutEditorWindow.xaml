@@ -120,7 +120,7 @@
                         <Button Content="設為選取元素的別名" Command="{Binding AssignSelectedUnmappedCommand}" Padding="8,1" Margin="12,0,0,0"
                                 AutomationProperties.AutomationId="AssignUnmapped" />
                     </StackPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="案件 LOG 中出現、但還沒有元素以它為別名的編號。先在 3D 畫布上選取站點、搬送機、對接設備、防火門或電梯，再雙擊編號（或選編號後按「設為選取元素的別名」），即可加為別名。"
+                    <TextBlock DockPanel.Dock="Top" Text="案件 LOG 中出現、但還沒有元素以它為別名的編號。先在 3D 畫布上選取站點、搬送機、Conv、防火門或電梯，再雙擊編號（或選編號後按「設為選取元素的別名」），即可加為別名。"
                                Foreground="#777" Margin="0,4,0,4" TextWrapping="Wrap" />
                     <ListBox x:Name="UnmappedList" ItemsSource="{Binding Unmapped}" SelectedItem="{Binding SelectedUnmapped}" AutomationProperties.AutomationId="UnmappedList"
                              MouseDoubleClick="Unmapped_MouseDoubleClick">

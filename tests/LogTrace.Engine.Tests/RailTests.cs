@@ -153,9 +153,6 @@ public sealed class RailTests
         Assert.Equal(RailPath.LoopTemplate(3, 2), back.Single(e => e.Id == "rl-1").Points);
         Assert.True(back.Single(e => e.Id == "rl-1").Closed);
         Assert.Equal("rl-1", back.Single(e => e.Id == "vh-1").Rail);
-        // 畫布包含弧線鼓出去的部分：右邊半圓最外側 x = 30 + 20 + 3 = 53，再加 20 公尺
-        var far = new LayoutElement { Id = "rl-2", Type = LayoutElementType.Rail, Points = RailPath.LoopTemplate(30, 2), Closed = true };
-        Assert.Equal(73, LayoutGeometry.CanvasSize([far]).Width);
     }
 
     [Fact]

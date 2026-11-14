@@ -34,13 +34,6 @@ public partial class MainWindow : Window
     /// <summary>使用者保存的版面檔（依使用者保存，不依案件，ADR-0008 第 7 點）；null 時不保存。</summary>
     public string? LayoutFile { get; init; }
 
-    /// <summary>3D 回放（WebView2）的使用者資料資料夾（ADR-0017）。</summary>
-    public string? WebViewDataFolder
-    {
-        get => Playback3D.UserDataFolder;
-        init => Playback3D.UserDataFolder = value;
-    }
-
     readonly System.Windows.Threading.DispatcherTimer _playTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     DateTime _lastTick;
 

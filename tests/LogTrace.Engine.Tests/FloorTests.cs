@@ -67,33 +67,4 @@ public sealed class FloorTests
         Assert.Contains(issues, i => i.Message.Contains("「st-3」的樓層「3F」不在樓層清單中") && i.ElementIds.SequenceEqual(["st-3"]));
         Assert.Contains(issues, i => i.Message.Contains("兩端不在同一層") && i.ElementIds.Contains("cv-1"));
     }
-
-    [Fact]
-    public void 並排_橫向由左到右_垂直時低樓層在下_樓層之間留5公尺()
-    {
-        var sizes = new List<(string, double, double)> { ("1F", 60, 40), ("2F", 80, 50), ("3F", 60, 40) };
-
-        var h = LayoutFloors.Arrange(sizes, vertical: false);
-        Assert.Equal(["1F", "2F", "3F"], h.Select(r => r.Floor));
-        Assert.Equal([0d, 65, 150], h.Select(r => r.OffsetX));
-        Assert.All(h, r => Assert.Equal(LayoutFloors.LabelBand, r.OffsetY)); // 上方留名稱的位置
-
-        var v = LayoutFloors.Arrange(sizes, vertical: true);
-        Assert.Equal(["1F", "2F", "3F"], v.Select(r => r.Floor)); // 依樓層順序回傳
-        Assert.True(v[0].OffsetY > v[1].OffsetY && v[1].OffsetY > v[2].OffsetY); // 1F 在最下面
-        Assert.Equal(1.5, v[2].OffsetY);
-        Assert.Equal(1.5 + 40 + 5 + 1.5, v[1].OffsetY);
-        Assert.All(v, r => Assert.Equal(0, r.OffsetX));
-    }
-
-    [Fact]
-    public void 點所在的樓層區域_落在空白處時取最近的()
-    {
-        var regions = LayoutFloors.Arrange([("1F", 60, 40), ("2F", 60, 40)], vertical: false);
-
-        Assert.Equal("1F", LayoutFloors.RegionAt(regions, 10, 10)!.Floor);
-        Assert.Equal("2F", LayoutFloors.RegionAt(regions, 70, 10)!.Floor);
-        Assert.Equal("2F", LayoutFloors.RegionAt(regions, 64, 10)!.Floor); // 空白處：離 2F 比較近
-        Assert.Equal("1F", LayoutFloors.RegionAt(regions, 10, 0.5)!.Floor); // 名稱那一條也算該層
-    }
 }

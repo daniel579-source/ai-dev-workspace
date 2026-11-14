@@ -54,23 +54,20 @@ public sealed class ElevatorEditorTests : IDisposable
     }
 
     [Fact]
-    public void 並排時其他服務樓層畫分身_拖曳分身移動電梯_拖到別層不換樓層()
+    public void 電梯在3D場景中跨越服務的樓層_拖曳移動不換樓層()
     {
         var ev = AddElevator();
         (ev.X, ev.Y) = (4, 4);
-        _vm.SideBySide = true;
 
-        Assert.Equal(2, _vm.ElevatorCopies.Count); // 2F、3F 的分身
-        var copy = _vm.ElevatorCopies.Single(c => c.Floor == "2F");
-        Assert.Equal(4 + copy.OffsetX, copy.ViewX);
+        var scene = _vm.BuildScene().Elements.Single(e => e.Id == ev.Id);
+        Assert.Equal(["1F", "2F", "3F"], scene.ServedFloors);
 
+        _vm.SelectFloorCommand.Execute("2F"); // 在 2F 的平面上拖曳
         _vm.BeginDrag(ev);
-        _vm.DragMoveBy(200, 1); // 拖得很遠（落在別層的區域）
+        _vm.DragMoveBy(200, 1);
         _vm.EndDrag();
         Assert.Equal(["1F", "2F", "3F"], ev.ServedFloors);
-        Assert.Equal(204, ev.X);
-        var after = _vm.ElevatorCopies.Single(c => c.Floor == "2F"); // 1F 的區域變寬，2F 的位移跟著改，分身重建
-        Assert.Equal(ev.X + after.OffsetX, after.ViewX); // 分身跟著電梯移動
+        Assert.Equal((204d, 5d), (ev.X, ev.Y));
     }
 
     [Fact]

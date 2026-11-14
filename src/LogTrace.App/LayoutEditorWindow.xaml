@@ -6,10 +6,8 @@
         AutomationProperties.AutomationId="LayoutEditor">
     <!-- ADR-0006 第 9 點：三欄式——左邊廠別設定、工具箱與元素清單，中間畫布，右邊屬性 -->
     <Window.Resources>
-        <local:MetersToPixelsConverter x:Key="Px" />
         <local:ElementTypeLabelConverter x:Key="TypeLabel" />
         <local:FileNameConverter x:Key="FileName" />
-        <local:RailGeometryConverter x:Key="RailGeometry" />
         <local:CollapsedWhenTrueConverter x:Key="Collapsed" />
         <BooleanToVisibilityConverter x:Key="Visible" />
         <!-- 輸送線起點、終點選單的項目：類型＋名稱（和元素清單一樣） -->
@@ -28,129 +26,6 @@
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Margin" Value="0,1" />
         </Style>
-        <!-- 元素的畫法：元素本身與電梯在其他樓層的分身共用（ADR-0006 第 15 點） -->
-        <DataTemplate x:Key="EditorElementTemplate">
-            <Grid>
-                <!-- 輸送線：表示貨物流向；連到搬送機的那一端畫到交接點，以橘點拖曳調整 -->
-                <Line X1="{Binding LineX1, Converter={StaticResource Px}}" Y1="{Binding LineY1, Converter={StaticResource Px}}"
-                      X2="{Binding LineX2, Converter={StaticResource Px}}" Y2="{Binding LineY2, Converter={StaticResource Px}}"
-                      Stroke="#94A3B8" StrokeThickness="3" StrokeDashArray="3 2" Tag="{Binding}"
-                      Visibility="{Binding IsConveyor, Converter={StaticResource Visible}}" />
-                <Canvas Visibility="{Binding IsConveyor, Converter={StaticResource Visible}}">
-                    <Ellipse Tag="fromPoint" Width="10" Height="10" Fill="#F59E0B" Stroke="White" Cursor="SizeAll"
-                             Canvas.Left="{Binding LineX1, Converter={StaticResource Px}}" Canvas.Top="{Binding LineY1, Converter={StaticResource Px}}"
-                             Visibility="{Binding HasFromPoint, Converter={StaticResource Visible}}"
-                             AutomationProperties.AutomationId="{Binding Id, StringFormat=FromPoint_{0}}">
-                        <Ellipse.RenderTransform><TranslateTransform X="-5" Y="-5" /></Ellipse.RenderTransform>
-                    </Ellipse>
-                    <Ellipse Tag="toPoint" Width="10" Height="10" Fill="#F59E0B" Stroke="White" Cursor="SizeAll"
-                             Canvas.Left="{Binding LineX2, Converter={StaticResource Px}}" Canvas.Top="{Binding LineY2, Converter={StaticResource Px}}"
-                             Visibility="{Binding HasToPoint, Converter={StaticResource Visible}}"
-                             AutomationProperties.AutomationId="{Binding Id, StringFormat=ToPoint_{0}}">
-                        <Ellipse.RenderTransform><TranslateTransform X="-5" Y="-5" /></Ellipse.RenderTransform>
-                    </Ellipse>
-                </Canvas>
-                <!-- 導軌（ADR-0006 第 14 點）：拖曳線條整條移動，雙擊插入點；選取時畫出點（方）與中點（圓）的把手 -->
-                <Path x:Name="RailLine" Data="{Binding RailPathData, Converter={StaticResource RailGeometry}}" Tag="{Binding}" Cursor="SizeAll"
-                      Stroke="#64748B" StrokeThickness="5" StrokeLineJoin="Round" Visibility="{Binding IsRail, Converter={StaticResource Visible}}"
-                      AutomationProperties.AutomationId="{Binding Id, StringFormat=Rail_{0}}" />
-                <ItemsControl ItemsSource="{Binding RailHandles}" Visibility="{Binding IsRail, Converter={StaticResource Visible}}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <Canvas />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemContainerStyle>
-                        <Style TargetType="ContentPresenter">
-                            <Setter Property="Canvas.Left" Value="{Binding X, Converter={StaticResource Px}}" />
-                            <Setter Property="Canvas.Top" Value="{Binding Y, Converter={StaticResource Px}}" />
-                        </Style>
-                    </ItemsControl.ItemContainerStyle>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Rectangle x:Name="Handle" Tag="railHandle" Width="10" Height="10" Fill="#F59E0B" Stroke="White" Cursor="SizeAll">
-                                <Rectangle.RenderTransform><TranslateTransform X="-5" Y="-5" /></Rectangle.RenderTransform>
-                            </Rectangle>
-                            <DataTemplate.Triggers>
-                                <DataTrigger Binding="{Binding IsPoint}" Value="False">
-                                    <Setter TargetName="Handle" Property="RadiusX" Value="5" />
-                                    <Setter TargetName="Handle" Property="RadiusY" Value="5" />
-                                    <Setter TargetName="Handle" Property="Fill" Value="#FDE68A" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                    <Setter TargetName="Handle" Property="Stroke" Value="#2563EB" />
-                                    <Setter TargetName="Handle" Property="StrokeThickness" Value="2" />
-                                </DataTrigger>
-                            </DataTemplate.Triggers>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                <Border x:Name="Shape" Tag="{Binding}" Cursor="SizeAll"
-                        Width="{Binding W, Converter={StaticResource Px}}" Height="{Binding H, Converter={StaticResource Px}}"
-                        BorderBrush="#475569" BorderThickness="1" Background="#E2E8F0"
-                        RenderTransformOrigin="0.5,0.5"
-                        Visibility="{Binding HasGeometry, Converter={StaticResource Visible}}"
-                        AutomationProperties.AutomationId="{Binding Id, StringFormat=Element_{0}}">
-                    <Border.RenderTransform>
-                        <RotateTransform Angle="{Binding Rotation}" />
-                    </Border.RenderTransform>
-                    <Grid>
-                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False">
-                            <TextBlock Text="{Binding Name}" FontSize="11" TextAlignment="Center" />
-                            <TextBlock Text="{Binding AliasesText}" FontSize="10" Foreground="#2A6CB0" TextAlignment="Center" />
-                            <TextBlock Text="{Binding DoorStateText}" FontSize="10" Foreground="#9F1239" TextAlignment="Center" />
-                        </StackPanel>
-                        <!-- 拖右下角的方塊調整大小 -->
-                        <Rectangle x:Name="ResizeHandle" Tag="resize" Width="8" Height="8" Fill="#F59E0B"
-                                   HorizontalAlignment="Right" VerticalAlignment="Bottom" Cursor="SizeNWSE" Visibility="Collapsed" />
-                    </Grid>
-                </Border>
-            </Grid>
-            <DataTemplate.Triggers>
-                <DataTrigger Binding="{Binding Type}" Value="Station">
-                    <Setter TargetName="Shape" Property="Background" Value="#DBEAFE" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Type}" Value="Rack">
-                    <Setter TargetName="Shape" Property="Background" Value="#FEF3C7" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Type}" Value="Vehicle">
-                    <Setter TargetName="Shape" Property="Background" Value="#DCFCE7" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Type}" Value="Dock">
-                    <Setter TargetName="Shape" Property="Background" Value="#F3E8FF" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Type}" Value="Elevator">
-                    <Setter TargetName="Shape" Property="Background" Value="#E0F2FE" />
-                    <Setter TargetName="Shape" Property="BorderBrush" Value="#0284C7" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Type}" Value="FireDoor">
-                    <Setter TargetName="Shape" Property="Background" Value="#FFE4E6" />
-                    <Setter TargetName="Shape" Property="BorderBrush" Value="#E11D48" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Type}" Value="Area">
-                    <Setter TargetName="Shape" Property="Background" Value="#0F94A3B8" />
-                    <Setter TargetName="Shape" Property="BorderBrush" Value="#94A3B8" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Type}" Value="Label">
-                    <Setter TargetName="Shape" Property="Background" Value="Transparent" />
-                    <Setter TargetName="Shape" Property="BorderBrush" Value="Transparent" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                    <Setter TargetName="Shape" Property="BorderBrush" Value="#2563EB" />
-                    <Setter TargetName="Shape" Property="BorderThickness" Value="2" />
-                    <Setter TargetName="ResizeHandle" Property="Visibility" Value="Visible" />
-                    <Setter TargetName="RailLine" Property="Stroke" Value="#2563EB" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding HasIssue}" Value="True">
-                    <Setter TargetName="RailLine" Property="Stroke" Value="#DC2626" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding HasIssue}" Value="True">
-                    <Setter TargetName="Shape" Property="BorderBrush" Value="#DC2626" />
-                    <Setter TargetName="Shape" Property="BorderThickness" Value="3" />
-                </DataTrigger>
-            </DataTemplate.Triggers>
-        </DataTemplate>
-
     </Window.Resources>
     <DockPanel>
         <!-- 檔案 -->
@@ -230,7 +105,7 @@
                 </ListBox>
             </DockPanel>
 
-            <!-- 中：畫布（1 公尺 = 32 像素，格線 1 公尺，吸附 0.5 公尺）；下方是未對應的編號（ADR-0006 第 3、9 點） -->
+            <!-- 中：3D 畫布（吸附 0.5 公尺，ADR-0018）；下方是未對應的編號（ADR-0006 第 3、9 點） -->
             <DockPanel Grid.Column="1">
             <Border DockPanel.Dock="Bottom" Height="170" BorderBrush="#DDD" BorderThickness="0,1,0,0" Padding="8,6">
                 <DockPanel>
@@ -242,11 +117,13 @@
                         <Button Content="載入案件比對" Command="{Binding LoadCaseCompareCommand}" Padding="8,1" Margin="6,0,0,0"
                                 AutomationProperties.AutomationId="LoadCaseCompare" />
                         <TextBlock Text="{Binding CompareCaseName, StringFormat=目前比對：{0}, TargetNullValue=''}" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#777" />
+                        <Button Content="設為選取元素的別名" Command="{Binding AssignSelectedUnmappedCommand}" Padding="8,1" Margin="12,0,0,0"
+                                AutomationProperties.AutomationId="AssignUnmapped" />
                     </StackPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="案件 LOG 中出現、但還沒有元素以它為別名的編號。把編號拖到畫布上的站點、搬送機、對接設備、防火門或電梯，即可加為別名。"
+                    <TextBlock DockPanel.Dock="Top" Text="案件 LOG 中出現、但還沒有元素以它為別名的編號。先在 3D 畫布上選取站點、搬送機、對接設備、防火門或電梯，再雙擊編號（或選編號後按「設為選取元素的別名」），即可加為別名。"
                                Foreground="#777" Margin="0,4,0,4" TextWrapping="Wrap" />
-                    <ListBox x:Name="UnmappedList" ItemsSource="{Binding Unmapped}" AutomationProperties.AutomationId="UnmappedList"
-                             PreviewMouseLeftButtonDown="Unmapped_PreviewMouseLeftButtonDown" PreviewMouseMove="Unmapped_PreviewMouseMove">
+                    <ListBox x:Name="UnmappedList" ItemsSource="{Binding Unmapped}" SelectedItem="{Binding SelectedUnmapped}" AutomationProperties.AutomationId="UnmappedList"
+                             MouseDoubleClick="Unmapped_MouseDoubleClick">
                         <ListBox.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <WrapPanel />
@@ -254,7 +131,7 @@
                         </ListBox.ItemsPanel>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Border Background="#FEF3C7" CornerRadius="3" Padding="6,2" Cursor="Hand" ToolTip="拖到元素上加為別名">
+                                <Border Background="#FEF3C7" CornerRadius="3" Padding="6,2" Cursor="Hand" ToolTip="雙擊：設為選取元素的別名">
                                     <TextBlock>
                                         <Run Text="{Binding Value, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="　" /><Run Text="{Binding KindLabel, Mode=OneWay}" Foreground="#777" /><Run Text="　" /><Run Text="{Binding Count, Mode=OneWay, StringFormat={}{0} 次}" Foreground="#777" />
                                     </TextBlock>
@@ -264,7 +141,7 @@
                     </ListBox>
                 </DockPanel>
             </Border>
-            <!-- 樓層列（ADR-0006 第 13 點）：切換樓層、新增、改名、上移、下移、刪除，以及單層／並排、橫向／垂直 -->
+            <!-- 樓層列（ADR-0006 第 13 點）：切換樓層、新增、改名、上移、下移、刪除、樓板高度，以及只顯示目前樓層（ADR-0018） -->
             <Border DockPanel.Dock="Top" Padding="6,3" BorderBrush="#DDD" BorderThickness="0,0,0,1">
                 <WrapPanel>
                     <TextBlock Text="樓層" VerticalAlignment="Center" Foreground="#555" Margin="0,0,6,0" />
@@ -301,127 +178,12 @@
                     </TextBox>
                     <TextBlock Text="公尺" VerticalAlignment="Center" Margin="2,0,0,0" Foreground="#555" />
                     <Button Content="套用" Command="{Binding SetFloorHeightCommand}" Padding="6,1" Margin="4,0,0,0" AutomationProperties.AutomationId="SetFloorHeight" />
-                    <CheckBox Content="並排" IsChecked="{Binding SideBySide}" VerticalAlignment="Center" Margin="16,0,0,0" AutomationProperties.AutomationId="EditorSideBySide" />
-                    <CheckBox Content="垂直排列（低樓層在下）" IsChecked="{Binding Vertical}" IsEnabled="{Binding SideBySide}" VerticalAlignment="Center" Margin="8,0,0,0"
-                              AutomationProperties.AutomationId="EditorVertical" />
+                    <CheckBox Content="只顯示目前樓層" IsChecked="{Binding OnlyCurrentFloor}" VerticalAlignment="Center" Margin="16,0,0,0"
+                              ToolTip="3D 中只畫目前樓層，避免上層遮擋（ADR-0018）" AutomationProperties.AutomationId="EditorOnlyCurrentFloor" />
                 </WrapPanel>
             </Border>
-            <Border DockPanel.Dock="Top" Padding="6,3" BorderBrush="#DDD" BorderThickness="0,0,0,1">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="縮放" VerticalAlignment="Center" Foreground="#555" />
-                    <TextBlock Text="{Binding ZoomText}" VerticalAlignment="Center" Width="44" TextAlignment="Right" AutomationProperties.AutomationId="EditorZoomText" />
-                    <Button Content="符合視窗" Padding="8,1" Margin="8,0,0,0" Click="ZoomFit_Click" AutomationProperties.AutomationId="EditorZoomFit" />
-                    <Button Content="100%" Padding="8,1" Margin="4,0,0,0" Click="ZoomReset_Click" />
-                    <TextBlock Text="{Binding CanvasSizeText, StringFormat=畫布 {0}}" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#777" />
-                    <TextBlock Text="Ctrl＋滾輪縮放　空白處拖曳框選　Ctrl＋點選加選　Ctrl+C／Ctrl+V／Del／Ctrl+Z" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#999" />
-                </StackPanel>
-            </Border>
-            <ScrollViewer x:Name="CanvasScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#F8FAFC"
-                          PreviewMouseWheel="CanvasScroll_PreviewMouseWheel">
-                <!-- ADR-0006 第 11 點：畫布依元素範圍加大；縮放用 LayoutTransform，滑鼠位置仍以畫布座標計算 -->
-                <Canvas x:Name="LayoutCanvas" Width="{Binding CanvasWidth, Converter={StaticResource Px}}" Height="{Binding CanvasHeight, Converter={StaticResource Px}}"
-                        Background="White" Margin="8" AllowDrop="True" Drop="Canvas_Drop" Focusable="True" FocusVisualStyle="{x:Null}"
-                        MouseLeftButtonDown="Canvas_MouseLeftButtonDown" MouseMove="Canvas_MouseMove" MouseLeftButtonUp="Canvas_MouseLeftButtonUp"
-                        AutomationProperties.AutomationId="LayoutCanvas">
-                    <Canvas.LayoutTransform>
-                        <ScaleTransform ScaleX="{Binding Zoom}" ScaleY="{Binding Zoom}" />
-                    </Canvas.LayoutTransform>
-                    <Rectangle Width="{Binding CanvasWidth, Converter={StaticResource Px}}" Height="{Binding CanvasHeight, Converter={StaticResource Px}}" IsHitTestVisible="False">
-                        <Rectangle.Fill>
-                            <DrawingBrush TileMode="Tile" Viewport="0,0,32,32" ViewportUnits="Absolute">
-                                <DrawingBrush.Drawing>
-                                    <GeometryDrawing Geometry="M0,0 L32,0 M0,0 L0,32">
-                                        <GeometryDrawing.Pen>
-                                            <Pen Brush="#E2E8F0" Thickness="1" />
-                                        </GeometryDrawing.Pen>
-                                    </GeometryDrawing>
-                                </DrawingBrush.Drawing>
-                            </DrawingBrush>
-                        </Rectangle.Fill>
-                    </Rectangle>
-                    <!-- 並排檢視的樓層區域（ADR-0006 第 13 點）：目前樓層以藍框標出 -->
-                    <ItemsControl ItemsSource="{Binding FloorRegions}" IsHitTestVisible="False">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <Canvas />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Canvas>
-                                    <Rectangle x:Name="Region" Canvas.Left="{Binding Left, Converter={StaticResource Px}}" Canvas.Top="{Binding Top, Converter={StaticResource Px}}"
-                                               Width="{Binding Width, Converter={StaticResource Px}}" Height="{Binding Height, Converter={StaticResource Px}}"
-                                               Stroke="#CBD5E1" StrokeThickness="1" Visibility="{Binding ShowLabel, Converter={StaticResource Visible}}" />
-                                    <TextBlock x:Name="RegionLabel" Text="{Binding Floor}" FontWeight="SemiBold" FontSize="14" Foreground="#475569"
-                                               Canvas.Left="{Binding Left, Converter={StaticResource Px}}" Canvas.Top="{Binding LabelTop, Converter={StaticResource Px}}"
-                                               Visibility="{Binding ShowLabel, Converter={StaticResource Visible}}" />
-                                </Canvas>
-                                <DataTemplate.Triggers>
-                                    <DataTrigger Binding="{Binding IsCurrent}" Value="True">
-                                        <Setter TargetName="Region" Property="Stroke" Value="#2563EB" />
-                                        <Setter TargetName="Region" Property="StrokeThickness" Value="2" />
-                                        <Setter TargetName="RegionLabel" Property="Foreground" Value="#2563EB" />
-                                    </DataTrigger>
-                                </DataTemplate.Triggers>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <ItemsControl ItemsSource="{Binding Elements}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <Canvas Width="{Binding CanvasWidth, Converter={StaticResource Px}}" Height="{Binding CanvasHeight, Converter={StaticResource Px}}" />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemContainerStyle>
-                            <Style TargetType="ContentPresenter">
-                                <Setter Property="Canvas.Left" Value="{Binding ViewX, Converter={StaticResource Px}}" />
-                                <Setter Property="Canvas.Top" Value="{Binding ViewY, Converter={StaticResource Px}}" />
-                                <Setter Property="Visibility" Value="{Binding IsOnCanvas, Converter={StaticResource Visible}}" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsConveyor}" Value="True">
-                                        <Setter Property="Canvas.Left" Value="0" />
-                                        <Setter Property="Canvas.Top" Value="0" />
-                                        <Setter Property="Panel.ZIndex" Value="1" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding IsRail}" Value="True">
-                                        <Setter Property="Canvas.Left" Value="0" />
-                                        <Setter Property="Canvas.Top" Value="0" />
-                                        <Setter Property="Panel.ZIndex" Value="0" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding Type}" Value="Area">
-                                        <Setter Property="Panel.ZIndex" Value="-1" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </ItemsControl.ItemContainerStyle>
-                        <ItemsControl.ItemTemplate>
-                            <StaticResource ResourceKey="EditorElementTemplate" />
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <!-- 並排檢視中電梯在其他服務樓層的分身（ADR-0006 第 15 點）：同一個元素，拖曳任何一個都是移動電梯 -->
-                    <ItemsControl ItemsSource="{Binding ElevatorCopies}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <Canvas />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemContainerStyle>
-                            <Style TargetType="ContentPresenter">
-                                <Setter Property="Canvas.Left" Value="{Binding ViewX, Converter={StaticResource Px}}" />
-                                <Setter Property="Canvas.Top" Value="{Binding ViewY, Converter={StaticResource Px}}" />
-                            </Style>
-                        </ItemsControl.ItemContainerStyle>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <ContentControl Content="{Binding Element}" ContentTemplate="{StaticResource EditorElementTemplate}" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <!-- 框選的範圍（ADR-0006 第 10 點） -->
-                    <Rectangle x:Name="SelectionBox" Visibility="Collapsed" IsHitTestVisible="False" Stroke="#2563EB" StrokeThickness="1"
-                               StrokeDashArray="4 2" Fill="#202563EB" />
-                </Canvas>
-            </ScrollViewer>
+            <!-- 3D 畫布（ADR-0018）：WebView2 + three.js；編輯邏輯在 ViewModel，網頁回報目前樓層平面上的座標 -->
+            <local:Layout3DEditorView x:Name="Editor3D" />
             </DockPanel>
 
             <!-- 右：元素屬性與 LOG 設定 -->

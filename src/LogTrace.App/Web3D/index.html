@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<!-- Layout 回放 3D（ADR-0017）：只載入程式資料夾內的檔案；網路請求另由 WebView2 封鎖 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-gh7NRJ7MEWdYUGMcXx0SUMJY93gUi2UqlztG1amlvwA='; style-src 'self'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Layout 回放 3D</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}</script>
+</head>
+<body>
+<div id="view"></div>
+<div id="hint">左鍵拖曳：旋轉　右鍵拖曳：平移　滾輪：縮放</div>
+<script type="module" src="playback.js"></script>
+</body>
+</html>

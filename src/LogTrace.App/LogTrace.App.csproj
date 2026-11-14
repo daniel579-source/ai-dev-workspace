@@ -10,7 +10,7 @@
     <RootNamespace>LogTrace.App</RootNamespace>
     <PublishSingleFile>false</PublishSingleFile>
     <SatelliteResourceLanguages>zh-Hant;en</SatelliteResourceLanguages>
-    <Version>0.5.0</Version>
+    <Version>0.6.0</Version>
   </PropertyGroup>
 
   <!-- 發佈資料夾附上使用說明、第三方元件清單與授權全文（#29） -->
@@ -34,7 +34,7 @@
 
   <!-- 3D 回放的網頁與 three.js（固定版本，放在程式內，不使用 CDN，ADR-0017 第 3 點） -->
   <ItemGroup>
-    <None Include="Playback3D\**\*" Link="playback3d\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
+    <None Include="Web3D\**\*" Link="web3d\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
   </ItemGroup>
 
   <!--

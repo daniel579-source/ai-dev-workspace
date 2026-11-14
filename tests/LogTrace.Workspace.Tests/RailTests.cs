@@ -169,27 +169,25 @@ public sealed class RailEditorTests : IDisposable
     }
 
     [Fact]
-    public void 並排時把導軌拖到另一層_放開後改到那一層_點換算成該層的座標()
+    public void 拖曳整條導軌不換樓層_不超出左上角()
     {
         var rail = AddRail(); // 1F，(1, 1) → (21, 1)
         _vm.AddFloorCommand.Execute(null);
-        _vm.SideBySide = true;
-        var region2 = _vm.FloorRegions.Single(r => r.Floor == "2F");
+        _vm.SelectFloorCommand.Execute("1F");
 
         _vm.BeginDrag(rail);
-        _vm.DragMoveBy(region2.Left + 2 - 1, 0);
+        _vm.DragMoveBy(-10, 3);
         _vm.EndDrag();
 
-        Assert.Equal("2F", rail.Floor);
-        Assert.Equal(2, rail.RailPoints[0].X, 6);
-        Assert.Contains($"M {region2.Left + 2:0.###},", rail.RailPathData);
+        Assert.Equal("1F", rail.Floor);
+        Assert.Equal((0d, 4d), (rail.RailPoints[0].X, rail.RailPoints[0].Y));
     }
 }
 
 public sealed class RailPlaybackTests
 {
     [Fact]
-    public void 回放畫出導軌_含樓層位移_屬於輔助元素()
+    public void 回放畫出導軌_屬於輔助元素()
     {
         var layout = new LayoutSection
         {

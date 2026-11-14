@@ -60,18 +60,12 @@ public sealed class ParsedFieldsSmokeTests : IDisposable
             In(editor, "CompareCase").AsComboBox().Select(0);
             In(editor, "LoadCaseCompare").AsButton().Invoke();
             var a09 = Retry.WhileNull(() => In(editor, "UnmappedList").FindAllDescendants().FirstOrDefault(e => e.Name.Contains("A-09")), TimeSpan.FromSeconds(5)).Result!;
-            var target = editor.FindAllDescendants(cf.ByName("入庫口1")).Last(); // 畫布上的元素（清單中的在前）
-            // 逐步移動滑鼠，讓 WPF 的拖放開始
-            var from = a09.BoundingRectangle.Center();
-            var to = target.BoundingRectangle.Center();
-            FlaUI.Core.Input.Mouse.MoveTo(from);
-            FlaUI.Core.Input.Mouse.Down(FlaUI.Core.Input.MouseButton.Left);
-            for (int i = 1; i <= 20; i++)
-            {
-                FlaUI.Core.Input.Mouse.MoveTo(new System.Drawing.Point(from.X + (to.X - from.X) * i / 20, from.Y + (to.Y - from.Y) * i / 20));
-                Thread.Sleep(30);
-            }
-            FlaUI.Core.Input.Mouse.Up(FlaUI.Core.Input.MouseButton.Left);
+            // 在 3D 畫布上選取元素，再雙擊未對應的編號（#117：WebView2 收不到 WPF 的拖放）
+            var target = Retry.WhileNull(() => In(editor, "Editor3D").FindFirstDescendant(cf.ByName("入庫口1")), TimeSpan.FromSeconds(30)).Result
+                ?? throw new InvalidOperationException("3D 畫布中找不到「入庫口1」");
+            target.Click();
+            Assert.True(Retry.WhileFalse(() => In(editor, "ElementName").AsTextBox().Text == "入庫口1", TimeSpan.FromSeconds(10)).Result);
+            a09.DoubleClick();
             Assert.True(Retry.WhileFalse(() => In(editor, "EditorStatus").Name.Contains("已把「A-09」加為「入庫口1」的別名"), TimeSpan.FromSeconds(10)).Result,
                 In(editor, "EditorStatus").Name);
             Assert.DoesNotContain(In(editor, "UnmappedList").FindAllDescendants(), e => e.Name.Contains("A-09"));

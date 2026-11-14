@@ -17,3 +17,4 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #F8FAFC; fon
 .label.aux { background: transparent; border-color: transparent; color: #64748B; }
 .label.estimated { border-style: dashed; }
 .floor-label { pointer-events: none; font: 600 14px "Microsoft JhengHei UI", "Segoe UI", sans-serif; color: #475569; }
+.label.rotate { background: #2563EB; color: #FFFFFF; border-color: #1D4ED8; font-weight: 600; }

@@ -1,7 +1,7 @@
 # ADR-0007：用戶端技術選型
 
 - 日期：2026-10-16
-- 狀態：已接受（**待技術驗證**）
+- 狀態：已接受（**待技術驗證**）；第 1 點「不依賴 WebView2」與第 3 點「日後的 3D」**由 ADR-0017 取代**（2026-11-14）
 - 確認者：repo owner（daniel579-source）
 - 對應 ticket：Wayfinder「用戶端技術選型」
 - 相關決策：ADR-0001（單機桌面程式）、ADR-0005（回放的世界模型）、ADR-0006（Layout 模型與設定檔）
@@ -29,6 +29,8 @@
 
 **C# + .NET 10（LTS）+ WPF**。以 **self-contained** 方式發佈（執行環境一起打包），目標電腦不需要安裝 .NET，也**不依賴 WebView2**。
 
+- 2026-11-14 補充：「不依賴 WebView2」**由 ADR-0017 取代**。Layout 回放改用 WebView2 內嵌 three.js 繪製 3D，WebView2 Runtime 以固定版本隨程式資料夾打包，仍不依賴電腦上是否安裝；其他選擇不變。
+
 ### 2. 打包與更新
 
 - 發佈成**單一資料夾**（壓成 zip），解壓後執行其中的 exe。
@@ -51,7 +53,7 @@
 | MVVM 架構 | CommunityToolkit.Mvvm | MIT |
 | 事件列表 | WPF 內建虛擬化清單（技術驗證後建議 ListView＋GridView、固定列高） | — |
 | 時間軸、Layout 畫布 | 自行繪製（時間軸的密度長條畫進點陣圖再一次送出） | — |
-| 日後的 3D | HelixToolkit | MIT |
+| 日後的 3D | ~~HelixToolkit~~ → three.js（WebView2 內嵌，2026-11-14 由 ADR-0017 取代） | MIT（WebView2 Runtime 依其散布條款，待確認） |
 
 ### 4. 技術驗證
 

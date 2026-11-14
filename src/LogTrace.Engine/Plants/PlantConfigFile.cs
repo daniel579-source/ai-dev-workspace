@@ -32,6 +32,9 @@ public static class PlantConfigFile
 
     static readonly int[] AllowedRotations = [0, 90, 180, 270];
 
+    /// <summary>樓板高度的上限（公尺），擋下明顯打錯的數字。</summary>
+    public const double MaxFloorHeight = 100;
+
     static readonly JsonSerializerOptions Options = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -190,6 +193,9 @@ public static class PlantConfigFile
         if (floors.Any(string.IsNullOrWhiteSpace)) issues.Add(new("有空白的樓層名稱。", []));
         foreach (var g in floors.Where(f => !string.IsNullOrWhiteSpace(f)).GroupBy(f => f.Trim(), LayoutFloors.NameComparer).Where(g => g.Count() > 1))
             issues.Add(new($"樓層「{g.Key}」重複（大小寫視為相同）。", []));
+        foreach (var f in doc.Layout.Floors ?? [])
+            if (f.Height is { } h && !(h > 0 && h <= MaxFloorHeight))
+                issues.Add(new($"樓層「{f.Name}」的樓板高度 {h} 公尺不合理（要大於 0、不超過 {MaxFloorHeight} 公尺）。", []));
         foreach (var e in elements.Where(e => e.Type is not (LayoutElementType.Conveyor or LayoutElementType.Elevator) && e.Floor is not null && LayoutFloors.Canonical(e.Floor, floors) is null))
             issues.Add(new($"「{Label(e)}」的樓層「{e.Floor}」不在樓層清單中。", [e.Id]));
 

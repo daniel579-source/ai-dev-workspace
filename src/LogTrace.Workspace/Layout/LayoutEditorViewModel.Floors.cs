@@ -63,6 +63,7 @@ public sealed partial class LayoutEditorViewModel
     partial void OnCurrentFloorChanged(string value)
     {
         FloorNameText = value;
+        FloorHeightText = HeightText(value);
         RefreshLayoutView();
         // 單層檢視換到別層時，看不到的元素取消選取：避免被 Del 刪除或被拖曳一起移動（Jev，0.78）
         if (Elements.Any(e => e.IsSelected && !e.IsOnCanvas)) SetSelection(Selection.Where(e => e.IsOnCanvas));
@@ -133,8 +134,48 @@ public sealed partial class LayoutEditorViewModel
     void LoadFloors(LayoutSection layout)
     {
         Floors.Clear();
+        _floorHeights.Clear();
         foreach (var f in LayoutFloors.Of(layout)) Floors.Add(f);
+        foreach (var f in layout.Floors ?? [])
+            if (f.Height is { } h) _floorHeights[f.Name] = h;
         CurrentFloor = Floors[0];
+        FloorHeightText = HeightText(CurrentFloor);
+    }
+
+    // ---- 樓板高度（ADR-0017 第 6 點）：3D 回放把樓層上下堆疊時使用；沒有填時為 5 公尺 ----
+
+    readonly Dictionary<string, double> _floorHeights = new(LayoutFloors.NameComparer);
+
+    /// <summary>樓層填的樓板高度；沒有填時為 null（使用預設 5 公尺）。</summary>
+    public double? HeightOf(string floor) => _floorHeights.TryGetValue(floor, out var h) ? h : null;
+
+    string HeightText(string floor) => HeightOf(floor) is { } h ? h.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) : "";
+
+    /// <summary>目前樓層的樓板高度（公尺）；空白＝使用預設 5 公尺。</summary>
+    [ObservableProperty]
+    public partial string FloorHeightText { get; set; } = "";
+
+    /// <summary>設定目前樓層的樓板高度：空白時恢復預設；不是大於 0 的數字時不套用。</summary>
+    [RelayCommand]
+    void SetFloorHeight()
+    {
+        var text = FloorHeightText.Trim();
+        var floor = CurrentFloor;
+        if (text.Length == 0)
+        {
+            if (!_floorHeights.Remove(floor)) return;
+            FloorsChanged($"樓層「{floor}」的樓板高度恢復預設 {LayoutFloors.DefaultHeight:0.###} 公尺。");
+            return;
+        }
+        if (!double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var h)
+            || !(h > 0 && h <= PlantConfigFile.MaxFloorHeight))
+        {
+            Status = $"樓板高度要是大於 0、不超過 {PlantConfigFile.MaxFloorHeight:0} 的數字（公尺）。";
+            return;
+        }
+        if (HeightOf(floor) == h) return;
+        _floorHeights[floor] = h;
+        FloorsChanged($"樓層「{floor}」的樓板高度為 {h:0.###} 公尺。");
     }
 
     /// <summary>
@@ -253,6 +294,7 @@ public sealed partial class LayoutEditorViewModel
             foreach (var e in Elements.Where(e => !e.IsConveyor && !e.IsElevator && SameFloor(FloorOf(e), old))) e.Floor = name;
             foreach (var e in Elements.Where(e => e.IsElevator && e.ServedFloors.Any(s => SameFloor(s.Trim(), old))))
                 e.ServedFloors = e.ServedFloors.Select(s => SameFloor(s.Trim(), old) ? name : s).ToList(); // 電梯服務的樓層一併改名
+            if (_floorHeights.Remove(old, out var height)) _floorHeights[name] = height; // 樓板高度跟著改名
             Floors[i] = name;
             CurrentFloor = name;
         });
@@ -298,6 +340,7 @@ public sealed partial class LayoutEditorViewModel
             return;
         }
         var name = CurrentFloor;
+        _floorHeights.Remove(name);
         Floors.RemoveAt(i);
         CurrentFloor = Floors[Math.Max(0, i - 1)];
         FloorsChanged($"已刪除樓層「{name}」。");

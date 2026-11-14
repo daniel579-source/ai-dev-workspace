@@ -34,6 +34,13 @@ public partial class MainWindow : Window
     /// <summary>使用者保存的版面檔（依使用者保存，不依案件，ADR-0008 第 7 點）；null 時不保存。</summary>
     public string? LayoutFile { get; init; }
 
+    /// <summary>3D 回放（WebView2）的使用者資料資料夾（ADR-0017）。</summary>
+    public string? WebViewDataFolder
+    {
+        get => Playback3D.UserDataFolder;
+        init => Playback3D.UserDataFolder = value;
+    }
+
     readonly System.Windows.Threading.DispatcherTimer _playTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     DateTime _lastTick;
 
@@ -171,39 +178,6 @@ public partial class MainWindow : Window
         if (EventList.SelectedItem is { } selected) EventList.ScrollIntoView(selected);
     }
 
-    /// <summary>Layout 回放：點元素選取它（料架的列另外處理）。</summary>
-    void PlaybackElement_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        if (sender is FrameworkElement { Tag: LogTrace.Workspace.Playback.PlaybackElementViewModel el } && !e.Handled)
-            _vm?.Playback.SelectElementCommand.Execute(el);
-    }
-
-    // Layout 回放的縮放（ADR-0006 第 11 點）
-    void PlaybackScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
-    {
-        if (Keyboard.Modifiers != ModifierKeys.Control || _vm is null) return;
-        _vm.Playback.ZoomStep(e.Delta > 0);
-        e.Handled = true;
-    }
-
-    void PlaybackZoomFit_Click(object sender, RoutedEventArgs e) =>
-        _vm?.Playback.FitZoom(PlaybackScroll.ViewportWidth - 16, PlaybackScroll.ViewportHeight - 16, MetersToPixelsConverter.PixelsPerMeter);
-
-    void PlaybackZoomReset_Click(object sender, RoutedEventArgs e)
-    {
-        if (_vm is not null) _vm.Playback.Zoom = 1;
-    }
-
-    /// <summary>Layout 回放：點料架的一列顯示側視圖。</summary>
-    void RackCell_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        if (sender is FrameworkElement { Tag: LogTrace.Workspace.Playback.RackCellViewModel cell })
-        {
-            _vm?.Playback.SelectRackCell(cell);
-            e.Handled = true;
-        }
-    }
-
     /// <summary>啟動時還原上次的版面；沒有保存過時使用「回放」預設版面。</summary>
     void Window_Loaded(object sender, RoutedEventArgs e)
     {
@@ -222,7 +196,11 @@ public partial class MainWindow : Window
         UpdateBusy();
     }
 
-    void Window_Closed(object? sender, EventArgs e) => _watchdog?.Dispose();
+    void Window_Closed(object? sender, EventArgs e)
+    {
+        _watchdog?.Dispose();
+        Playback3D.Shutdown();
+    }
 
     /// <summary>關閉程式時保存目前的版面；保存失敗不阻擋關閉。</summary>
     void Window_Closing(object? sender, CancelEventArgs e)
@@ -275,14 +253,6 @@ public sealed class CollapsedWhenTrueConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
         value is true ? Visibility.Collapsed : Visibility.Visible;
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
-}
-
-/// <summary>數值大於 0 時為 true。</summary>
-public sealed class PositiveConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value is int n && n > 0;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
 }

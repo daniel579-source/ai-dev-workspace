@@ -1,4 +1,4 @@
-# 打包 LogTrace（#29，ADR-0001、ADR-0007）：self-contained 單一資料夾，壓成 zip，解壓後直接執行。
+﻿# 打包 LogTrace（#29，ADR-0001、ADR-0007）：self-contained 單一資料夾，壓成 zip，解壓後直接執行。
 # 用法：pwsh scripts/package.ps1            → publish/LogTrace/ 與 publish/LogTrace-<版本>-win-x64.zip
 #       pwsh scripts/package.ps1 -Output out
 param([string]$Output = "publish")
@@ -15,11 +15,19 @@ $zip = Join-Path $outDir "LogTrace-$version-win-x64.zip"
 if (Test-Path $folder) { Remove-Item -Recurse -Force $folder }
 if (Test-Path $zip) { Remove-Item -Force $zip }
 
+# WebView2 固定版本 Runtime（ADR-0017 第 2 點）：必須先下載並解開到 third_party\webview2\runtime\（見 README）
+$runtimeVersion = ([xml](Get-Content $project -Raw)).Project.PropertyGroup.WebView2RuntimeVersion | Where-Object { $_ } | Select-Object -First 1
+$runtimeSource = Join-Path $root "third_party/webview2/runtime/Microsoft.WebView2.FixedVersionRuntime.$runtimeVersion.x64"
+if (-not (Test-Path (Join-Path $runtimeSource 'msedgewebview2.exe'))) { throw "找不到 WebView2 固定版本 Runtime $runtimeVersion：$runtimeSource（見 README「WebView2 Runtime」）" }
+
 dotnet publish $project -c Release -r win-x64 --self-contained -o $folder
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish 失敗（$LASTEXITCODE）" }
 
-# 發佈資料夾必須有的檔案：主程式、7-Zip、使用說明、授權清單與全文
-foreach ($f in 'LogTrace.exe', '7z/7za.dll', '7z/License.txt', '使用說明.md', 'THIRD-PARTY-NOTICES.md', 'licenses/Apache-2.0.txt', 'licenses/AvalonDock-LICENSE.txt') {
+# 發佈資料夾必須有的檔案：主程式、7-Zip、使用說明、授權清單與全文；
+# 3D 回放（ADR-0017）：WebView2 Runtime、網頁與 three.js、授權
+foreach ($f in 'LogTrace.exe', '7z/7za.dll', '7z/License.txt', '使用說明.md', 'THIRD-PARTY-NOTICES.md', 'licenses/Apache-2.0.txt', 'licenses/AvalonDock-LICENSE.txt',
+               'WebView2Loader.dll', 'WebView2Runtime/msedgewebview2.exe', 'playback3d/index.html', 'playback3d/app.js', 'playback3d/vendor/three/three.module.js',
+               'licenses/three.js-LICENSE.txt', 'licenses/Microsoft.Web.WebView2-LICENSE.txt') {
     if (-not (Test-Path (Join-Path $folder $f))) { throw "發佈資料夾缺少 $f" }
 }
 # 不得包含有 unRAR 授權限制的 7z.dll

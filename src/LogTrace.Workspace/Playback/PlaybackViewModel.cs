@@ -79,7 +79,7 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
         Floor = e.Type == LayoutElementType.Elevator ? ServedFloors.FirstOrDefault() ?? (floors ?? [LayoutFloors.Default])[0]
             : LayoutFloors.FloorOf(e, floors ?? [LayoutFloors.Default], Find);
         if (e.Type == LayoutElementType.Conveyor && e.From is { } f && e.To is { } t && byId.TryGetValue(f, out var a) && byId.TryGetValue(t, out var b))
-            ((_lineX1, _lineY1), (_lineX2, _lineY2)) = (End(a, e.FromPoint), End(b, e.ToPoint));
+            ConveyorEnds = (End(a, e.FromPoint), End(b, e.ToPoint));
         if (e.Type == LayoutElementType.Rack && e.ColFrom is { } from && e.ColTo is { } to && to >= from)
             for (int c = from; c <= to; c++) Cells.Add(new RackCellViewModel(c, e.Levels ?? 0));
         Look = IsAuxiliary ? ElementLook.Auxiliary : ElementLook.Unknown;
@@ -104,9 +104,6 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     public bool HasGeometry => !IsConveyor && !IsRail;
     public bool IsAuxiliary => Type is LayoutElementType.Conveyor or LayoutElementType.Area or LayoutElementType.Label or LayoutElementType.Rail;
 
-    /// <summary>導軌的路徑（WPF 路徑語法，公尺，含樓層位移，ADR-0006 第 14 點）；不是導軌時為 null。</summary>
-    public string? RailPathData => IsRail ? RailPath.Of(Model).ToPathData(OffsetX, OffsetY) : null;
-
     public double X { get; }
     public double Y { get; }
     public double W { get; }
@@ -125,35 +122,14 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     [ObservableProperty]
     public partial string? CurrentFloorText { get; set; }
 
-    readonly double _lineX1, _lineY1, _lineX2, _lineY2;
-
-    // 畫面上的位置：並排檢視時加上所在樓層區域的位移；單層檢視時其他樓層的元素不顯示（ADR-0006 第 13 點）
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ViewX), nameof(LineX1), nameof(LineX2), nameof(RailPathData))]
-    public partial double OffsetX { get; set; }
+    /// <summary>輸送線兩端的位置（公尺）；兩端都找得到時才有，其他元素為 null。</summary>
+    public ((double X, double Y) From, (double X, double Y) To)? ConveyorEnds { get; }
 
     /// <summary>
     /// 沿導軌移動的搬送機在目前時刻的位置與依據（ADR-0005 第 10 點）；其他元素為 null（畫在 Layout 上放的位置）。
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ViewX), nameof(ViewY))]
     public partial VehiclePlacement? Placement { get; set; }
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ViewY), nameof(LineY1), nameof(LineY2), nameof(RailPathData))]
-    public partial double OffsetY { get; set; }
-
-    [ObservableProperty]
-    public partial bool IsOnCanvas { get; set; } = true;
-
-    /// <summary>畫面上的左上角：沿導軌移動時以位置（中心）換算，否則為 Layout 上放的位置；再加上樓層的位移。</summary>
-    public double ViewX => (Placement is { } p ? p.X - W / 2 : X) + OffsetX;
-    public double ViewY => (Placement is { } p ? p.Y - H / 2 : Y) + OffsetY;
-    public double LineX1 => _lineX1 + OffsetX;
-    public double LineY1 => _lineY1 + OffsetY;
-    public double LineX2 => _lineX2 + OffsetX;
-    public double LineY2 => _lineY2 + OffsetY;
 
     /// <summary>料架的各列。</summary>
     public ObservableCollection<RackCellViewModel> Cells { get; } = [];
@@ -222,36 +198,18 @@ public sealed partial class PlaybackViewModel : ObservableObject
 
     public ObservableCollection<PlaybackElementViewModel> Elements { get; } = [];
 
-    /// <summary>畫布大小（公尺）：元素範圍再加 20 公尺，最小 60 × 40（ADR-0006 第 11 點）。不寫進設定檔。</summary>
+    /// <summary>3D 的場景（Layout 元素與樓層）；載入或清除案件時重建（ADR-0017 第 4 點）。沒有 Layout 時元素為空。</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanvasSizeText))]
-    public partial double CanvasWidth { get; private set; } = LayoutGeometry.MinCanvasWidth;
+    public partial SceneLayout Scene { get; private set; } = SceneLayout.Empty;
 
+    /// <summary>3D 的目前時刻狀態：目前時刻或選取改變時更新；畫面把它傳給網頁。</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanvasSizeText))]
-    public partial double CanvasHeight { get; private set; } = LayoutGeometry.MinCanvasHeight;
+    public partial SceneState SceneNow { get; private set; } = SceneState.Empty;
 
-    public string CanvasSizeText => $"{CanvasWidth:0} × {CanvasHeight:0} 公尺";
-
-    /// <summary>畫面縮放（1 = 100%）；只改變顯示。</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ZoomText))]
-    public partial double Zoom { get; set; } = 1;
-
-    public string ZoomText => LayoutZoom.Text(Zoom);
-
-    partial void OnZoomChanged(double value)
+    void RefreshSceneState()
     {
-        var clamped = LayoutZoom.Clamp(value);
-        if (clamped != value) Zoom = clamped;
+        if (_model is not null) SceneNow = PlaybackScene.StateOf(Elements, _state, SelectedElement, _selectedCell, _storageRule);
     }
-
-    /// <summary>Ctrl＋滾輪。</summary>
-    public void ZoomStep(bool zoomIn) => Zoom = LayoutZoom.Step(Zoom, zoomIn);
-
-    /// <summary>「符合視窗」：可視範圍與每公尺像素數由畫面提供。</summary>
-    public void FitZoom(double viewportWidth, double viewportHeight, double pixelsPerMeter) =>
-        Zoom = LayoutZoom.Fit(viewportWidth, viewportHeight, CanvasWidth * pixelsPerMeter, CanvasHeight * pixelsPerMeter);
 
     /// <summary>沒有 Layout 或沒有狀態規則時的說明；可以回放時為 null。</summary>
     [ObservableProperty]
@@ -286,6 +244,8 @@ public sealed partial class PlaybackViewModel : ObservableObject
     {
         _model = null;
         _state = new();
+        Scene = SceneLayout.Empty;
+        SceneNow = SceneState.Empty;
         Equipment.Clear();
         Elements.Clear();
         Detail.Clear();
@@ -309,8 +269,8 @@ public sealed partial class PlaybackViewModel : ObservableObject
         LoadFloors(layout);
         Elements.Clear();
         foreach (var e in layout.Elements) Elements.Add(new PlaybackElementViewModel(e, byId, Floors));
-        RefreshFloorView();
         SelectedElement = null;
+        Scene = PlaybackScene.LayoutOf(layout, Elements);
         Message = hasStateRules ? null : "廠別設定的解析規則中，只有在席等少數狀態變化；命令、搬送機、警報等需要在規則中設定「效果」才能推導。";
         SetMoment(0);
     }
@@ -332,20 +292,16 @@ public sealed partial class PlaybackViewModel : ObservableObject
         UpdateDetail();
         UpdateSideView();
         UpdateEquipment();
+        RefreshSceneState();
     }
 
     partial void OnSelectedElementChanged(PlaybackElementViewModel? oldValue, PlaybackElementViewModel? newValue)
     {
         if (oldValue is not null) oldValue.IsSelected = false;
         if (newValue is not null) newValue.IsSelected = true;
-        if (newValue is not null)
-        {
-            // 電梯：切到目前所在的樓層；未取得資訊時不切換（使用者決定）
-            if (newValue.IsElevator) { if (_state.Elevators.TryGetValue(newValue.Id, out var ev) && ev.Floor is { } f) Follow(f); }
-            else Follow(newValue.Floor);
-        }
         if (newValue is null || !newValue.IsRack) SelectRackCell(null);
         UpdateDetail();
+        RefreshSceneState();
     }
 
     void Update(PlaybackElementViewModel el)
@@ -717,6 +673,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
             SelectedElement = Elements.FirstOrDefault(e => e.Cells.Contains(cell));
         }
         UpdateSideView();
+        RefreshSceneState();
     }
 
     void UpdateSideView()

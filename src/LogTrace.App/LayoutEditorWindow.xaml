@@ -291,6 +291,16 @@
                     <Button Content="上移" Command="{Binding MoveFloorUpCommand}" Padding="6,1" Margin="4,0,0,0" ToolTip="往較高的樓層移動" />
                     <Button Content="下移" Command="{Binding MoveFloorDownCommand}" Padding="6,1" Margin="4,0,0,0" ToolTip="往較低的樓層移動" />
                     <Button Content="刪除樓層" Command="{Binding DeleteFloorCommand}" Padding="6,1" Margin="4,0,0,0" AutomationProperties.AutomationId="DeleteFloor" />
+                    <!-- 樓板高度（ADR-0017 第 6 點）：3D 回放上下堆疊樓層時使用；空白＝預設 5 公尺 -->
+                    <TextBlock Text="樓板高度" VerticalAlignment="Center" Margin="12,0,4,0" Foreground="#555" />
+                    <TextBox Text="{Binding FloorHeightText, UpdateSourceTrigger=PropertyChanged}" Width="50" AutomationProperties.AutomationId="FloorHeight"
+                             ToolTip="目前樓層的樓板高度（公尺），3D 回放上下堆疊樓層時使用；空白＝預設 5 公尺">
+                        <TextBox.InputBindings>
+                            <KeyBinding Key="Enter" Command="{Binding SetFloorHeightCommand}" />
+                        </TextBox.InputBindings>
+                    </TextBox>
+                    <TextBlock Text="公尺" VerticalAlignment="Center" Margin="2,0,0,0" Foreground="#555" />
+                    <Button Content="套用" Command="{Binding SetFloorHeightCommand}" Padding="6,1" Margin="4,0,0,0" AutomationProperties.AutomationId="SetFloorHeight" />
                     <CheckBox Content="並排" IsChecked="{Binding SideBySide}" VerticalAlignment="Center" Margin="16,0,0,0" AutomationProperties.AutomationId="EditorSideBySide" />
                     <CheckBox Content="垂直排列（低樓層在下）" IsChecked="{Binding Vertical}" IsEnabled="{Binding SideBySide}" VerticalAlignment="Center" Margin="8,0,0,0"
                               AutomationProperties.AutomationId="EditorVertical" />

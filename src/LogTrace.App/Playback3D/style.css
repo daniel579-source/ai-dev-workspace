@@ -1,0 +1,19 @@
+/* Layout 回放 3D 的版面（ADR-0017）；顏色沿用 2D 圖例（ADR-0008 第 6 點） */
+html, body { margin: 0; height: 100%; overflow: hidden; background: #F8FAFC; font-family: "Microsoft JhengHei UI", "Segoe UI", sans-serif; }
+#view { position: absolute; inset: 0; }
+#view canvas { display: block; }
+#labels { position: absolute; inset: 0; pointer-events: none; }
+#hint { position: absolute; left: 6px; bottom: 4px; font-size: 11px; color: #94A3B8; pointer-events: none; user-select: none; }
+
+/* 元素名稱：可以點選（UI 自動化也能找到） */
+.label {
+  pointer-events: auto; cursor: pointer; border: 1px solid #CBD5E1; border-radius: 3px; background: rgba(255, 255, 255, 0.85);
+  color: #1F2937; font: 11px "Microsoft JhengHei UI", "Segoe UI", sans-serif; padding: 0 4px; line-height: 1.35; white-space: nowrap; text-align: center;
+}
+.label .summary { display: block; color: #1E3A8A; font-size: 10px; }
+.label .summary:empty { display: none; }
+.label.alarm { border-color: #DC2626; background: rgba(254, 226, 226, 0.92); }
+.label.selected { border-color: #2563EB; box-shadow: 0 0 0 1px #2563EB; }
+.label.aux { background: transparent; border-color: transparent; color: #64748B; }
+.label.estimated { border-style: dashed; }
+.floor-label { pointer-events: none; font: 600 14px "Microsoft JhengHei UI", "Segoe UI", sans-serif; color: #475569; }

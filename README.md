@@ -43,11 +43,25 @@ $env:LOGTRACE_APP_EXE = "D:/temp/LogTrace/LogTrace.exe"; $env:LOGTRACE_E2E_SOURC
 dotnet test tests/LogTrace.App.SmokeTests --logger "console;verbosity=detailed"
 ```
 
+### WebView2 Runtime（3D 回放，ADR-0017）
+
+Layout 回放以 WebView2 內嵌 three.js 繪製 3D；程式只使用隨程式資料夾打包的**固定版本 Runtime**（約 680 MB，不放進 repo）。建置或打包前先準備一次：
+
+1. 從 Microsoft 的 WebView2 下載頁（<https://developer.microsoft.com/microsoft-edge/webview2/>）的「Fixed Version」下載 x64 的 `Microsoft.WebView2.FixedVersionRuntime.<版本>.x64.cab`，版本與 `src/LogTrace.App/LogTrace.App.csproj` 的 `WebView2RuntimeVersion` 相同（目前 157.0.4341.60）。
+2. 確認數位簽章為 Microsoft Corporation，解開到 `third_party/webview2/runtime/`（已列在 `.gitignore`）：
+
+   ```powershell
+   New-Item -ItemType Directory -Force third_party/webview2/runtime | Out-Null
+   expand.exe -F:* Microsoft.WebView2.FixedVersionRuntime.157.0.4341.60.x64.cab third_party/webview2/runtime
+   ```
+
+建置時 Runtime 複製到輸出資料夾的 `WebView2Runtime\`；找不到時照常建置，但 3D 面板只顯示原因（冒煙測試會失敗）。`scripts/package.ps1` 找不到 Runtime 時停止打包。three.js（0.187.0）放在 `src/LogTrace.App/Playback3D/vendor/three/`，隨程式發佈，不使用 CDN。
+
 | 專案 | 內容 |
 |---|---|
 | `src/LogTrace.Engine` | 案件引擎：無畫面的函式庫（案件管理、匯入資料夾／7z／zip、解析、排序與事件序號、儲存、廠別設定檔的讀寫與檢查）。7z 使用 7-Zip 的 `7za.dll`（LGPL，隨程式放在 `7z\`） |
 | `src/LogTrace.Workspace` | ViewModel（主畫面、Layout 編輯器）：不依賴 WPF 控制項 |
-| `src/LogTrace.App` | WPF 畫面（AvalonDock） |
+| `src/LogTrace.App` | WPF 畫面（AvalonDock）；Layout 回放的 3D 網頁在 `Playback3D/`（WebView2 + three.js，ADR-0017） |
 | `tests/` | 引擎測試、ViewModel 測試、FlaUI 冒煙測試；測試用 LOG 在 `tests/fixtures`（虛構） |
 
 ## 文件導覽

@@ -29,6 +29,22 @@ public sealed class OfflineSmokeTests : IDisposable
             .ToList();
     }
 
+    /// <summary>3D 回放的瀏覽器程序（程式資料夾內的 WebView2 Runtime，ADR-0017）。</summary>
+    static List<int> WebViewProcesses()
+    {
+        var runtime = Path.Combine(Path.GetDirectoryName(ImportSmokeTests.AppExe())!, "WebView2Runtime");
+        var pids = new List<int>();
+        foreach (var p in Process.GetProcessesByName("msedgewebview2"))
+            try
+            {
+                if (p.MainModule?.FileName.StartsWith(runtime, StringComparison.OrdinalIgnoreCase) == true) pids.Add(p.Id);
+            }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+            {
+            }
+        return pids;
+    }
+
     [Fact]
     public void 走完主要流程_程式沒有開啟任何網路連線()
     {
@@ -46,7 +62,13 @@ public sealed class OfflineSmokeTests : IDisposable
             AutomationElement In(string id) =>
                 Retry.WhileNull(() => main.FindFirstDescendant(cf.ByAutomationId(id)), TimeSpan.FromSeconds(10)).Result
                 ?? throw new InvalidOperationException($"找不到 {id}");
-            void Check() => seen.AddRange(Endpoints(app.ProcessId));
+            var webPids = new HashSet<int>();
+            void Check()
+            {
+                seen.AddRange(Endpoints(app.ProcessId));
+                webPids.UnionWith(WebViewProcesses());
+                foreach (var pid in webPids) seen.AddRange(Endpoints(pid).Select(e => "3D 瀏覽器程序：" + e)); // 3D 回放也不得連線
+            }
 
             Check(); // 啟動後
             In("PlantChoice").AsComboBox().Select("範例廠");
@@ -55,7 +77,10 @@ public sealed class OfflineSmokeTests : IDisposable
             In("ImportSource").AsTextBox().Text = Path.Combine(TempFolder.Fixture("playback-prototype"), "logs");
             In("Import").AsButton().Invoke();
             Assert.True(Retry.WhileFalse(() => In("Status").Name.Contains("筆事件"), TimeSpan.FromSeconds(30)).Result);
-            Check(); // 匯入、建立索引
+            Assert.True(Retry.WhileFalse(() => In("Playback3DStatus").Name.StartsWith("3D 已載入", StringComparison.Ordinal), TimeSpan.FromSeconds(30)).Result);
+            Assert.DoesNotContain("已封鎖", In("Playback3DStatus").Name); // 網頁沒有發出任何網路請求
+            Assert.NotEmpty(WebViewProcesses()); // 使用程式資料夾內的 Runtime
+            Check(); // 匯入、建立索引、3D 回放
 
             ImportSmokeTests.OpenTab(main, "搜尋");
             In("SearchAllOf").AsTextBox().Text = "SSCA01";

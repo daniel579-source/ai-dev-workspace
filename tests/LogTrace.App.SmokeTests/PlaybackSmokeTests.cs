@@ -9,7 +9,7 @@ using LogTrace.Tests.Support;
 
 namespace LogTrace.App.SmokeTests;
 
-// Layout 回放（#24）。測試資料：tests/fixtures/playback-prototype（虛構）
+// Layout 回放（#24；3D，#113）。測試資料：tests/fixtures/playback-prototype（虛構）
 [Trait("Category", "UI")]
 public sealed class PlaybackSmokeTests : IDisposable
 {
@@ -50,8 +50,14 @@ public sealed class PlaybackSmokeTests : IDisposable
             Keyboard.Type(VirtualKeyShort.END);
             Assert.True(Retry.WhileFalse(() => In("PlaybackMoment").Name.Contains("10:06:00"), TimeSpan.FromSeconds(10)).Result, In("PlaybackMoment").Name);
 
-            // 點 Layout 上的「輸送站2」：警報 E205 沒有復歸
-            var station = Retry.WhileNull(() => In("PlaybackLayout").FindFirstDescendant(cf.ByName("輸送站2")), TimeSpan.FromSeconds(10)).Result!;
+            // 3D 面板載入完成（ADR-0017）：網頁回報元素數量，沒有任何網路請求被封鎖
+            Assert.True(Retry.WhileFalse(() => In("Playback3DStatus").Name.StartsWith("3D 已載入", StringComparison.Ordinal), TimeSpan.FromSeconds(30)).Result,
+                In("Playback3DStatus").Name + " " + main.FindFirstDescendant(cf.ByAutomationId("Playback3DError"))?.Name);
+            Assert.DoesNotContain("已封鎖", In("Playback3DStatus").Name);
+
+            // 點 3D 上的「輸送站2」（元素名稱的標籤）：警報 E205 沒有復歸
+            var station = Retry.WhileNull(() => In("Playback3D").FindFirstDescendant(cf.ByName("輸送站2")), TimeSpan.FromSeconds(20)).Result
+                ?? throw new InvalidOperationException("3D 畫面中找不到「輸送站2」");
             station.Click();
             Assert.True(Retry.WhileFalse(() => In("ElementStateTitle").Name == "輸送站2", TimeSpan.FromSeconds(10)).Result);
             var texts = string.Concat(In("ElementState").FindAllDescendants().Select(e => e.Name));

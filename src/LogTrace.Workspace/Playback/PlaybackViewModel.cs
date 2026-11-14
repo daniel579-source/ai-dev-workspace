@@ -210,7 +210,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
 
     void RefreshSceneState()
     {
-        if (_model is not null) SceneNow = PlaybackScene.StateOf(Elements, _state, SelectedElement, _selectedCell, _storageRule);
+        if (_model is not null) SceneNow = PlaybackScene.StateOf(Elements, _state, SelectedElement, _selectedCell, _storageRule, CargoByPallet);
     }
 
     /// <summary>沒有 Layout 或沒有狀態規則時的說明；可以回放時為 null。</summary>

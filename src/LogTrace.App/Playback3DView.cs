@@ -27,6 +27,13 @@ public sealed class Playback3DView : Web3DView
         follow.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, new System.Windows.Data.Binding(nameof(PlaybackViewModel.FollowFocus)));
         AutomationProperties.SetAutomationId(follow, "PlaybackFollowFocus");
         ToolBar.Children.Add(follow);
+        // 搬送中貨物的標示（#125）：命令編號（預設）或棧板編號，記在本機
+        ToolBar.Children.Add(new TextBlock { Text = "貨物標示", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 4, 0) });
+        var cargo = new ComboBox { ItemsSource = PlaybackViewModel.CargoLabelChoices, Width = 90, VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "搬送中的貨物（在搬送機、RM、電梯上）顯示命令編號或棧板編號" };
+        cargo.SetBinding(System.Windows.Controls.Primitives.Selector.SelectedIndexProperty, new System.Windows.Data.Binding(nameof(PlaybackViewModel.CargoLabelIndex)));
+        AutomationProperties.SetAutomationId(cargo, "PlaybackCargoLabel");
+        ToolBar.Children.Add(cargo);
         DataContextChanged += (_, _) => Attach(DataContext as PlaybackViewModel);
     }
 

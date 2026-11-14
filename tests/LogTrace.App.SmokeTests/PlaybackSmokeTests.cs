@@ -60,6 +60,26 @@ public sealed class PlaybackSmokeTests : IDisposable
                 ?? throw new InvalidOperationException("3D 畫面中找不到「輸送站2」");
             station.Click();
             Assert.True(Retry.WhileFalse(() => In("ElementStateTitle").Name == "輸送站2", TimeSpan.FromSeconds(10)).Result);
+            // 搬送中貨物的標示（#125）：從頭逐筆前進，找到搬送機上的貨物；預設命令編號，切換後為棧板編號
+            In("PlaybackCargoLabel").AsComboBox().Select("命令編號");
+            first.AsListBoxItem().Select();
+            first.Focus();
+            Keyboard.Type(VirtualKeyShort.HOME);
+            AutomationElement? Cargo(string prefix) => In("Playback3D").FindAllDescendants().FirstOrDefault(e => e.Name.StartsWith(prefix, StringComparison.Ordinal));
+            AutomationElement? command = null;
+            for (int i = 0; i < 60 && (command = Cargo("000")) is null; i++)
+            {
+                Keyboard.TypeSimultaneously(VirtualKeyShort.SHIFT, VirtualKeyShort.RIGHT);
+                Thread.Sleep(150);
+            }
+            Assert.NotNull(command); // 命令編號（虛構：000 開頭的 8 位數字）
+            In("PlaybackCargoLabel").AsComboBox().Select("棧板編號");
+            Assert.True(Retry.WhileFalse(() => Cargo("000") is null, TimeSpan.FromSeconds(5)).Result); // 改為棧板編號
+            In("PlaybackCargoLabel").AsComboBox().Select("命令編號");
+            first.Focus(); // 方向鍵與 End 要作用在事件清單，不是下拉選單
+            Keyboard.Type(VirtualKeyShort.END);
+            Assert.True(Retry.WhileFalse(() => In("PlaybackMoment").Name.Contains("10:06:00"), TimeSpan.FromSeconds(10)).Result, In("PlaybackMoment").Name);
+
             var texts = string.Concat(In("ElementState").FindAllDescendants().Select(e => e.Name));
             Assert.Contains("未見復歸紀錄", texts);
             Assert.Contains("警報發生 A-02 E205", texts);

@@ -6,10 +6,10 @@ using LogTrace.Engine.Plants;
 namespace LogTrace.Workspace.Layout;
 
 /// <summary>
-/// 樓層檢視的本機設定（不寫進廠別設定檔）：回放的「跟隨」（ADR-0017）、編輯器的「只顯示目前樓層」（ADR-0018）。
-/// 2D 時期的單層／並排、橫向／垂直已移除；舊設定檔中的這些欄位讀取時忽略。
+/// 檢視的本機設定（不寫進廠別設定檔）：回放的「跟隨」（ADR-0017）與搬送中貨物的標示（#125：false＝命令編號，預設）、
+/// 編輯器的「只顯示目前樓層」（ADR-0018）。2D 時期的單層／並排、橫向／垂直已移除；舊設定檔中的這些欄位讀取時忽略。
 /// </summary>
-public sealed record FloorViewSettings(bool Follow = false, bool OnlyCurrentFloor = false);
+public sealed record FloorViewSettings(bool Follow = false, bool OnlyCurrentFloor = false, bool CargoByPallet = false);
 
 // 樓層（ADR-0006 第 13 點、ADR-0018 第 6 點）：每個元素屬於一層；3D 中所有樓層上下堆疊。
 // 編輯一律在「目前樓層」的平面上：滑鼠操作傳進來的座標是目前樓層的座標（公尺）；點了別層的元素時，目前樓層先切到那一層。

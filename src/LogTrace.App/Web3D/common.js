@@ -49,6 +49,20 @@ export function box(w, h, d, material, x = 0, y = 0, z = 0) {
   return m;
 }
 
+/** 貨箱上的標示（#125）：text 為 null 時隱藏。標籤掛在貨箱上，跟著貨物移動。 */
+export function setCargoLabel(item, text) {
+  if (!item.cargo) return;
+  if (!item.cargoLabel) {
+    const div = document.createElement('div');
+    div.className = 'cargo-label';
+    item.cargoLabel = new CSS2DObject(div);
+    item.cargoLabel.center.set(0.5, 0.5);
+    item.cargo.add(item.cargoLabel);
+  }
+  item.cargoLabel.element.textContent = text || '';
+  item.cargoLabel.visible = !!text;
+}
+
 export function setColor(mesh, color, opacity = 1) {
   if (!mesh) return;
   mesh.material.color.setHex(color);

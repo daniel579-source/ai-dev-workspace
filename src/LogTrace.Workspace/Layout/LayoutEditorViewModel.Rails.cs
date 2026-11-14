@@ -211,26 +211,19 @@ public sealed partial class LayoutEditorViewModel
         rail.RailPoints = points;
     }
 
-    /// <summary>
-    /// 放開整條導軌：並排時依範圍中心落在哪一層換樓層，點換算成該層的座標；不超出該層的左上角（ADR-0006 第 13 點）。
-    /// </summary>
+    /// <summary>放開整條導軌：不超出樓層的左上角（座標不小於 0）。拖曳不換樓層（ADR-0018：在目前樓層的平面上編輯）。</summary>
     void EndRailDrag(IReadOnlyList<LayoutElementViewModel> rails)
     {
         var moves = rails.Select(r =>
         {
-            var (l, t, rr, b) = r.Path().Bounds();
-            var region = SideBySide ? RegionAt((l + rr) / 2 + r.OffsetX, (t + b) / 2 + r.OffsetY) : new FloorRegion(FloorOf(r), r.OffsetX, r.OffsetY, 0, 0);
-            double dx = r.OffsetX - region.OffsetX, dy = r.OffsetY - region.OffsetY;
-            return (Rail: r, region.Floor, Dx: Math.Max(dx, -l), Dy: Math.Max(dy, -t));
+            var (l, t, _, _) = r.Path().Bounds();
+            return (Rail: r, Dx: Math.Max(0, -l), Dy: Math.Max(0, -t));
         }).ToList();
         _suppressUndo++;
         try
         {
             foreach (var m in moves)
-            {
-                if (!SameFloor(FloorOf(m.Rail), m.Floor)) m.Rail.Floor = m.Floor;
                 if (m.Dx != 0 || m.Dy != 0) m.Rail.RailPoints = RailPath.Shift(m.Rail.RailPoints, m.Dx, m.Dy);
-            }
         }
         finally
         {

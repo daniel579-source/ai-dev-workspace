@@ -83,6 +83,17 @@ public static class PlaybackScene
     public static string Message(string kind, object data) =>
         JsonSerializer.Serialize(new { kind, data }, Json);
 
+    /// <summary>以傳給網頁的格式寫出 JSON（用來比較場景是否改變）。</summary>
+    public static string ToJson(object data) => JsonSerializer.Serialize(data, Json);
+
+    /// <summary>只有 Layout（沒有回放狀態）時的場景，例如 Layout 編輯器（ADR-0018）。</summary>
+    public static SceneLayout LayoutOf(LayoutSection layout)
+    {
+        var byId = layout.Elements.GroupBy(e => e.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        var floors = LayoutFloors.Of(layout);
+        return LayoutOf(layout, layout.Elements.Select(e => new PlaybackElementViewModel(e, byId, floors)).ToList());
+    }
+
     public static SceneLayout LayoutOf(LayoutSection layout, IEnumerable<PlaybackElementViewModel> elements)
     {
         var floors = LayoutFloors.Stack(layout).Select(f => new SceneFloor(f.Floor, f.Elevation, f.Height)).ToList();

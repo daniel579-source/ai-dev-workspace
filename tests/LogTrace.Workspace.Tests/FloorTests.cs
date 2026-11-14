@@ -99,64 +99,58 @@ public sealed class FloorEditorTests : IDisposable
     }
 
     [Fact]
-    public void 並排檢視_各層加上位移_框選可以跨層_切換時記住設定()
+    public void 只顯示目前樓層_預設關_切換時記住設定_框選只選目前樓層()
     {
         var a = Add(LayoutElementType.Station);
         _vm.AddFloorCommand.Execute(null);
-        var b = Add(LayoutElementType.Station);
+        var b = Add(LayoutElementType.Station); // 2F，座標與 a 相同
 
-        _vm.SideBySide = true;
-        Assert.Equal(new FloorViewSettings(true, false), _saved[^1]);
-        Assert.True(a.IsOnCanvas && b.IsOnCanvas);
-        Assert.Equal(2, _vm.FloorRegions.Count);
-        var r2 = _vm.FloorRegions[1];
-        Assert.Equal((r2.Left, r2.Top), (b.OffsetX, b.OffsetY));
-        Assert.True(b.ViewX > 60); // 1F 至少 60 公尺寬，再加 5 公尺
-        Assert.True(r2.IsCurrent);
+        Assert.False(_vm.OnlyCurrentFloor);
+        _vm.OnlyCurrentFloor = true;
+        Assert.Equal(new FloorViewSettings(OnlyCurrentFloor: true), _saved[^1]);
+        Assert.True(_vm.BuildSceneState().OnlyCurrentFloor);
 
-        _vm.SelectInRect(0, 0, b.ViewX + 1, 5, add: false);
-        Assert.Equal(2, _vm.SelectionCount);
-
-        _vm.Vertical = true;
-        Assert.Equal(new FloorViewSettings(true, true), _saved[^1]);
-        Assert.True(a.OffsetY > b.OffsetY); // 低樓層在下
+        _vm.SelectInRect(0, 0, 10, 10, add: false); // 目前樓層 2F
+        Assert.Equal([b], _vm.Selection);
+        _vm.SelectFloorCommand.Execute("1F");
+        Assert.Empty(_vm.Selection); // 換層時別層的元素取消選取
+        _vm.SelectInRect(0, 0, 10, 10, add: false);
+        Assert.Equal([a], _vm.Selection);
     }
 
     [Fact]
-    public void 並排時拖到另一層_放開後改到那一層_座標換算成該層的座標()
+    public void 拖曳不換樓層_座標不小於0_整個拖曳算一步()
     {
         var a = Add(LayoutElementType.Station, 2, 2);
         _vm.AddFloorCommand.Execute(null);
-        _vm.SideBySide = true;
-        var region2 = _vm.FloorRegions.Single(r => r.Floor == "2F");
+        _vm.SelectFloorCommand.Execute("1F");
 
         _vm.BeginDrag(a);
-        _vm.DragMoveBy(region2.Left + 3 - 2, 0); // 拖到 2F 的 x = 3
+        _vm.DragMoveBy(100, -10);
         _vm.EndDrag();
 
-        Assert.Equal("2F", a.Floor);
-        Assert.Equal((3d, 2d), (a.X, a.Y));
-        Assert.Equal("2F", _vm.CurrentFloor);
-        _vm.UndoCommand.Execute(null); // 整個拖曳算一步
-        Assert.Equal(("1F", 2d), (_vm.Elements.Single().Floor, _vm.Elements.Single().X));
+        Assert.Equal("1F", a.Floor);
+        Assert.Equal((102d, 0d), (a.X, a.Y));
+        _vm.UndoCommand.Execute(null);
+        Assert.Equal((2d, 2d), (_vm.Elements.Single().X, _vm.Elements.Single().Y));
     }
 
     [Fact]
-    public void 貼上到滑鼠所在的樓層_多選一起移到其他樓層()
+    public void 貼上到目前樓層的滑鼠位置_多選一起移到其他樓層()
     {
         var a = Add(LayoutElementType.Station, 2, 2);
         var b = Add(LayoutElementType.Station, 6, 2);
         _vm.AddFloorCommand.Execute(null);
-        _vm.SideBySide = true;
-        var region2 = _vm.FloorRegions.Single(r => r.Floor == "2F");
 
         _vm.SelectFloorCommand.Execute("1F");
         _vm.SelectInRect(0, 0, 10, 5, add: false);
         _vm.CopyCommand.Execute(null);
-        _vm.Paste(region2.Left + 4, region2.Top + 4);
+        _vm.SelectFloorCommand.Execute("2F");
+        _vm.Paste(4, 4);
         Assert.All(_vm.Selection, e => Assert.Equal("2F", e.Floor));
         Assert.Equal(4, _vm.Selection.Min(e => e.X));
 
+        _vm.SelectFloorCommand.Execute("1F");
         _vm.SelectInRect(0, 0, 10, 5, add: false); // 1F 的兩個
         Assert.True(_vm.HasMultipleSelection);
         _vm.MoveTargetFloor = "2F";

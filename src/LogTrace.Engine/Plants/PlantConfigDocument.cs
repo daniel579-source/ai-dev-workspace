@@ -164,62 +164,13 @@ public static class LayoutGeometry
         }
         return true;
     }
-
-    /// <summary>畫布在元素範圍外留的空白（公尺）。</summary>
-    public const double CanvasMargin = 20;
-    public const double MinCanvasWidth = 60;
-    public const double MinCanvasHeight = 40;
-
-    /// <summary>
-    /// 畫布大小（公尺，ADR-0006 第 11 點）：所有元素的範圍（右邊、下邊）再加 20 公尺，最小 60 × 40 公尺。不寫進設定檔。
-    /// </summary>
-    public static (double Width, double Height) CanvasSize(IEnumerable<(double Right, double Bottom)> extents)
-    {
-        double right = 0, bottom = 0;
-        foreach (var (r, b) in extents)
-        {
-            right = Math.Max(right, r);
-            bottom = Math.Max(bottom, b);
-        }
-        return (Math.Max(MinCanvasWidth, Math.Ceiling(right + CanvasMargin)), Math.Max(MinCanvasHeight, Math.Ceiling(bottom + CanvasMargin)));
-    }
-
-    /// <summary>Layout 的畫布大小：有位置的元素取旋轉後的範圍，輸送線取交接點。</summary>
-    public static (double Width, double Height) CanvasSize(IEnumerable<LayoutElement> elements) =>
-        CanvasSize(elements.SelectMany(Extents));
-
-    static IEnumerable<(double, double)> Extents(LayoutElement e)
-    {
-        if (e.Type == LayoutElementType.Rail)
-        {
-            var (_, _, r, b) = RailPath.Of(e).Bounds();
-            yield return (r, b);
-            yield break;
-        }
-        if (e.X is { } x && e.Y is { } y)
-        {
-            var (_, _, r, b) = Bounds(x, y, e.W ?? 0, e.H ?? 0, e.Rotation ?? 0);
-            yield return (r, b);
-        }
-        if (e.FromPoint is { } f) yield return (f.X, f.Y);
-        if (e.ToPoint is { } t) yield return (t.X, t.Y);
-    }
 }
-
-/// <summary>樓層在畫布上的區域（公尺）：OffsetX、OffsetY 是該層座標原點在畫布上的位置；名稱標在區域上方。</summary>
-public sealed record FloorRegion(string Floor, double OffsetX, double OffsetY, double Width, double Height);
 
 /// <summary>樓層（ADR-0006 第 13 點）：名稱與順序；每個元素屬於一層，輸送線畫在兩端的樓層。</summary>
 public static class LayoutFloors
 {
     /// <summary>舊設定檔沒有樓層時的預設樓層。</summary>
     public const string Default = "1F";
-
-    /// <summary>並排檢視中樓層之間的空白（公尺）。</summary>
-    public const double Gap = 5;
-
-    /// <summary>並排檢視中每層上方標名稱的高度（公尺）。</summary>
-    public const double LabelBand = 1.5;
 
     /// <summary>樓層名稱的比對：大小寫視為相同（和別名一致）。</summary>
     public static StringComparer NameComparer => StringComparer.OrdinalIgnoreCase;
@@ -292,32 +243,6 @@ public static class LayoutFloors
             e.Floor = e.Type == LayoutElementType.Conveyor ? null : Canonical(e.Floor, floors) ?? e.Floor ?? floors[0];
         }
     }
-
-    /// <summary>
-    /// 並排檢視的區域：橫向依樓層順序由左到右；垂直時低樓層在下。樓層之間留 <see cref="Gap"/> 公尺，
-    /// 每層上方留 <see cref="LabelBand"/> 公尺標名稱。sizes 依樓層順序。
-    /// </summary>
-    public static IReadOnlyList<FloorRegion> Arrange(IReadOnlyList<(string Floor, double Width, double Height)> sizes, bool vertical)
-    {
-        var regions = new List<FloorRegion>();
-        double x = 0, y = 0;
-        foreach (var (floor, w, h) in vertical ? sizes.Reverse() : sizes)
-        {
-            regions.Add(new FloorRegion(floor, x, y + LabelBand, w, h));
-            if (vertical) y += LabelBand + h + Gap;
-            else x += w + Gap;
-        }
-        return vertical ? regions.AsEnumerable().Reverse().ToList() : regions;
-    }
-
-    /// <summary>點 (x, y) 所在的區域；落在空白處時取最近的區域。</summary>
-    public static FloorRegion? RegionAt(IReadOnlyList<FloorRegion> regions, double x, double y) =>
-        regions.Count == 0 ? null : regions.MinBy(r =>
-        {
-            double dx = Math.Max(0, Math.Max(r.OffsetX - x, x - (r.OffsetX + r.Width)));
-            double dy = Math.Max(0, Math.Max(r.OffsetY - LabelBand - y, y - (r.OffsetY + r.Height))); // 名稱那一條也算該層
-            return dx * dx + dy * dy;
-        });
 }
 
 /// <summary>一個樓層：名稱與樓板高度（公尺；null＝沒有填，使用 <see cref="LayoutFloors.DefaultHeight"/>）。</summary>

@@ -24,9 +24,9 @@ dotnet publish $project -c Release -r win-x64 --self-contained -o $folder
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish 失敗（$LASTEXITCODE）" }
 
 # 發佈資料夾必須有的檔案：主程式、7-Zip、使用說明、授權清單與全文；
-# 3D 回放（ADR-0017）：WebView2 Runtime、網頁與 three.js、授權
+# 3D 回放與 Layout 編輯器（ADR-0017、ADR-0018）：WebView2 Runtime、網頁與 three.js、授權
 foreach ($f in 'LogTrace.exe', '7z/7za.dll', '7z/License.txt', '使用說明.md', 'THIRD-PARTY-NOTICES.md', 'licenses/Apache-2.0.txt', 'licenses/AvalonDock-LICENSE.txt',
-               'WebView2Loader.dll', 'WebView2Runtime/msedgewebview2.exe', 'playback3d/index.html', 'playback3d/app.js', 'playback3d/vendor/three/three.module.js',
+               'WebView2Loader.dll', 'WebView2Runtime/msedgewebview2.exe', 'web3d/index.html', 'web3d/editor.html', 'web3d/common.js', 'web3d/vendor/three/three.module.js',
                'licenses/three.js-LICENSE.txt', 'licenses/Microsoft.Web.WebView2-LICENSE.txt') {
     if (-not (Test-Path (Join-Path $folder $f))) { throw "發佈資料夾缺少 $f" }
 }

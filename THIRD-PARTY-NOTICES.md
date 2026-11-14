@@ -16,7 +16,7 @@ LogTrace 發佈資料夾中包含下列第三方元件。授權全文在 `licens
 | 7-Zip（`7z\7za.dll`，來自 7z.Libs 26.4.0） | 26.04 | 解開 7z／zip | GNU LGPL（部分程式碼為 BSD 3-clause、BSD 2-clause） | `licenses\7-Zip-7za-License.txt`（另有一份在 `7z\License.txt`） |
 | Microsoft.Web.WebView2（`Microsoft.Web.WebView2.Core.dll`、`.Wpf.dll`、`.WinForms.dll`、`WebView2Loader.dll`） | 1.0.4314.35 | 在 WPF 中內嵌瀏覽器元件（3D 回放，ADR-0017） | BSD 3-Clause 形式的 Microsoft 授權；第三方聲明見 NOTICE | `licenses\Microsoft.Web.WebView2-LICENSE.txt`、`licenses\Microsoft.Web.WebView2-NOTICE.txt` |
 | Microsoft Edge WebView2 Runtime（固定版本，`WebView2Runtime\`） | 157.0.4341.60 | 3D 回放的瀏覽器引擎（隨程式打包，ADR-0017 第 2 點） | Microsoft 的 WebView2 Runtime 授權條款；散布方式見 <https://learn.microsoft.com/microsoft-edge/webview2/concepts/distribution>（**散布條款待確認**）。內含的 Chromium 等開放原始碼元件授權，可執行 `WebView2Runtime\show_third_party_software_licenses.bat` 查看 | — |
-| three.js（`playback3d\vendor\three\`：three.module.js、three.core.js、OrbitControls.js、CSS2DRenderer.js） | 0.187.0 | 3D 繪製（ADR-0017） | MIT | `licenses\three.js-LICENSE.txt` |
+| three.js（`web3d\vendor\three\`：three.module.js、three.core.js、OrbitControls.js、CSS2DRenderer.js） | 0.187.0 | 3D 繪製（回放 ADR-0017、Layout 編輯器 ADR-0018） | MIT | `licenses\three.js-LICENSE.txt` |
 
 ## 說明
 

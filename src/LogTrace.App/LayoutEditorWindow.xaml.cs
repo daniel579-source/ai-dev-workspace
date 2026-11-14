@@ -10,22 +10,18 @@ using LogTrace.Workspace.Layout;
 
 namespace LogTrace.App;
 
-/// <summary>Layout 編輯器視窗：畫布上的滑鼠操作轉成公尺後交給 ViewModel（吸附、最小尺寸等規則都在 ViewModel）。</summary>
+/// <summary>Layout 編輯器視窗：3D 畫布（Layout3DEditorView）把滑鼠操作換算成公尺交給 ViewModel（吸附、最小尺寸等規則都在 ViewModel，ADR-0018）。</summary>
 public partial class LayoutEditorWindow : Window
 {
     public static IReadOnlyList<int> Rotations => LayoutEditorViewModel.Rotations;
 
     readonly LayoutEditorViewModel _vm;
-    Point? _dragStart;
-    bool _resizing;
-    bool _movingPoint;
-    bool _movingRailHandle;
-    Point? _boxStart;
 
     public LayoutEditorWindow(LayoutEditorViewModel vm)
     {
         InitializeComponent();
         DataContext = _vm = vm;
+        Closed += (_, _) => Editor3D.Shutdown();
     }
 
     protected override void OnClosing(CancelEventArgs e)
@@ -34,139 +30,8 @@ public partial class LayoutEditorWindow : Window
         base.OnClosing(e);
     }
 
-    void Canvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        LayoutCanvas.Focus(); // 讓 Ctrl+C／Ctrl+V／Del／Ctrl+Z 作用在畫布，而不是之前輸入的文字框
-        var hit = e.OriginalSource as FrameworkElement;
-        const double ppm = MetersToPixelsConverter.PixelsPerMeter;
-        // 導軌的把手（ADR-0006 第 14 點）
-        if (hit is { Tag: "railHandle", DataContext: RailHandleViewModel handle })
-        {
-            _vm.BeginRailHandleDrag(handle);
-            _movingRailHandle = true;
-            _dragStart = e.GetPosition(LayoutCanvas);
-            LayoutCanvas.CaptureMouse();
-            e.Handled = true;
-            return;
-        }
-        // 雙擊導軌：在雙擊處插入一點
-        if (e.ClickCount == 2 && FindElement(hit) is { IsRail: true } rail)
-        {
-            var p = e.GetPosition(LayoutCanvas);
-            _vm.InsertRailPointAt(rail, p.X / ppm, p.Y / ppm);
-            e.Handled = true;
-            return;
-        }
-        if (hit is { Tag: "fromPoint" or "toPoint", DataContext: LayoutElementViewModel conveyor })
-        {
-            _vm.BeginTransferPointDrag(conveyor, hit.Tag is "fromPoint");
-            _movingPoint = true;
-            _dragStart = e.GetPosition(LayoutCanvas);
-            LayoutCanvas.CaptureMouse();
-            e.Handled = true;
-            return;
-        }
-        var element = FindElement(hit);
-        if (element is null)
-        {
-            // 空白處：開始框選（ADR-0006 第 10 點）；並排時目前樓層改為點到的那一層（第 13 點）
-            _boxStart = e.GetPosition(LayoutCanvas);
-            _vm.SetCurrentFloorAt(_boxStart.Value.X / MetersToPixelsConverter.PixelsPerMeter, _boxStart.Value.Y / MetersToPixelsConverter.PixelsPerMeter);
-            LayoutCanvas.CaptureMouse();
-            e.Handled = true;
-            return;
-        }
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
-        {
-            _vm.ToggleSelect(element);
-            e.Handled = true;
-            return;
-        }
-        _vm.BeginDrag(element);
-        _resizing = hit?.Tag is "resize";
-        _dragStart = e.GetPosition(LayoutCanvas);
-        LayoutCanvas.CaptureMouse();
-        e.Handled = true;
-    }
-
-    void Canvas_MouseMove(object sender, MouseEventArgs e)
-    {
-        if (_boxStart is { } box)
-        {
-            var q = e.GetPosition(LayoutCanvas);
-            Canvas.SetLeft(SelectionBox, Math.Min(box.X, q.X));
-            Canvas.SetTop(SelectionBox, Math.Min(box.Y, q.Y));
-            SelectionBox.Width = Math.Abs(q.X - box.X);
-            SelectionBox.Height = Math.Abs(q.Y - box.Y);
-            SelectionBox.Visibility = Visibility.Visible;
-            return;
-        }
-        if (_dragStart is not { } start) return;
-        var p = e.GetPosition(LayoutCanvas);
-        if (_movingRailHandle)
-        {
-            _vm.DragRailHandleTo(p.X / MetersToPixelsConverter.PixelsPerMeter, p.Y / MetersToPixelsConverter.PixelsPerMeter);
-            return;
-        }
-        if (_movingPoint)
-        {
-            _vm.DragTransferPointTo(p.X / MetersToPixelsConverter.PixelsPerMeter, p.Y / MetersToPixelsConverter.PixelsPerMeter);
-            return;
-        }
-        double dx = (p.X - start.X) / MetersToPixelsConverter.PixelsPerMeter, dy = (p.Y - start.Y) / MetersToPixelsConverter.PixelsPerMeter;
-        if (_resizing) _vm.DragResizeBy(dx, dy);
-        else _vm.DragMoveBy(dx, dy);
-    }
-
-    void Canvas_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        if (_boxStart is { } box)
-        {
-            _boxStart = null;
-            SelectionBox.Visibility = Visibility.Collapsed;
-            LayoutCanvas.ReleaseMouseCapture();
-            var q = e.GetPosition(LayoutCanvas);
-            var add = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
-            if (Math.Abs(q.X - box.X) < SystemParameters.MinimumHorizontalDragDistance
-                && Math.Abs(q.Y - box.Y) < SystemParameters.MinimumVerticalDragDistance)
-            {
-                if (!add) _vm.SelectedElement = null; // 點空白處：取消選取
-                return;
-            }
-            const double ppm = MetersToPixelsConverter.PixelsPerMeter;
-            _vm.SelectInRect(box.X / ppm, box.Y / ppm, q.X / ppm, q.Y / ppm, add);
-            return;
-        }
-        if (_dragStart is null) return;
-        _dragStart = null;
-        _movingPoint = false;
-        _movingRailHandle = false;
-        _vm.EndDrag();
-        LayoutCanvas.ReleaseMouseCapture();
-    }
-
-    static LayoutElementViewModel? FindElement(FrameworkElement? fe)
-    {
-        for (var d = fe; d is not null; d = System.Windows.Media.VisualTreeHelper.GetParent(d) as FrameworkElement)
-            if (d.Tag is LayoutElementViewModel vm) return vm;
-        return null;
-    }
-
-    // ---- 縮放（ADR-0006 第 11 點） ----
-
-    void CanvasScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
-    {
-        if (Keyboard.Modifiers != ModifierKeys.Control) return;
-        _vm.ZoomStep(e.Delta > 0);
-        e.Handled = true;
-    }
-
-    void ZoomFit_Click(object sender, RoutedEventArgs e) =>
-        _vm.FitZoom(CanvasScroll.ViewportWidth - 16, CanvasScroll.ViewportHeight - 16, MetersToPixelsConverter.PixelsPerMeter);
-
-    void ZoomReset_Click(object sender, RoutedEventArgs e) => _vm.Zoom = 1;
-
-    // ---- 鍵盤：Ctrl+C／Ctrl+V／Del／Ctrl+Z（ADR-0006 第 10 點）；在文字框中維持文字編輯的行為 ----
+    // ---- 鍵盤：Ctrl+C／Ctrl+V／Del／Ctrl+Z（ADR-0006 第 10 點）；在文字框中維持文字編輯的行為。
+    //      3D 畫布有焦點時，按鍵由網頁轉給 Layout3DEditorView（WebView2 的按鍵不經過 WPF） ----
 
     void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
@@ -178,13 +43,7 @@ public partial class LayoutEditorWindow : Window
                 _vm.CopyCommand.Execute(null);
                 break;
             case Key.V when ctrl:
-                // 滑鼠在畫布上時以它為左上角；不在畫布上時放在原位置往右下 1 公尺
-                if (LayoutCanvas.IsMouseOver)
-                {
-                    var p = Mouse.GetPosition(LayoutCanvas);
-                    _vm.Paste(p.X / MetersToPixelsConverter.PixelsPerMeter, p.Y / MetersToPixelsConverter.PixelsPerMeter);
-                }
-                else _vm.Paste(null, null);
+                _vm.Paste(null, null); // 焦點不在 3D 畫布：放在原位置往右下 1 公尺
                 break;
             case Key.Z when ctrl:
                 if (_vm.UndoCommand.CanExecute(null)) _vm.UndoCommand.Execute(null);
@@ -201,82 +60,17 @@ public partial class LayoutEditorWindow : Window
     /// <summary>回到編輯器時重新列出可以比對的案件。</summary>
     void Window_Activated(object? sender, EventArgs e) => _vm.RefreshCaseChoices();
 
-    // ---- 把未對應的編號拖到元素上（ADR-0006 第 3 點） ----
+    // ---- 未對應的編號（ADR-0006 第 3 點）：雙擊設為選取元素的別名（#117：WebView2 收不到 WPF 的拖放） ----
 
-    Point? _unmappedDragStart;
-    UnmappedIdViewModel? _unmappedDragItem;
-
-    // 按下時就記住點到的編號：開始移動後 ListBox 會攔截滑鼠，移動事件的來源變成 ListBox 本身
-    void Unmapped_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    void Unmapped_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        _unmappedDragStart = e.GetPosition(null);
-        _unmappedDragItem = DataContextOf(e.OriginalSource as DependencyObject) as UnmappedIdViewModel;
-    }
-
-    void Unmapped_PreviewMouseMove(object sender, MouseEventArgs e)
-    {
-        if (e.LeftButton != MouseButtonState.Pressed || _unmappedDragStart is not { } start) return;
-        var p = e.GetPosition(null);
-        if (Math.Abs(p.X - start.X) < SystemParameters.MinimumHorizontalDragDistance
-            && Math.Abs(p.Y - start.Y) < SystemParameters.MinimumVerticalDragDistance) return;
-        if (_unmappedDragItem is not { } id) return;
-        _unmappedDragStart = null;
-        _unmappedDragItem = null;
-        DragDrop.DoDragDrop(UnmappedList, new DataObject(typeof(UnmappedIdViewModel), id), DragDropEffects.Copy);
-    }
-
-    /// <summary>滑鼠點到的可能是文字中的 Run（不是 FrameworkElement），往上找到帶資料的元素。</summary>
-    static object? DataContextOf(DependencyObject? d)
-    {
-        while (d is not null)
-        {
-            if (d is FrameworkElement fe) return fe.DataContext;
-            if (d is FrameworkContentElement fce) return fce.DataContext;
-            d = System.Windows.Media.VisualTreeHelper.GetParent(d);
-        }
-        return null;
-    }
-
-    void Canvas_Drop(object sender, DragEventArgs e)
-    {
-        if (e.Data.GetData(typeof(UnmappedIdViewModel)) is not UnmappedIdViewModel id) return;
-        var hit = LayoutCanvas.InputHitTest(e.GetPosition(LayoutCanvas)) as FrameworkElement;
-        if (FindElement(hit) is { } element) _vm.AssignUnmapped(id, element);
+        if (_vm.AssignSelectedUnmappedCommand.CanExecute(null)) _vm.AssignSelectedUnmappedCommand.Execute(null);
     }
 
     void ConfigList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (ConfigList.SelectedItem is string path) _vm.OpenConfigCommand.Execute(path);
     }
-}
-
-/// <summary>
-/// 導軌的路徑（WPF 路徑語法，公尺）轉成畫布上的圖形：放大成像素（1 公尺 = 32 像素）；線寬不跟著放大。
-/// </summary>
-public sealed class RailGeometryConverter : IValueConverter
-{
-    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        if (value is not string data || data.Length == 0) return null;
-        var geometry = System.Windows.Media.Geometry.Parse(data).Clone();
-        geometry.Transform = new System.Windows.Media.ScaleTransform(MetersToPixelsConverter.PixelsPerMeter, MetersToPixelsConverter.PixelsPerMeter);
-        geometry.Freeze();
-        return geometry;
-    }
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
-}
-
-/// <summary>公尺轉成畫布上的像素（1 公尺 = 32 像素）。</summary>
-public sealed class MetersToPixelsConverter : IValueConverter
-{
-    public const double PixelsPerMeter = 32;
-
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
-        value is double m ? m * PixelsPerMeter : 0d;
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
-        value is double px ? px / PixelsPerMeter : 0d;
 }
 
 /// <summary>元素種類的中文名稱。</summary>

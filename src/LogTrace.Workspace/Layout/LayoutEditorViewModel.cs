@@ -148,41 +148,10 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
-    [NotifyCanExecuteChangedFor(nameof(DeleteSelectedCommand), nameof(AddAliasCommand), nameof(AddPropertyCommand), nameof(SetRotationCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteSelectedCommand), nameof(AddAliasCommand), nameof(AddPropertyCommand), nameof(SetRotationCommand), nameof(AssignSelectedUnmappedCommand))]
     public partial LayoutElementViewModel? SelectedElement { get; set; }
 
     public bool HasSelection => SelectedElement is not null;
-
-    /// <summary>畫布大小（公尺）：元素範圍再加 20 公尺，最小 60 × 40（ADR-0006 第 11 點）。不寫進設定檔。</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanvasSizeText))]
-    public partial double CanvasWidth { get; private set; } = LayoutGeometry.MinCanvasWidth;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanvasSizeText))]
-    public partial double CanvasHeight { get; private set; } = LayoutGeometry.MinCanvasHeight;
-
-    public string CanvasSizeText => $"{CanvasWidth:0} × {CanvasHeight:0} 公尺";
-
-    /// <summary>畫面縮放（1 = 100%）；只改變顯示。</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ZoomText))]
-    public partial double Zoom { get; set; } = 1;
-
-    public string ZoomText => LayoutZoom.Text(Zoom);
-
-    partial void OnZoomChanged(double value)
-    {
-        var clamped = LayoutZoom.Clamp(value);
-        if (clamped != value) Zoom = clamped;
-    }
-
-    /// <summary>Ctrl＋滾輪。</summary>
-    public void ZoomStep(bool zoomIn) => Zoom = LayoutZoom.Step(Zoom, zoomIn);
-
-    /// <summary>「符合視窗」：可視範圍與每公尺像素數由畫面提供。</summary>
-    public void FitZoom(double viewportWidth, double viewportHeight, double pixelsPerMeter) =>
-        Zoom = LayoutZoom.Fit(viewportWidth, viewportHeight, CanvasWidth * pixelsPerMeter, CanvasHeight * pixelsPerMeter);
 
     /// <summary>屬性面板中輸入、準備加入的別名。</summary>
     [ObservableProperty]
@@ -253,7 +222,11 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         FilePath = path;
         RefreshEndpoints();
         IsDirty = false;
+        DocumentLoaded?.Invoke();
     }
+
+    /// <summary>開啟或新增了一份設定（3D 畫布整個重畫並回到預設視角）。</summary>
+    public event Action? DocumentLoaded;
 
     /// <summary>有未存檔的修改時詢問是否放棄；可以繼續時傳回 true。</summary>
     public bool ConfirmDiscard() =>
@@ -416,11 +389,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         else if (propertyName is nameof(LayoutElementViewModel.Conveyors))
             RefreshDoorConveyors();
         else if (propertyName is nameof(LayoutElementViewModel.Rotation))
-            RefreshCanvasSize();
+            RefreshLayoutView();
     }
-
-    /// <summary>依元素範圍重算畫布大小：拖到靠近邊緣時跟著變大（並排時每層各自計算，ADR-0006 第 13 點）。</summary>
-    void RefreshCanvasSize() => RefreshLayoutView();
 
     LayoutElementViewModel? Find(string? id) => id is null ? null : Elements.FirstOrDefault(e => e.Id == id && e.HasGeometry);
 
@@ -573,7 +543,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     /// <summary>屬性面板沒有顯示單一元素時的說明。</summary>
     public string SelectionHint => SelectionCount > 1
         ? $"已選取 {SelectionCount} 個元素：拖曳一起移動，Del 刪除，Ctrl+C 複製。屬性面板只在選取一個元素時顯示。"
-        : "點選畫布上的元素即可編輯屬性；拖曳移動，拖右下角的橘色方塊調整大小。在空白處拖曳可以框選，Ctrl＋點選加選或取消選取。";
+        : "點選 3D 畫布上的元素即可編輯屬性；拖曳移動，拖四角的方塊調整大小、頂面的箭頭調整高度，按旋轉按鈕轉 90 度。在空白處拖曳可以框選目前樓層的元素，Ctrl＋點選加選或取消選取。右鍵拖曳旋轉視角、中鍵平移、滾輪縮放。";
 
     void SetSelection(IEnumerable<LayoutElementViewModel> items)
     {
@@ -643,7 +613,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
 
     /// <summary>
     /// 貼上（Ctrl+V）：產生新的 id，名稱、尺寸、旋轉、自訂屬性與別名照抄（別名重複由存檔前檢查擋下）。
-    /// 以 (x, y)（畫面上的公尺，滑鼠目前位置）當作整組的左上角，貼到滑鼠所在的樓層；
+    /// 以 (x, y)（目前樓層平面上的公尺，滑鼠目前位置）當作整組的左上角，貼到目前樓層；
     /// 滑鼠不在畫布上（null）時放在原位置往右下 1 公尺，貼到目前樓層。貼上後選取新元素。
     /// </summary>
     public void Paste(double? x, double? y)
@@ -658,11 +628,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         double dx = 1, dy = 1;
         var floor = CurrentFloor;
         if (shapes.Count == 0) (dx, dy) = (0, 0);
-        else if (x is { } vx && y is { } vy)
+        else if (x is { } px && y is { } py)
         {
-            var region = RegionAt(vx, vy);
-            floor = region.Floor;
-            var (px, py) = (vx - region.OffsetX, vy - region.OffsetY);
             var bounds = shapes.Select(BoundsOf).ToList();
             dx = Math.Max(0, SnapTo(px)) - bounds.Min(b => b.Left);
             dy = Math.Max(0, SnapTo(py)) - bounds.Min(b => b.Top);
@@ -735,7 +702,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     /// </summary>
     void Commit(string? key)
     {
-        if (_suppressUndo > 0 || _drag is not null || _pointDrag is not null || IsHandleDragging) return;
+        if (_suppressUndo > 0 || _drag is not null || _pointDrag is not null || _heightDrag is not null || IsHandleDragging) return;
         var now = Snapshot();
         if (now == _undoBaseline) return;
         if (key is null || key != _lastEditKey)
@@ -852,10 +819,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         d.Element.H = Math.Max(Snap, SnapTo(d.H + dy));
     }
 
-    /// <summary>
-    /// 放開：並排時，元素中心落在哪一層的區域（落在空白處時取最近的），就改到那一層，座標換算成該層的座標（ADR-0006 第 13 點）；
-    /// 座標不小於 0。整個拖曳算一步。
-    /// </summary>
+    /// <summary>放開：座標不小於 0；拖曳不換樓層（換樓層用屬性面板，ADR-0018）。整個拖曳算一步。</summary>
     public void EndDrag()
     {
         var group = _drag;
@@ -865,34 +829,19 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         _dragPrimary = null;
         _pointDrag = null;
         _railHandleDrag = null;
+        _heightDrag = null;
         if (rails is { Count: > 0 }) EndRailDrag(rails.Select(r => r.Rail).ToList());
         if (group is { Count: > 0 })
         {
-            // 先以拖曳時的區域算好每個元素的目的地，再一起套用（套用時區域會重算）
-            var moves = group.Select(d => d.Element).Select(e =>
-            {
-                // 電梯並排時拖到別層不換樓層（ADR-0006 第 15 點）
-                var r = SideBySide && !e.IsElevator ? RegionAt(e.ViewX + e.W / 2, e.ViewY + e.H / 2) : new FloorRegion(FloorOf(e), e.OffsetX, e.OffsetY, 0, 0);
-                return (Element: e, r.Floor, X: Math.Max(0, SnapTo(e.ViewX - r.OffsetX)), Y: Math.Max(0, SnapTo(e.ViewY - r.OffsetY)));
-            }).ToList();
-            bool floorChanged = moves.Any(m => !SameFloor(FloorOf(m.Element), m.Floor));
             _suppressUndo++;
             try
             {
-                foreach (var m in moves)
-                {
-                    if (!SameFloor(FloorOf(m.Element), m.Floor)) m.Element.Floor = m.Floor;
-                    (m.Element.X, m.Element.Y) = (m.X, m.Y);
-                }
+                foreach (var e in group.Select(d => d.Element))
+                    (e.X, e.Y) = (Math.Max(0, SnapTo(e.X)), Math.Max(0, SnapTo(e.Y)));
             }
             finally
             {
                 _suppressUndo--;
-            }
-            if (floorChanged)
-            {
-                CurrentFloor = FloorOf(moves[0].Element);
-                Status = $"已移到「{CurrentFloor}」。";
             }
         }
         RefreshEndpoints();

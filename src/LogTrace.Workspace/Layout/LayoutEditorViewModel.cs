@@ -312,7 +312,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         _document.Plant = PlantName.Trim();
         _document.Layout.StorageCodeRule = string.IsNullOrWhiteSpace(StorageCodeRule) ? null : StorageCodeRule.Trim();
         _document.Layout.Elements = Elements.Select(e => e.ToModel()).ToList();
-        _document.Layout.Floors = [.. FloorList];
+        _document.Layout.Floors = FloorList.Select(f => new LayoutFloor(f, HeightOf(f))).ToList();
         _document.ModuleOrder = Lines(ModuleOrderText);
         _document.KnownLoggers = Lines(KnownLoggersText);
         _document.Encodings = EncodingRules.Select(r => r.ToModel()).ToList();
@@ -725,9 +725,9 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     public int UndoCount => _undo.Count;
 
     /// <summary>復原的狀態：樓層清單與元素（樓層改名會一併改元素，所以兩者一起記錄）。</summary>
-    sealed record UndoState(List<string> Floors, string Elements);
+    sealed record UndoState(List<LayoutFloor> Floors, string Elements);
 
-    string Snapshot() => System.Text.Json.JsonSerializer.Serialize(new UndoState([.. FloorList], PlantConfigFile.SerializeElements(Elements.Select(e => e.ToModel()))));
+    string Snapshot() => System.Text.Json.JsonSerializer.Serialize(new UndoState(FloorList.Select(f => new LayoutFloor(f, HeightOf(f))).ToList(), PlantConfigFile.SerializeElements(Elements.Select(e => e.ToModel()))));
 
     /// <summary>
     /// 記錄一次修改：把修改前的狀態放進復原堆疊。key 相同的連續修改（同一欄位連續輸入）合併成一步；

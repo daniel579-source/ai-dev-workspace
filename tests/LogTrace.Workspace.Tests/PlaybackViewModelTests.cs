@@ -196,18 +196,20 @@ public sealed class PlaybackViewModelTests : IDisposable
     }
 
     [Fact]
-    public async Task 回放畫面的畫布依元素範圍調整大小_也可以縮放()
+    public async Task 開啟案件後產生3D場景_每個Layout元素都在場景中_目前時刻的狀態跟著更新()
     {
         await OpenPrototypeCase();
         var plant = Engine.Plants.PlantConfigFile.Load(Path.Combine(TempFolder.Fixture("playback-prototype"), "plant.json"));
 
-        Assert.Equal(Engine.Plants.LayoutGeometry.CanvasSize(plant.Layout.Elements), (P.CanvasWidth, P.CanvasHeight));
-        Assert.True(P.CanvasWidth >= 60 && P.CanvasHeight >= 40);
+        Assert.Equal(plant.Layout.Elements.Select(e => e.Id).Order(), P.Scene.Elements.Select(e => e.Id).Order());
+        Assert.Equal(P.Elements.Count, P.SceneNow.Elements.Count);
 
-        P.ZoomStep(zoomIn: false);
-        Assert.Equal(0.833, P.Zoom);
-        P.FitZoom(P.CanvasWidth * 16, P.CanvasHeight * 32, pixelsPerMeter: 32);
-        Assert.Equal(0.5, P.Zoom);
+        _vm.GoToEndCommand.Execute(null);
+        var station2 = P.Elements.Single(e => e.Name == "輸送站2");
+        Assert.Equal("alarm", P.SceneNow.Elements.Single(e => e.Id == station2.Id).Look); // 警報 E205 沒有復歸
+
+        var json = PlaybackScene.Message("state", P.SceneNow);
+        Assert.StartsWith("{\"kind\":\"state\",\"data\":{\"sequence\":", json);
     }
 
     [Fact]
@@ -258,6 +260,6 @@ public sealed class PlaybackViewModelTests : IDisposable
 
         var el = new PlaybackElementViewModel(cv, new Dictionary<string, Engine.Plants.LayoutElement> { ["st-1"] = st, ["vh-1"] = vh });
 
-        Assert.Equal((2.0, 2.0, 10.0, 1.5), (el.LineX1, el.LineY1, el.LineX2, el.LineY2));
+        Assert.Equal(((2.0, 2.0), (10.0, 1.5)), el.ConveyorEnds);
     }
 }

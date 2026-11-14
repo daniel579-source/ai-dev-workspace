@@ -229,54 +229,62 @@ public sealed class FloorPlaybackTests
     }
 
     [Fact]
-    public void 單層檢視只畫目前樓層_設備狀態表與詳細資訊標出樓層()
+    public void 樓層在3D中上下堆疊_設備狀態表與詳細資訊標出樓層()
     {
         var p = Load(new FloorViewSettings());
 
-        Assert.True(p.HasFloors);
-        Assert.Equal("1F", p.CurrentFloor);
-        Assert.True(p.Elements.Single(e => e.Id == "st-1").IsOnCanvas);
-        Assert.False(p.Elements.Single(e => e.Id == "st-2").IsOnCanvas);
+        Assert.Equal(["1F", "2F"], p.Floors);
+        Assert.Equal([new SceneFloor("1F", 0, 5), new SceneFloor("2F", 5, 5)], p.Scene.Floors); // 沒有填樓板高度：5 公尺
+        Assert.Equal("2F", p.Scene.Elements.Single(e => e.Id == "st-2").Floor);
         Assert.Equal("2F", p.Equipment.Single(r => r.Id == "vh-1").Floor);
         p.SelectElementCommand.Execute(p.Elements.Single(e => e.Id == "st-1"));
         Assert.Equal("1F", p.Detail.Single(d => d.Label == "樓層").Value);
     }
 
     [Fact]
-    public void 跟隨切換樓層_預設關_開啟時設備狀態表選取元素就切到它的樓層()
+    public void 跟隨_預設關_開啟時設備狀態表選取元素就要求相機轉向它()
     {
         var saved = new List<FloorViewSettings>();
         var p = Load(new FloorViewSettings(), saved);
+        var focused = new List<string>();
+        p.FocusRequested += focused.Add;
 
         p.SelectedEquipment = p.Equipment.Single(r => r.Id == "st-2");
         Assert.Equal("st-2", p.SelectedElement!.Id); // 選取 Layout 上的元素
-        Assert.Equal("1F", p.CurrentFloor); // 跟隨關：不切換
+        Assert.Empty(focused); // 跟隨關：不轉向
 
-        p.FollowFloor = true;
-        Assert.Equal(new FloorViewSettings(false, false, true), saved[^1]);
+        p.FollowFocus = true;
+        Assert.Equal(new FloorViewSettings(Follow: true), saved[^1]);
         p.SelectedEquipment = p.Equipment.Single(r => r.Id == "vh-1");
-        Assert.Equal("2F", p.CurrentFloor);
+        Assert.Equal(["vh-1"], focused);
     }
 
     [Fact]
-    public void 跟隨切換樓層_選取事件時切到事件中第一個對應元素的樓層_不改變選取()
+    public void 跟隨_選取事件時轉向事件中第一個對應的元素_不改變選取()
     {
         var p = Load(new FloorViewSettings(Follow: true));
+        var focused = new List<string>();
+        p.FocusRequested += focused.Add;
 
         p.FollowEvent([new EventField(1, FieldKinds.Station, "X-99"), new EventField(1, FieldKinds.Station, "B-01")]);
 
-        Assert.Equal("2F", p.CurrentFloor);
+        Assert.Equal(["st-2"], focused);
         Assert.Null(p.SelectedElement);
     }
 
     [Fact]
-    public void 並排時不切換樓層_各層都畫出來()
+    public void 在3D畫面上點選元素_選取它但相機不轉向()
     {
-        var p = Load(new FloorViewSettings(SideBySide: true, Follow: true));
+        var p = Load(new FloorViewSettings(Follow: true));
+        var focused = new List<string>();
+        p.FocusRequested += focused.Add;
 
-        Assert.All(p.Elements, e => Assert.True(e.IsOnCanvas));
-        Assert.True(p.Elements.Single(e => e.Id == "st-2").ViewX > 60);
-        p.FollowEvent([new EventField(1, FieldKinds.Station, "B-01")]);
-        Assert.Equal("1F", p.CurrentFloor);
+        p.SelectFromScene("st-2");
+
+        Assert.Equal("st-2", p.SelectedElement!.Id);
+        Assert.True(p.SceneNow.Elements.Single(e => e.Id == "st-2").Selected);
+        Assert.Empty(focused);
+        p.SelectFromScene(null); // 點在空白處：不改變選取
+        Assert.Equal("st-2", p.SelectedElement!.Id);
     }
 }

@@ -27,7 +27,8 @@ public partial class App : Application
         var settings = new SettingsStore(System.IO.Path.Combine(settingsRoot, "settings.json"));
         _vm = new MainViewModel(settings, new WpfUserInteraction(), System.IO.Path.Combine(dataRoot, "Cases"),
             plantsRoot: System.IO.Path.Combine(dataRoot, "Plants"));
-        var window = new MainWindow { DataContext = _vm, LayoutFile = System.IO.Path.Combine(settingsRoot, "layout.xml") };
+        var window = new MainWindow { DataContext = _vm, LayoutFile = System.IO.Path.Combine(settingsRoot, "layout.xml"),
+            WebViewDataFolder = System.IO.Path.Combine(settingsRoot, "WebView2") };
         window.Show();
         // #57 之前的預設位置還有資料時，詢問是否搬到 D 槽
         if (testRoot is null)

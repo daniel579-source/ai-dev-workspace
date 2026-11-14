@@ -201,14 +201,15 @@ public sealed class RailPlaybackTests
             ],
         };
         var p = new PlaybackViewModel();
-        p.UseViewSettings(new FloorViewSettings(SideBySide: true), null);
+        p.UseViewSettings(new FloorViewSettings(), null);
         p.Load(new WorldModel([], layout, "在席"), layout, [], hasStateRules: true);
 
         var rail = p.Elements.Single(e => e.Id == "rl-1");
         Assert.True(rail.IsRail && rail.IsAuxiliary && !rail.HasGeometry);
         Assert.Equal(ElementLook.Auxiliary, rail.Look);
-        Assert.StartsWith($"M {4 + rail.OffsetX:0.###},", rail.RailPathData);
-        Assert.True(rail.OffsetX > 60);
+        var scene = p.Scene.Elements.Single(e => e.Id == "rl-1");
+        Assert.Equal(("rail", "2F", true), (scene.Type, scene.Floor, scene.Closed));
+        Assert.Equal(RailPath.Of(layout.Elements[0]).Polyline().Count, scene.Path!.Count); // 3D 畫導軌的折線
         Assert.DoesNotContain(p.Equipment, r => r.Id == "rl-1");
     }
 }

@@ -224,9 +224,32 @@ public static class LayoutFloors
     /// <summary>樓層名稱的比對：大小寫視為相同（和別名一致）。</summary>
     public static StringComparer NameComparer => StringComparer.OrdinalIgnoreCase;
 
-    /// <summary>樓層清單；沒有時為只有 1F。</summary>
+    /// <summary>舊設定檔或沒有填樓板高度時的預設（公尺，ADR-0017 第 6 點）。</summary>
+    public const double DefaultHeight = 5;
+
+    /// <summary>樓層名稱清單；沒有時為只有 1F。</summary>
     public static IReadOnlyList<string> Of(LayoutSection layout) =>
-        layout.Floors is { Count: > 0 } floors ? floors : [Default];
+        layout.Floors is { Count: > 0 } floors ? floors.Select(f => f.Name).ToList() : [Default];
+
+    /// <summary>樓層的樓板高度（公尺）：有填時用填的值，沒有時為 <see cref="DefaultHeight"/>。</summary>
+    public static double HeightOf(LayoutSection layout, string floor) =>
+        layout.Floors?.FirstOrDefault(f => NameComparer.Equals(f.Name, floor))?.Height ?? DefaultHeight;
+
+    /// <summary>
+    /// 每層地板的高度（公尺，最低層為 0）：依樓層順序，把下面各層的樓板高度相加（3D 回放一律上下堆疊，ADR-0017 第 6 點）。
+    /// </summary>
+    public static IReadOnlyList<(string Floor, double Elevation, double Height)> Stack(LayoutSection layout)
+    {
+        var list = new List<(string, double, double)>();
+        double z = 0;
+        foreach (var f in Of(layout))
+        {
+            var h = HeightOf(layout, f);
+            list.Add((f, z, h));
+            z += h;
+        }
+        return list;
+    }
 
     /// <summary>
     /// 元素所在的樓層：輸送線取起點的樓層（沒有起點時取終點）；其他元素取 floor，沒有時為第一層。
@@ -257,7 +280,7 @@ public static class LayoutFloors
     public static void Normalize(LayoutSection layout)
     {
         var floors = Of(layout).ToList();
-        layout.Floors = floors;
+        if (layout.Floors is not { Count: > 0 }) layout.Floors = [Default];
         foreach (var e in layout.Elements)
         {
             if (e.Type == LayoutElementType.Elevator)
@@ -297,6 +320,72 @@ public static class LayoutFloors
         });
 }
 
+/// <summary>一個樓層：名稱與樓板高度（公尺；null＝沒有填，使用 <see cref="LayoutFloors.DefaultHeight"/>）。</summary>
+public sealed record LayoutFloor(string Name, double? Height = null)
+{
+    /// <summary>只有名稱的樓層（舊設定檔的寫法）。</summary>
+    public static implicit operator LayoutFloor(string name) => new(name);
+}
+
+/// <summary>
+/// 樓層清單的讀寫：讀取時接受名稱（舊版）或 {name, height} 物件；寫出時只要有一層填了高度就全部寫成物件，否則寫成名稱。
+/// </summary>
+public sealed class LayoutFloorListConverter : JsonConverter<List<LayoutFloor>>
+{
+    public override List<LayoutFloor> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType != JsonTokenType.StartArray) throw new JsonException("樓層必須是陣列。");
+        var list = new List<LayoutFloor>();
+        while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+        {
+            if (reader.TokenType == JsonTokenType.String)
+            {
+                list.Add(new LayoutFloor(reader.GetString()!));
+                continue;
+            }
+            if (reader.TokenType != JsonTokenType.StartObject) throw new JsonException("樓層必須是名稱或 {name, height}。");
+            string? name = null;
+            double? height = null;
+            while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
+            {
+                var key = reader.GetString();
+                reader.Read();
+                if (string.Equals(key, "name", StringComparison.OrdinalIgnoreCase))
+                    name = reader.TokenType == JsonTokenType.String ? reader.GetString() : throw new JsonException("樓層的 name 必須是文字。");
+                else if (string.Equals(key, "height", StringComparison.OrdinalIgnoreCase))
+                    height = reader.TokenType switch
+                    {
+                        JsonTokenType.Number => reader.GetDouble(),
+                        JsonTokenType.Null => null,
+                        _ => throw new JsonException("樓層的 height 必須是數字（公尺）。"),
+                    };
+                else reader.Skip();
+            }
+            list.Add(new LayoutFloor(name ?? throw new JsonException("樓層缺少 name。"), height));
+        }
+        return list;
+    }
+
+    public override void Write(Utf8JsonWriter writer, List<LayoutFloor> value, JsonSerializerOptions options)
+    {
+        bool objects = value.Any(f => f.Height is not null);
+        writer.WriteStartArray();
+        foreach (var f in value)
+        {
+            if (!objects)
+            {
+                writer.WriteStringValue(f.Name);
+                continue;
+            }
+            writer.WriteStartObject();
+            writer.WriteString("name", f.Name);
+            if (f.Height is { } h) writer.WriteNumber("height", h);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+    }
+}
+
 /// <summary>Layout 區段（ADR-0006 第 7 點）。</summary>
 public sealed class LayoutSection
 {
@@ -306,8 +395,12 @@ public sealed class LayoutSection
     /// <summary>儲位編號的拆解規則，例如 RRCCCLL（排 2 碼、列 3 碼、層 2 碼）。</summary>
     public string? StorageCodeRule { get; set; }
 
-    /// <summary>樓層名稱，順序即樓層順序（ADR-0006 第 13 點）；null 或空＝只有 1F。</summary>
-    public List<string>? Floors { get; set; }
+    /// <summary>
+    /// 樓層，順序即樓層順序（ADR-0006 第 13 點）；null 或空＝只有 1F。每層可以填樓板高度（ADR-0017 第 6 點）：
+    /// 沒有填任何高度時寫成名稱的陣列（與舊版相同），有填時寫成 {name, height} 的物件陣列（格式版本 6）。
+    /// </summary>
+    [JsonConverter(typeof(LayoutFloorListConverter))]
+    public List<LayoutFloor>? Floors { get; set; }
 
     public List<LayoutElement> Elements { get; set; } = [];
 
@@ -324,15 +417,17 @@ public sealed class PlantConfigDocument
 {
     /// <summary>
     /// 程式能讀寫的格式版本。2：輸送線的 bidirectional 與交接點（#63）。3：防火門（舊版程式不認得 fireDoor 這個種類）。
-    /// 4：導軌（#100，舊版程式不認得 rail 這個種類）。5：電梯（#102）。存檔時只寫實際用到的最低版本，讓舊版程式照常開啟（ADR-0006 第 7 點）。
+    /// 4：導軌（#100，舊版程式不認得 rail 這個種類）。5：電梯（#102）。6：樓板高度（#113，樓層寫成物件，舊版程式讀不了）。
+    /// 存檔時只寫實際用到的最低版本，讓舊版程式照常開啟（ADR-0006 第 7 點）。
     /// </summary>
-    public const int CurrentFormatVersion = 5;
+    public const int CurrentFormatVersion = 6;
 
     /// <summary>
-    /// 這份設定需要的格式版本：有電梯時為 5；有導軌時為 4；有防火門時為 3；有雙向或連到搬送機（有交接點）的輸送線時為 2；否則為 1。
+    /// 這份設定需要的格式版本：有填樓板高度時為 6；有電梯時為 5；有導軌時為 4；有防火門時為 3；有雙向或連到搬送機（有交接點）的輸送線時為 2；否則為 1。
     /// </summary>
     public int RequiredFormatVersion() =>
-        Layout.Elements.Any(e => e.Type == LayoutElementType.Elevator) ? 5
+        Layout.Floors?.Any(f => f.Height is not null) == true ? 6
+        : Layout.Elements.Any(e => e.Type == LayoutElementType.Elevator) ? 5
         : Layout.Elements.Any(e => e.Type == LayoutElementType.Rail) ? 4
         : Layout.Elements.Any(e => e.Type == LayoutElementType.FireDoor) ? 3
         : Layout.Elements.Any(e => e.Type == LayoutElementType.Conveyor && (e.Bidirectional == true || e.FromPoint is not null || e.ToPoint is not null)) ? 2 : 1;

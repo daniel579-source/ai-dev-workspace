@@ -150,21 +150,15 @@ public sealed class ElevatorPlaybackTests
     }
 
     [Fact]
-    public void 電梯在每個服務的樓層都畫出來_並排時其他樓層是分身_跟隨時切到目前樓層()
+    public void 電梯在3D場景中跨越服務的樓層_狀態帶出目前樓層()
     {
-        var single = Load(new FloorViewSettings(Follow: true));
-        var ev = single.Elements.Single(e => e.Id == "ev-1");
-        Assert.True(ev.IsOnCanvas);
-        single.SelectFloorCommand.Execute("2F");
-        Assert.True(ev.IsOnCanvas);
+        var p = Load(new FloorViewSettings());
 
-        single.SelectFloorCommand.Execute("1F");
-        single.SetMoment(3); // 抵達 2F
-        single.SelectElementCommand.Execute(ev);
-        Assert.Equal("2F", single.CurrentFloor);
+        var ev = p.Scene.Elements.Single(e => e.Id == "ev-1");
+        Assert.Equal(["1F", "2F"], ev.ServedFloors);
+        Assert.Null(p.SceneNow.Elements.Single(e => e.Id == "ev-1").ElevatorFloor); // 未取得資訊：不畫台車
 
-        var side = Load(new FloorViewSettings(SideBySide: true));
-        Assert.Single(side.ElevatorCopies);
-        Assert.Equal("2F", side.ElevatorCopies[0].Floor);
+        p.SetMoment(3); // 抵達 2F
+        Assert.Equal("2F", p.SceneNow.Elements.Single(e => e.Id == "ev-1").ElevatorFloor);
     }
 }

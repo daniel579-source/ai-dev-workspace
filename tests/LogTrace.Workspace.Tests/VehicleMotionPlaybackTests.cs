@@ -46,25 +46,27 @@ public sealed class VehicleMotionPlaybackTests
         var p = Load();
         var vh = p.Elements.Single(e => e.Id == "vh-1");
 
+        SceneElementState Scene() => p.SceneNow.Elements.Single(e => e.Id == "vh-1");
         p.SetMoment(1);
-        Assert.Equal((8d, 30d), (vh.ViewX, vh.ViewY));
+        Assert.Equal((9d, 30.5d), (Scene().X, Scene().Y)); // 位置未取得資訊：Layout 上放的位置（中心）
         Assert.False(vh.IsEstimated);
         p.SelectElementCommand.Execute(vh);
         Assert.Contains("位置未取得資訊", p.Detail.Single(d => d.Label == "位置").Value);
 
         p.SetMoment(3, T0.AddSeconds(30)); // 派送 20 秒、抵達 40 秒：一半，中心 x = 10
-        Assert.Equal(9, vh.ViewX, 6); // 左上角 = 中心 − 寬 / 2
-        Assert.Equal(4.5, vh.ViewY, 6);
+        Assert.Equal(10, Scene().X!.Value, 6); // 3D 以中心表示
+        Assert.Equal(4.5 + vh.H / 2, Scene().Y!.Value, 6);
         Assert.True(vh.IsEstimated);
+        Assert.True(Scene().Estimated); // 推估：3D 畫成半透明
         var line = p.Detail.Single(d => d.Label == "位置");
         Assert.StartsWith("推估", line.Value);
         Assert.Equal(2L, line.Cause);
 
         p.SetMoment(3, T0.AddSeconds(35)); // 播放時落在兩筆事件之間
-        Assert.Equal(13, vh.ViewX, 6);
+        Assert.Equal(14, Scene().X!.Value, 6);
 
         p.SetMoment(4);
-        Assert.Equal(17, vh.ViewX, 6);
+        Assert.Equal(18, Scene().X!.Value, 6);
         Assert.False(vh.IsEstimated);
         Assert.StartsWith("依 LOG：已抵達", p.Detail.Single(d => d.Label == "位置").Value);
         Assert.Equal(4L, p.Detail.Single(d => d.Label == "位置").Cause);

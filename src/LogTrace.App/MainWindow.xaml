@@ -11,140 +11,9 @@
         <local:NotConverter x:Key="Not" />
         <BooleanToVisibilityConverter x:Key="Visible" />
         <local:CollapsedWhenTrueConverter x:Key="Collapsed" />
-        <local:MetersToPixelsConverter x:Key="Px" />
-        <local:PositiveConverter x:Key="Positive" />
-        <local:RailGeometryConverter x:Key="RailGeometry" />
         <DataTemplate x:Key="Choice">
             <CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected}" Margin="0,1" />
         </DataTemplate>
-        <!-- Layout 回放的元素畫法：元素本身與電梯在其他樓層的分身共用（ADR-0006 第 15 點） -->
-        <DataTemplate x:Key="PlaybackElementTemplate">
-            <Grid>
-                <Line X1="{Binding LineX1, Converter={StaticResource Px}}" Y1="{Binding LineY1, Converter={StaticResource Px}}"
-                      X2="{Binding LineX2, Converter={StaticResource Px}}" Y2="{Binding LineY2, Converter={StaticResource Px}}"
-                      x:Name="ConveyorLine" Stroke="#94A3B8" StrokeThickness="3" StrokeDashArray="3 2" IsHitTestVisible="False"
-                      Visibility="{Binding IsConveyor, Converter={StaticResource Visible}}" />
-                <!-- 導軌（ADR-0006 第 14 點）：輔助元素，只畫出來 -->
-                <Path Data="{Binding RailPathData, Converter={StaticResource RailGeometry}}" Stroke="#CBD5E1" StrokeThickness="5"
-                      StrokeLineJoin="Round" IsHitTestVisible="False" Visibility="{Binding IsRail, Converter={StaticResource Visible}}" />
-                <Border x:Name="Shape" Tag="{Binding}" Cursor="Hand" MouseLeftButtonUp="PlaybackElement_Click"
-                        Width="{Binding W, Converter={StaticResource Px}}" Height="{Binding H, Converter={StaticResource Px}}"
-                        BorderBrush="#64748B" BorderThickness="1" Background="#E5E7EB" RenderTransformOrigin="0.5,0.5"
-                        Visibility="{Binding HasGeometry, Converter={StaticResource Visible}}" ToolTip="{Binding Aliases}">
-                    <Border.RenderTransform>
-                        <RotateTransform Angle="{Binding Rotation}" />
-                    </Border.RenderTransform>
-                    <Grid>
-                        <!-- 料架：沿長邊切成列，以有貨的層數表示 -->
-                        <ItemsControl ItemsSource="{Binding Cells}" Visibility="{Binding IsRack, Converter={StaticResource Visible}}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <UniformGrid Rows="1" />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border x:Name="Cell" Tag="{Binding}" BorderBrush="#CBD5E1" BorderThickness="0.5" Background="#F8FAFC"
-                                            MouseLeftButtonUp="RackCell_Click" Cursor="Hand"
-                                            ToolTip="{Binding Column, StringFormat=第 {0} 列（點一下看側視圖）}">
-                                        <TextBlock x:Name="Count" Text="{Binding Occupied}" FontSize="9" HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                                                   Foreground="#1E3A8A" Visibility="Collapsed" />
-                                    </Border>
-                                    <DataTemplate.Triggers>
-                                        <DataTrigger Binding="{Binding Occupied}" Value="0">
-                                            <Setter TargetName="Count" Property="Visibility" Value="Collapsed" />
-                                        </DataTrigger>
-                                        <MultiDataTrigger>
-                                            <MultiDataTrigger.Conditions>
-                                                <Condition Binding="{Binding Occupied, Converter={StaticResource Positive}}" Value="True" />
-                                            </MultiDataTrigger.Conditions>
-                                            <Setter TargetName="Cell" Property="Background" Value="#93C5FD" />
-                                            <Setter TargetName="Count" Property="Visibility" Value="Visible" />
-                                        </MultiDataTrigger>
-                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                            <Setter TargetName="Cell" Property="BorderBrush" Value="#2563EB" />
-                                            <Setter TargetName="Cell" Property="BorderThickness" Value="2" />
-                                        </DataTrigger>
-                                    </DataTemplate.Triggers>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False">
-                            <TextBlock Text="{Binding Name}" FontSize="11" TextAlignment="Center" />
-                            <TextBlock Text="{Binding Summary}" FontSize="10" Foreground="#1E3A8A" TextAlignment="Center" TextWrapping="Wrap" />
-                        </StackPanel>
-                        <TextBlock Text="{Binding PresenceLight}" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,3,0"
-                                   IsHitTestVisible="False" />
-                        <!-- 運轉狀態不是自動時的小標記（ADR-0005 第 3 點，#70） -->
-                        <TextBlock Text="{Binding StatusBadge}" FontSize="10" Foreground="White" Background="#7C3AED" Padding="2,0"
-                                   HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="2,0,0,2" ToolTip="運轉狀態不是自動（點開站點看詳細）">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding StatusBadge}" Value="{x:Null}">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                        <TextBlock x:Name="Warn" Text="⚠" Foreground="#B45309" FontSize="12" HorizontalAlignment="Left" VerticalAlignment="Top"
-                                   Margin="3,0,0,0" Visibility="Collapsed" IsHitTestVisible="False" ToolTip="{Binding InconsistentText}" />
-                        <!-- 防火門的推估狀態（還沒有 LOG 事件，用平時狀態）：虛線框 -->
-                        <Rectangle Stroke="#334155" StrokeThickness="1.5" StrokeDashArray="3 2" IsHitTestVisible="False"
-                                   Visibility="{Binding IsEstimated, Converter={StaticResource Visible}}" />
-                    </Grid>
-                </Border>
-            </Grid>
-            <DataTemplate.Triggers>
-                <DataTrigger Binding="{Binding Look}" Value="Empty">
-                    <Setter TargetName="Shape" Property="Background" Value="White" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Look}" Value="Occupied">
-                    <Setter TargetName="Shape" Property="Background" Value="#BFDBFE" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Look}" Value="Executing">
-                    <Setter TargetName="Shape" Property="Background" Value="#FDE68A" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Look}" Value="Alarm">
-                    <Setter TargetName="Shape" Property="Background" Value="#FEE2E2" />
-                    <Setter TargetName="Shape" Property="BorderBrush" Value="#DC2626" />
-                    <Setter TargetName="Shape" Property="BorderThickness" Value="2" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Look}" Value="Auxiliary">
-                    <Setter TargetName="Shape" Property="Background" Value="#0F94A3B8" />
-                    <Setter TargetName="Shape" Property="BorderBrush" Value="#CBD5E1" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Look}" Value="DoorOpen">
-                    <Setter TargetName="Shape" Property="Background" Value="#DCFCE7" />
-                    <Setter TargetName="Shape" Property="BorderBrush" Value="#16A34A" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Look}" Value="DoorClosed">
-                    <Setter TargetName="Shape" Property="Background" Value="#FECACA" />
-                    <Setter TargetName="Shape" Property="BorderBrush" Value="#B91C1C" />
-                </DataTrigger>
-                <!-- 輸送線被關著的防火門阻斷：紅色實線；只有推估的門時為紅色虛線 -->
-                <DataTrigger Binding="{Binding IsBlocked}" Value="True">
-                    <Setter TargetName="ConveyorLine" Property="Stroke" Value="#DC2626" />
-                    <Setter TargetName="ConveyorLine" Property="StrokeDashArray" Value="{x:Null}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding IsBlockedEstimated}" Value="True">
-                    <Setter TargetName="ConveyorLine" Property="StrokeDashArray" Value="2 2" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Type}" Value="Label">
-                    <Setter TargetName="Shape" Property="Background" Value="Transparent" />
-                    <Setter TargetName="Shape" Property="BorderBrush" Value="Transparent" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding IsInconsistent}" Value="True">
-                    <Setter TargetName="Warn" Property="Visibility" Value="Visible" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                    <Setter TargetName="Shape" Property="BorderBrush" Value="#2563EB" />
-                    <Setter TargetName="Shape" Property="BorderThickness" Value="2" />
-                </DataTrigger>
-            </DataTemplate.Triggers>
-        </DataTemplate>
-
     </Window.Resources>
     <DockPanel>
         <!-- 頂端：版面選單；右側固定顯示時區與時間校正（ADR-0003 第 1、5 點、ADR-0008 第 4 點） -->
@@ -518,10 +387,10 @@
                                             <Border Background="White" BorderBrush="#9CA3AF" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="空" Margin="0,0,10,0" Foreground="#555" />
                                             <Border Background="#BFDBFE" BorderBrush="#9CA3AF" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="有貨" Margin="0,0,10,0" Foreground="#555" />
                                             <Border Background="#FDE68A" BorderBrush="#9CA3AF" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="搬送機執行中" Margin="0,0,10,0" Foreground="#555" />
-                                            <Border Background="#FEE2E2" BorderBrush="#DC2626" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="異常中" Margin="0,0,10,0" Foreground="#555" />
-                                            <Border Background="#DCFCE7" BorderBrush="#16A34A" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="防火門開" Margin="0,0,10,0" Foreground="#555" />
-                                            <Border Background="#FECACA" BorderBrush="#B91C1C" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="防火門關（虛線框＝推估）" Margin="0,0,10,0" Foreground="#555" />
-                                            <TextBlock Text="●在席 ON　○OFF　◌未知　⚠ 不一致" Foreground="#555" />
+                                            <Border Background="#FCA5A5" BorderBrush="#DC2626" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="異常中" Margin="0,0,10,0" Foreground="#555" />
+                                            <Border Background="#86EFAC" BorderBrush="#16A34A" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="防火門開" Margin="0,0,10,0" Foreground="#555" />
+                                            <Border Background="#F87171" BorderBrush="#B91C1C" BorderThickness="1" Width="14" Height="10" Margin="0,0,3,0" /><TextBlock Text="防火門關" Margin="0,0,10,0" Foreground="#555" />
+                                            <TextBlock Text="在席燈：綠＝ON、深灰＝OFF、淡灰＝未知　⚠ 不一致　半透明＝推估" Foreground="#555" />
                                         </WrapPanel>
                                         <TextBlock Text="{Binding Message}" Foreground="#B45309" TextWrapping="Wrap" Margin="0,3,0,0" AutomationProperties.AutomationId="PlaybackMessage">
                                             <TextBlock.Style>
@@ -549,118 +418,8 @@
                                         </TextBlock>
                                     </StackPanel>
                                 </Border>
-                                <!-- 樓層（ADR-0006 第 13 點）：有兩層以上時顯示 -->
-                                <Border DockPanel.Dock="Top" Padding="6,3" BorderBrush="#DDD" BorderThickness="0,0,0,1"
-                                        Visibility="{Binding HasFloors, Converter={StaticResource Visible}}">
-                                    <WrapPanel>
-                                        <TextBlock Text="樓層" VerticalAlignment="Center" Foreground="#555" Margin="0,0,6,0" />
-                                        <ListBox ItemsSource="{Binding Floors}" SelectedItem="{Binding CurrentFloor}" BorderThickness="0" Background="Transparent"
-                                                 AutomationProperties.AutomationId="PlaybackFloorTabs">
-                                            <ListBox.ItemsPanel>
-                                                <ItemsPanelTemplate>
-                                                    <StackPanel Orientation="Horizontal" />
-                                                </ItemsPanelTemplate>
-                                            </ListBox.ItemsPanel>
-                                            <ListBox.ItemTemplate>
-                                                <DataTemplate>
-                                                    <TextBlock Text="{Binding}" Padding="8,1" />
-                                                </DataTemplate>
-                                            </ListBox.ItemTemplate>
-                                        </ListBox>
-                                        <CheckBox Content="並排" IsChecked="{Binding SideBySide}" VerticalAlignment="Center" Margin="16,0,0,0" AutomationProperties.AutomationId="PlaybackSideBySide" />
-                                        <CheckBox Content="垂直排列（低樓層在下）" IsChecked="{Binding Vertical}" IsEnabled="{Binding SideBySide}" VerticalAlignment="Center" Margin="8,0,0,0" />
-                                        <CheckBox Content="跟隨切換樓層" IsChecked="{Binding FollowFloor}" VerticalAlignment="Center" Margin="16,0,0,0"
-                                                  ToolTip="從 Layout、設備狀態表、命令或事件跳到某個元素時，切到它所在的樓層（單層檢視）"
-                                                  AutomationProperties.AutomationId="PlaybackFollowFloor" />
-                                    </WrapPanel>
-                                </Border>
-                                <Border DockPanel.Dock="Top" Padding="6,3" BorderBrush="#DDD" BorderThickness="0,0,0,1">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="縮放" VerticalAlignment="Center" Foreground="#555" />
-                                        <TextBlock Text="{Binding ZoomText}" VerticalAlignment="Center" Width="44" TextAlignment="Right" AutomationProperties.AutomationId="PlaybackZoomText" />
-                                        <Button Content="符合視窗" Padding="8,1" Margin="8,0,0,0" Click="PlaybackZoomFit_Click" AutomationProperties.AutomationId="PlaybackZoomFit" />
-                                        <Button Content="100%" Padding="8,1" Margin="4,0,0,0" Click="PlaybackZoomReset_Click" />
-                                        <TextBlock Text="{Binding CanvasSizeText, StringFormat=畫布 {0}}" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#777" />
-                                        <TextBlock Text="Ctrl＋滾輪縮放" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#999" />
-                                    </StackPanel>
-                                </Border>
-                                <ScrollViewer x:Name="PlaybackScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#F8FAFC"
-                                              PreviewMouseWheel="PlaybackScroll_PreviewMouseWheel">
-                                    <Grid Margin="8" Background="White" HorizontalAlignment="Left" VerticalAlignment="Top">
-                                    <Grid.LayoutTransform>
-                                        <ScaleTransform ScaleX="{Binding Zoom}" ScaleY="{Binding Zoom}" />
-                                    </Grid.LayoutTransform>
-                                    <!-- 並排檢視的樓層區域與名稱（ADR-0006 第 13 點） -->
-                                    <ItemsControl ItemsSource="{Binding FloorRegions}" IsHitTestVisible="False">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <Canvas />
-                                            </ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Canvas Visibility="{Binding ShowLabel, Converter={StaticResource Visible}}">
-                                                    <Rectangle Canvas.Left="{Binding Left, Converter={StaticResource Px}}" Canvas.Top="{Binding Top, Converter={StaticResource Px}}"
-                                                               Width="{Binding Width, Converter={StaticResource Px}}" Height="{Binding Height, Converter={StaticResource Px}}"
-                                                               Stroke="#CBD5E1" StrokeThickness="1" />
-                                                    <TextBlock Text="{Binding Floor}" FontWeight="SemiBold" FontSize="14" Foreground="#475569"
-                                                               Canvas.Left="{Binding Left, Converter={StaticResource Px}}" Canvas.Top="{Binding LabelTop, Converter={StaticResource Px}}" />
-                                                </Canvas>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                    <ItemsControl ItemsSource="{Binding Elements}" AutomationProperties.AutomationId="PlaybackLayout">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <Canvas Width="{Binding CanvasWidth, Converter={StaticResource Px}}" Height="{Binding CanvasHeight, Converter={StaticResource Px}}" />
-                                            </ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                        <ItemsControl.ItemContainerStyle>
-                                            <Style TargetType="ContentPresenter">
-                                                <Setter Property="Canvas.Left" Value="{Binding ViewX, Converter={StaticResource Px}}" />
-                                                <Setter Property="Canvas.Top" Value="{Binding ViewY, Converter={StaticResource Px}}" />
-                                                <Setter Property="Visibility" Value="{Binding IsOnCanvas, Converter={StaticResource Visible}}" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsConveyor}" Value="True">
-                                                        <Setter Property="Canvas.Left" Value="0" />
-                                                        <Setter Property="Canvas.Top" Value="0" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding IsRail}" Value="True">
-                                                        <Setter Property="Canvas.Left" Value="0" />
-                                                        <Setter Property="Canvas.Top" Value="0" />
-                                                        <Setter Property="Panel.ZIndex" Value="-1" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding Type}" Value="Area">
-                                                        <Setter Property="Panel.ZIndex" Value="-1" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </ItemsControl.ItemContainerStyle>
-                                        <ItemsControl.ItemTemplate>
-                                            <StaticResource ResourceKey="PlaybackElementTemplate" />
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                    <!-- 並排檢視中電梯在其他服務樓層的分身（ADR-0006 第 15 點） -->
-                                    <ItemsControl ItemsSource="{Binding ElevatorCopies}">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <Canvas />
-                                            </ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                        <ItemsControl.ItemContainerStyle>
-                                            <Style TargetType="ContentPresenter">
-                                                <Setter Property="Canvas.Left" Value="{Binding ViewX, Converter={StaticResource Px}}" />
-                                                <Setter Property="Canvas.Top" Value="{Binding ViewY, Converter={StaticResource Px}}" />
-                                            </Style>
-                                        </ItemsControl.ItemContainerStyle>
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <ContentControl Content="{Binding Element}" ContentTemplate="{StaticResource PlaybackElementTemplate}" />
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                    </Grid>
-                                </ScrollViewer>
+                                <!-- 3D（ADR-0017）：WebView2 + three.js；樓層一律上下堆疊 -->
+                                <local:Playback3DView x:Name="Playback3D" />
                             </DockPanel>
                         </ad:LayoutAnchorable>
                         <ad:LayoutAnchorable ContentId="timeline" Title="時間軸" CanClose="False">

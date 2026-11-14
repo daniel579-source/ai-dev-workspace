@@ -195,6 +195,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             SelectedElement = null;
             Elements.Clear();
             LoadFloors(doc.Layout);
+            LoadRows(doc.Layout);
             foreach (var e in doc.Layout.Elements) Attach(new LayoutElementViewModel(e));
         }
         finally
@@ -286,6 +287,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         _document.Layout.StorageCodeRule = string.IsNullOrWhiteSpace(StorageCodeRule) ? null : StorageCodeRule.Trim();
         _document.Layout.Elements = Elements.Select(e => e.ToModel()).ToList();
         _document.Layout.Floors = FloorList.Select(f => new LayoutFloor(f, HeightOf(f))).ToList();
+        _document.Layout.Rows = RowsModel();
         _document.ModuleOrder = Lines(ModuleOrderText);
         _document.KnownLoggers = Lines(KnownLoggersText);
         _document.Encodings = EncodingRules.Select(r => r.ToModel()).ToList();
@@ -523,6 +525,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             foreach (var door in Elements.Where(x => x.IsFireDoor))
                 foreach (var id in door.Conveyors.Where(removedIds.Contains).ToList()) door.Conveyors.Remove(id);
             clearedVehicles = ClearRailsOf(removedIds); // 刪除的導軌：指定它的搬送機清除指定（ADR-0006 第 14 點）
+            RemoveRowsOf(removedIds); // 刪除的 RM：它的排從配置表移除（ADR-0019）
         });
         IsDirty = true;
         var extra = removed.Count - selected.Count;
@@ -566,6 +569,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         (SelectedRailPoint, SelectedRailSegment) = (null, null);
         RefreshRails();
         RefreshDoorConveyors();
+        RefreshRmRows();
         NewDoorConveyor = null;
         _lastEditKey = null; // 換了選取後的修改另算一步
         OnPropertyChanged(nameof(SelectionCount));
@@ -692,9 +696,9 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     public int UndoCount => _undo.Count;
 
     /// <summary>復原的狀態：樓層清單與元素（樓層改名會一併改元素，所以兩者一起記錄）。</summary>
-    sealed record UndoState(List<LayoutFloor> Floors, string Elements);
+    sealed record UndoState(List<LayoutFloor> Floors, string Elements, List<LayoutRow>? Rows = null);
 
-    string Snapshot() => System.Text.Json.JsonSerializer.Serialize(new UndoState(FloorList.Select(f => new LayoutFloor(f, HeightOf(f))).ToList(), PlantConfigFile.SerializeElements(Elements.Select(e => e.ToModel()))));
+    string Snapshot() => System.Text.Json.JsonSerializer.Serialize(new UndoState(FloorList.Select(f => new LayoutFloor(f, HeightOf(f))).ToList(), PlantConfigFile.SerializeElements(Elements.Select(e => e.ToModel())), RowsModel()));
 
     /// <summary>
     /// 記錄一次修改：把修改前的狀態放進復原堆疊。key 相同的連續修改（同一欄位連續輸入）合併成一步；
@@ -757,6 +761,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             var restored = System.Text.Json.JsonSerializer.Deserialize<UndoState>(state)!;
             var floor = CurrentFloor;
             LoadFloors(new LayoutSection { Floors = restored.Floors });
+            _rows = [.. restored.Rows ?? []];
             CurrentFloor = LayoutFloors.Canonical(floor, FloorList) ?? FloorList[0];
             foreach (var m in PlantConfigFile.DeserializeElements(restored.Elements)) Attach(new LayoutElementViewModel(m));
         }

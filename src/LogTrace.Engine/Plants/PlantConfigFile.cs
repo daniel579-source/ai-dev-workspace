@@ -188,6 +188,30 @@ public static class PlantConfigFile
         foreach (var g in elements.GroupBy(e => e.Id, StringComparer.Ordinal).Where(g => g.Count() > 1))
             issues.Add(new($"元素 id「{g.Key}」重複。", [g.Key]));
 
+        // 排的配置表（ADR-0019 第 3 點）
+        var rows = doc.Layout.Rows ?? [];
+        string Key(string row) => row.Trim();
+        foreach (var r in rows.Where(r => string.IsNullOrWhiteSpace(r.Row)))
+            issues.Add(new("排的配置表有空白的排號。", []));
+        foreach (var g in rows.Where(r => !string.IsNullOrWhiteSpace(r.Row)).GroupBy(r => Key(r.Row)).Where(g => g.Count() > 1))
+            issues.Add(new($"排的配置表中排號「{g.Key}」重複。", []));
+        var byRow = rows.Where(r => !string.IsNullOrWhiteSpace(r.Row)).GroupBy(r => Key(r.Row)).ToDictionary(g => g.Key, g => g.First());
+        foreach (var r in byRow.Values)
+        {
+            if (r.Rm is { } rm && !elements.Any(e => e.Id == rm && e.Type == LayoutElementType.Rm))
+                issues.Add(new($"排「{Key(r.Row)}」所屬的 RM「{rm}」不存在。", []));
+            if (r.Depth is null && r.Pair is null) continue; // 單深
+            if (r.Depth is null || r.Pair is null)
+            {
+                issues.Add(new($"排「{Key(r.Row)}」是雙深時要同時填深淺與配對的排。", []));
+                continue;
+            }
+            if (!byRow.TryGetValue(Key(r.Pair), out var p))
+                issues.Add(new($"排「{Key(r.Row)}」配對的排「{Key(r.Pair)}」不在配置表中。", []));
+            else if (p.Pair is null || Key(p.Pair) != Key(r.Row) || p.Depth == r.Depth || p.Rm != r.Rm)
+                issues.Add(new($"排「{Key(r.Row)}」與「{Key(r.Pair)}」的配對要互相指向、一深一淺、所屬 RM 相同。", []));
+        }
+
         // 樓層（ADR-0006 第 13 點）
         var floors = LayoutFloors.Of(doc.Layout);
         if (floors.Any(string.IsNullOrWhiteSpace)) issues.Add(new("有空白的樓層名稱。", []));
@@ -255,6 +279,8 @@ public static class PlantConfigFile
                 else if (!LayoutFloors.NameComparer.Equals(LayoutFloors.FloorOf(e, floors, _ => null), LayoutFloors.FloorOf(rail, floors, _ => null)))
                     issues.Add(new($"「{Label(e)}」和它的導軌「{Label(rail)}」不在同一層。", [e.Id, rail.Id]));
             }
+            if (e.Rail is not null && e.Type is not (LayoutElementType.Vehicle or LayoutElementType.Rm))
+                issues.Add(new($"「{Label(e)}」不能指定導軌；只有搬送機與 RM 可以。", [e.Id]));
             if (e.Type == LayoutElementType.FireDoor)
             {
                 foreach (var id in e.Conveyors ?? [])

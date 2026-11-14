@@ -21,7 +21,8 @@ public enum VehiclePositionBasis
 }
 
 /// <summary>搬送機在某一時刻的位置：中心點（樓層座標，公尺）、依據，以及派送、抵達的事件序號。</summary>
-public sealed record VehiclePlacement(double X, double Y, VehiclePositionBasis Basis, long? DispatchCause = null, long? ArrivalCause = null)
+/// <param name="Lift">RM 載貨台的高度（公尺，離地板）：依儲位的層推估（ADR-0019 第 5 點）；搬送機（STV）或不知道時為 null。</param>
+public sealed record VehiclePlacement(double X, double Y, VehiclePositionBasis Basis, long? DispatchCause = null, long? ArrivalCause = null, double? Lift = null)
 {
     public bool IsEstimated => Basis == VehiclePositionBasis.Estimated;
 }
@@ -38,7 +39,7 @@ public sealed class VehicleMotion
 
     /// <summary>一段行程：從派送開始，到抵達、作業完成、取消或下一次派送為止。距離是導軌上的長度位置。</summary>
     sealed record Leg(long DispatchSeq, DateTime? DispatchTime, double? Start, double? End,
-        LegEnd EndKind, long? EndSeq, DateTime? EndTime, double? ArrivedAt);
+        LegEnd EndKind, long? EndSeq, DateTime? EndTime, double? ArrivedAt, double? StartLift = null, double? EndLift = null);
 
     readonly Dictionary<string, (LayoutElement Vehicle, RailPath Rail)> _vehicles = new(StringComparer.Ordinal);
     readonly Dictionary<string, List<Leg>> _legs = new(StringComparer.Ordinal);
@@ -55,7 +56,8 @@ public sealed class VehicleMotion
             foreach (var a in e.Aliases ?? [])
                 byAlias.TryAdd(a.Trim(), e);
 
-        foreach (var v in layout.Elements.Where(e => e.Type == LayoutElementType.Vehicle && e.Rail is not null))
+        // 搬送機（STV）與 RM（ADR-0019）：有指定存在的導軌時沿導軌移動
+        foreach (var v in layout.Elements.Where(e => e.Type is LayoutElementType.Vehicle or LayoutElementType.Rm && e.Rail is not null))
             if (byId.TryGetValue(v.Rail!, out var r) && r.Type == LayoutElementType.Rail && (r.Points?.Count ?? 0) >= 2)
                 _vehicles[v.Id] = (v, RailPath.Of(r));
 
@@ -79,20 +81,36 @@ public sealed class VehicleMotion
             return p is { } q ? rail.Project(q.X, q.Y).Distance : null;
         }
 
+        // RM 載貨台的高度：儲位取那一層的底部（（層 − 1）× 每層高度）；Conv 等其他元素取地板（推估，ADR-0019 第 5 點）
+        double? LiftOf(string vehicleId, string? code)
+        {
+            if (code is null || _vehicles[vehicleId].Vehicle.Type != LayoutElementType.Rm) return null;
+            if (byAlias.ContainsKey(code.Trim())) return 0;
+            if (StorageCode.TryParse(layout.StorageCodeRule, code.Trim(), out var slot))
+            {
+                var rack = layout.Elements.FirstOrDefault(e => e.Type == LayoutElementType.Rack && e.Row == slot.Row && e.ColFrom <= slot.Column && slot.Column <= e.ColTo);
+                return Math.Max(0, slot.Level - 1) * (rack?.LevelHeight is > 0 ? rack.LevelHeight.Value : DefaultLevelHeight);
+            }
+            return null;
+        }
+
         // 每台搬送機依序整理成行程
-        var open = new Dictionary<string, (long Seq, DateTime? Time, double? Start, double? End, string? Command)>(StringComparer.Ordinal);
+        var open = new Dictionary<string, (long Seq, DateTime? Time, double? Start, double? End, string? Command, double? StartLift, double? EndLift)>(StringComparer.Ordinal);
         var last = new Dictionary<string, double?>(StringComparer.Ordinal); // 上一個位置
+        var lastLift = new Dictionary<string, double?>(StringComparer.Ordinal);
         void Close(string vh, LegEnd kind, long? seq, double? arrivedAt = null)
         {
             if (!open.Remove(vh, out var o)) return;
             if (!_legs.TryGetValue(vh, out var list)) _legs[vh] = list = [];
-            list.Add(new Leg(o.Seq, o.Time, o.Start, o.End, kind, seq, seq is { } s ? timeOf(s) : null, arrivedAt));
+            list.Add(new Leg(o.Seq, o.Time, o.Start, o.End, kind, seq, seq is { } s ? timeOf(s) : null, arrivedAt, o.StartLift, o.EndLift));
             // 上一個位置：抵達時為抵達處；作業完成、取消、沒有抵達時停在起點；都不知道時維持原本的
             var previous = last.GetValueOrDefault(vh);
             last[vh] = kind == LegEnd.Arrived ? arrivedAt ?? o.End ?? previous : o.Start ?? previous;
+            var previousLift = lastLift.GetValueOrDefault(vh);
+            lastLift[vh] = kind == LegEnd.Arrived ? o.EndLift ?? previousLift : o.StartLift ?? previousLift;
         }
         string? VehicleOf(EventEffect x) =>
-            x.Get(FieldKinds.Vehicle) is { } code && byAlias.TryGetValue(code.Trim(), out var e) && _vehicles.ContainsKey(e.Id) ? e.Id : null;
+            (x.Get(FieldKinds.Rm) ?? x.Get(FieldKinds.Vehicle)) is { } code && byAlias.TryGetValue(code.Trim(), out var e) && _vehicles.ContainsKey(e.Id) ? e.Id : null;
         string? VehicleOfCommand(string? command) =>
             command is null ? null : open.FirstOrDefault(o => o.Value.Command == command).Key;
 
@@ -104,7 +122,9 @@ public sealed class VehicleMotion
                 {
                     Close(vh, LegEnd.Superseded, x.Sequence);
                     var start = OnRail(vh, x.Get(FieldKinds.Source)) ?? last.GetValueOrDefault(vh);
-                    open[vh] = (x.Sequence, timeOf(x.Sequence), start, OnRail(vh, x.Get(FieldKinds.Destination)), x.Get(FieldKinds.Command));
+                    var startLift = LiftOf(vh, x.Get(FieldKinds.Source)) ?? lastLift.GetValueOrDefault(vh);
+                    open[vh] = (x.Sequence, timeOf(x.Sequence), start, OnRail(vh, x.Get(FieldKinds.Destination)), x.Get(FieldKinds.Command),
+                        startLift, LiftOf(vh, x.Get(FieldKinds.Destination)));
                     break;
                 }
                 case EffectKinds.SegmentArrived when (VehicleOf(x) ?? VehicleOfCommand(x.Get(FieldKinds.Command))) is { } vh && open.ContainsKey(vh):
@@ -136,38 +156,42 @@ public sealed class VehicleMotion
         if (leg is null)
             return new VehiclePlacement((vehicle.X ?? 0) + (vehicle.W ?? 0) / 2, (vehicle.Y ?? 0) + (vehicle.H ?? 0) / 2, VehiclePositionBasis.Unknown);
 
-        VehiclePlacement At(double? distance, VehiclePositionBasis basis, long? arrival = null)
+        VehiclePlacement At(double? distance, VehiclePositionBasis basis, long? arrival = null, double? lift = null)
         {
             if (distance is not { } d)
                 return new VehiclePlacement((vehicle.X ?? 0) + (vehicle.W ?? 0) / 2, (vehicle.Y ?? 0) + (vehicle.H ?? 0) / 2,
-                    basis == VehiclePositionBasis.Estimated ? VehiclePositionBasis.Unknown : basis, leg.DispatchSeq, arrival);
+                    basis == VehiclePositionBasis.Estimated ? VehiclePositionBasis.Unknown : basis, leg.DispatchSeq, arrival, lift);
             var p = rail.PointAt(d);
-            return new VehiclePlacement(p.X, p.Y, basis, leg.DispatchSeq, arrival);
+            return new VehiclePlacement(p.X, p.Y, basis, leg.DispatchSeq, arrival, lift);
         }
 
         bool ended = leg.EndSeq is { } end && end <= sequence;
         if (ended)
             return leg.EndKind switch
             {
-                LegEnd.Arrived => At(leg.ArrivedAt ?? leg.End, VehiclePositionBasis.Arrived, leg.EndSeq),
-                LegEnd.Finished => At(leg.Start, VehiclePositionBasis.FinishedNoLocation, leg.EndSeq),
-                LegEnd.Cancelled => At(leg.Start, VehiclePositionBasis.Cancelled, leg.EndSeq),
-                _ => At(leg.Start, VehiclePositionBasis.WaitingArrival),
+                LegEnd.Arrived => At(leg.ArrivedAt ?? leg.End, VehiclePositionBasis.Arrived, leg.EndSeq, leg.EndLift ?? leg.StartLift),
+                LegEnd.Finished => At(leg.Start, VehiclePositionBasis.FinishedNoLocation, leg.EndSeq, leg.StartLift),
+                LegEnd.Cancelled => At(leg.Start, VehiclePositionBasis.Cancelled, leg.EndSeq, leg.StartLift),
+                _ => At(leg.Start, VehiclePositionBasis.WaitingArrival, lift: leg.StartLift),
             };
 
         // 執行中：只有之後確實抵達的行程才內插
-        if (leg.EndKind != LegEnd.Arrived) return At(leg.Start, VehiclePositionBasis.WaitingArrival);
+        if (leg.EndKind != LegEnd.Arrived) return At(leg.Start, VehiclePositionBasis.WaitingArrival, lift: leg.StartLift);
         var target = leg.ArrivedAt ?? leg.End;
-        if (leg.Start is not { } s) return At(target, VehiclePositionBasis.Estimated); // 沒有起點：直接畫在終點
-        if (target is not { } t) return At(s, VehiclePositionBasis.WaitingArrival);
+        if (leg.Start is not { } s) return At(target, VehiclePositionBasis.Estimated, lift: leg.EndLift); // 沒有起點：直接畫在終點
+        if (target is not { } t) return At(s, VehiclePositionBasis.WaitingArrival, lift: leg.StartLift);
         double f = 0;
         if (leg.DispatchTime is { } t0 && leg.EndTime is { } t1 && t1 > t0 && time is { } now)
             f = Math.Clamp((now - t0).TotalMilliseconds / (t1 - t0).TotalMilliseconds, 0, 1);
         double distance = rail.Closed && rail.Length > 0
             ? s + ((t - s) % rail.Length + rail.Length) % rail.Length * f // 依點的順序方向
             : s + (t - s) * f;
-        return At(distance, VehiclePositionBasis.Estimated);
+        double? lift = leg.StartLift is { } l0 && leg.EndLift is { } l1 ? l0 + (l1 - l0) * f : leg.EndLift ?? leg.StartLift;
+        return At(distance, VehiclePositionBasis.Estimated, lift: lift);
     }
+
+    /// <summary>料架沒有填每層高度時的預設（公尺），與 3D 畫面相同。</summary>
+    public const double DefaultLevelHeight = 1.2;
 
     /// <summary>料架某一列的中心（考慮旋轉）：列沿長邊（寬）切分。</summary>
     static (double X, double Y) ColumnCenter(LayoutElement rack, int column)

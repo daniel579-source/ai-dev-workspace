@@ -60,7 +60,8 @@ public sealed partial class RackCellViewModel(int column, int levels) : Observab
 }
 
 /// <summary>料架側視圖的一層。IsEmpty＝LOG 記載已取出；Pallet 與 IsEmpty 都沒有時為未取得資訊（ADR-0005 第 2 點 2026-11-04 補充）。</summary>
-public sealed record RackLevelViewModel(int Level, string? StorageCode, string? Pallet, bool IsEmpty, long? Cause, string? CauseText)
+/// <param name="Depth">雙深料架的深淺（「淺」或「深」，ADR-0019 第 7 點）；單深為 null。</param>
+public sealed record RackLevelViewModel(int Level, string? StorageCode, string? Pallet, bool IsEmpty, long? Cause, string? CauseText, string? Depth = null)
 {
     /// <summary>棧板欄的顯示：棧板編號、「空」，或未取得資訊的「—」。</summary>
     public string Content => Pallet ?? (IsEmpty ? "空" : "—");
@@ -117,6 +118,7 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     public IReadOnlyList<string> ServedFloors { get; }
 
     public bool IsElevator => Type == LayoutElementType.Elevator;
+    public bool IsRm => Type == LayoutElementType.Rm;
 
     /// <summary>設備狀態表的「樓層」欄：電梯為目前樓層（未取得資訊時為「—」），其他元素為所在的樓層。</summary>
     [ObservableProperty]
@@ -267,6 +269,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
         _motion = new VehicleMotion(model.Effects, layout, seq => _events.TryGetValue(seq, out var ev) ? ev.Timestamp : null);
         var byId = layout.Elements.GroupBy(e => e.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
         LoadFloors(layout);
+        _rows = layout.Rows ?? [];
         Elements.Clear();
         foreach (var e in layout.Elements) Elements.Add(new PlaybackElementViewModel(e, byId, Floors));
         SelectedElement = null;
@@ -323,7 +326,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
                     : s is null ? ElementLook.Unknown : ElementLook.Empty;
                 break;
             }
-            case LayoutElementType.Vehicle:
+            case LayoutElementType.Vehicle or LayoutElementType.Rm:
             {
                 w.Vehicles.TryGetValue(el.Id, out var v);
                 el.Placement = _motion?.PlacementAt(el.Id, w.Sequence, _momentTime);
@@ -394,6 +397,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
     }
 
     Dictionary<string, string> _stationModeNames = [];
+    IReadOnlyList<LayoutRow> _rows = [];
     DateTime? _momentTime;
 
     /// <summary>電梯目前樓層與依據的文字（ADR-0005 第 11 點）。</summary>
@@ -480,7 +484,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
                     Detail.Add(Line("不一致", "命令說貨物在這個站點，但在席是 OFF（不判斷哪一邊才對）", s?.PresenceCause));
                 break;
             }
-            case LayoutElementType.Vehicle:
+            case LayoutElementType.Vehicle or LayoutElementType.Rm:
             {
                 w.Vehicles.TryGetValue(el.Id, out var v);
                 Detail.Add(Line("連線", v?.Connection ?? "未知", v?.ConnectionCause));
@@ -497,6 +501,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
                 {
                     Detail.Add(Line("位置", PlacementText(pl.Basis), pl.ArrivalCause ?? pl.DispatchCause));
                     if (pl.DispatchCause is { } d && pl.ArrivalCause is not null) Detail.Add(Line("派送", "這一段的派送", d));
+                    if (pl.Lift is { } lift) Detail.Add(Line("載貨台", $"約 {lift:0.0} 公尺（推估：依儲位的層）", pl.ArrivalCause ?? pl.DispatchCause));
                 }
                 break;
             }
@@ -593,7 +598,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
 
     void UpdateEquipment()
     {
-        var rows = Elements.Where(e => e.Type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Dock or LayoutElementType.FireDoor or LayoutElementType.Elevator)
+        var rows = Elements.Where(e => e.Type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Rm or LayoutElementType.Dock or LayoutElementType.FireDoor or LayoutElementType.Elevator)
             .Select(e => new EquipmentRowViewModel(e.Id, e.Name, e.TypeLabel, e.Aliases, EquipmentState(e), _state.Alarms.ContainsKey(e.Id) || e.IsInconsistent, e.Look,
                 e.IsElevator ? e.CurrentFloorText ?? "—" : e.Floor))
             .Where(r => !OnlyAbnormal || r.IsAbnormal);
@@ -627,7 +632,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
                 if (pallets.Count > 0) parts.Add("貨物 " + string.Join("、", pallets));
                 if (e.IsInconsistent) parts.Add("不一致");
                 break;
-            case LayoutElementType.Vehicle:
+            case LayoutElementType.Vehicle or LayoutElementType.Rm:
                 w.Vehicles.TryGetValue(e.Id, out var v);
                 parts.Add($"連線 {v?.Connection ?? "未知"}");
                 parts.Add($"模式 {v?.Mode ?? "未知"}");
@@ -684,14 +689,21 @@ public sealed partial class PlaybackViewModel : ObservableObject
             SideViewTitle = null;
             return;
         }
-        SideViewTitle = $"{rack.Name}　第 {cell.Column} 列（由上而下）";
+        var row = rack.Model.Row ?? "";
+        // 雙深（排的配置表有深淺與配對，ADR-0019 第 7 點）：每層分淺、深兩格
+        var config = _rows.FirstOrDefault(r => r.Row.Trim() == row.Trim());
+        (string Row, string? Depth)[] pairs = config is { Depth: { } depth, Pair: { } pair }
+            ? depth == RowDepth.Shallow ? [(row, "淺"), (pair, "深")] : [(pair, "淺"), (row, "深")]
+            : [(row, null)];
+        SideViewTitle = $"{rack.Name}　第 {cell.Column} 列（由上而下）" + (pairs.Length > 1 ? $"；雙深：淺＝第 {pairs[0].Row} 排、深＝第 {pairs[1].Row} 排" : "");
         for (int level = cell.Levels; level >= 1; level--)
-        {
-            var code = StorageCode.Format(_storageRule, rack.Model.Row ?? "", cell.Column, level);
-            var slot = code is not null && _state.Storage.TryGetValue(code, out var sl) ? sl : null;
-            long? cause = slot?.Cause;
-            SideView.Add(new RackLevelViewModel(level, code, slot?.Pallet, slot?.IsEmpty == true, cause, Line("", "", cause).CauseText));
-        }
+            foreach (var (r, d) in pairs)
+            {
+                var code = StorageCode.Format(_storageRule, r, cell.Column, level);
+                var slot = code is not null && _state.Storage.TryGetValue(code, out var sl) ? sl : null;
+                long? cause = slot?.Cause;
+                SideView.Add(new RackLevelViewModel(level, code, slot?.Pallet, slot?.IsEmpty == true, cause, Line("", "", cause).CauseText, d));
+            }
     }
 
     /// <summary>跳到造成狀態的事件（主畫面選取它，目前時刻也跟著移動）。</summary>

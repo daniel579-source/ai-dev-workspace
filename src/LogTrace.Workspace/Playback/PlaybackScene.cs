@@ -33,7 +33,7 @@ public sealed record SceneLayout(IReadOnlyList<SceneFloor> Floors, IReadOnlyList
 /// 元素在目前時刻的狀態。Look 為圖例的顏色（<see cref="ElementLook"/>）。
 /// X、Y：沿導軌移動的搬送機的位置（中心，公尺；推估時 Estimated）；其他元素為 null。
 /// ElevatorFloor：電梯目前的樓層；移動中時為 null，改用 MovingFrom、MovingTo（推估）。
-/// RackSlots：料架有貨的儲位（[列, 層]）。
+/// RackSlots：料架有貨的儲位（[列, 層]）。Lift：RM 載貨台的高度（公尺，推估）。
 /// </summary>
 public sealed record SceneElementState(
     string Id, string Look, bool Selected = false,
@@ -41,7 +41,7 @@ public sealed record SceneElementState(
     bool Blocked = false, bool BlockedEstimated = false, bool Loaded = false, bool Executing = false,
     string? Summary = null, double? X = null, double? Y = null,
     string? ElevatorFloor = null, string? MovingFrom = null, string? MovingTo = null,
-    IReadOnlyList<int[]>? RackSlots = null, int? SelectedColumn = null);
+    IReadOnlyList<int[]>? RackSlots = null, int? SelectedColumn = null, double? Lift = null);
 
 /// <summary>場景的目前時刻狀態；目前時刻或選取改變時傳。</summary>
 public sealed record SceneState(long Sequence, IReadOnlyList<SceneElementState> Elements)
@@ -60,6 +60,7 @@ public static class PlaybackScene
     {
         LayoutElementType.Station => 0.8,
         LayoutElementType.Vehicle => 0.6,
+        LayoutElementType.Rm => 10, // 立柱的高度；載貨台依儲位的層移動（ADR-0019）
         LayoutElementType.Dock => 1.5,
         LayoutElementType.FireDoor => 3,
         LayoutElementType.Conveyor => 0.6,
@@ -144,12 +145,12 @@ public static class PlaybackScene
             bool isSelected = ReferenceEquals(e, selected);
             switch (e.Type)
             {
-                case LayoutElementType.Vehicle:
+                case LayoutElementType.Vehicle or LayoutElementType.Rm:
                 {
                     world.Vehicles.TryGetValue(e.Id, out var v);
                     list.Add(new SceneElementState(e.Id, look, isSelected, Inconsistent: e.IsInconsistent, Estimated: e.IsEstimated,
                         Loaded: world.PalletsAt(LocationKind.Vehicle, e.Id).Any(), Executing: v?.Work == VehicleWork.Executing,
-                        Summary: e.Summary, X: e.Placement?.X, Y: e.Placement?.Y));
+                        Summary: e.Summary, X: e.Placement?.X, Y: e.Placement?.Y, Lift: e.Placement?.Lift));
                     break;
                 }
                 case LayoutElementType.Elevator:

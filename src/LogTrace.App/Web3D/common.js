@@ -203,6 +203,30 @@ export function createViewer(opts = {}) {
     item.group.add(item.cargo);
   }
 
+  function buildRm(e, item) {
+    // RM（堆高起重機，ADR-0019 第 6 點）：底部走行台車（狀態顏色）、兩支立柱、頂部連桿、沿立柱上下的載貨台
+    const mast = Math.min(0.18, e.w / 8);
+    const baseH = 0.35;
+    item.body = box(e.w, baseH, e.h, mat(LOOK.unknown, { transparent: true }), 0, baseH / 2, 0);
+    item.group.add(item.body);
+    item.group.add(instanced([
+      at(-e.w / 2 + mast / 2, e.height / 2, 0, mast, e.height, mast * 1.6),
+      at(e.w / 2 - mast / 2, e.height / 2, 0, mast, e.height, mast * 1.6),
+    ], frameMat));
+    item.group.add(box(e.w, 0.15, mast * 1.6, frameMat, 0, e.height - 0.075, 0));
+    item.group.add(instanced([at(-e.w / 2 + 0.05, baseH * 0.5, 0, 0.08, baseH * 0.6, e.h * 0.9), at(e.w / 2 - 0.05, baseH * 0.5, 0, 0.08, baseH * 0.6, e.h * 0.9)], bumperMat));
+    // 載貨台：在兩支立柱之間，向料架兩側伸出（深 e.h）；高度由狀態的 lift 決定
+    item.carriage = new THREE.Group();
+    item.carriage.add(box(e.w - mast * 2 - 0.04, 0.12, e.h * 1.1, mat(0x475569, { transparent: true }), 0, 0.06, 0));
+    item.carriage.add(rollers(e.w - mast * 2 - 0.1, e.h, 0.15, 0.18, 0.035));
+    item.cargo = box(Math.min(e.w, 1.1) * 0.7, 0.8, Math.min(e.h, 1.1) * 0.8, mat(COLOR.cargo, { transparent: true }), 0, 0.6, 0);
+    item.cargo.visible = false;
+    item.carriage.add(item.cargo);
+    item.carriage.position.y = baseH + 0.05;
+    item.baseH = baseH;
+    item.group.add(item.carriage);
+  }
+
   function buildDock(e, item) {
     // Conv（對接設備，例如升降移載機）：底座、兩支立柱與頂部橫樑、中間的升降平台（狀態顏色）與滾筒
     const mast = Math.min(0.14, e.w / 6);
@@ -358,6 +382,7 @@ export function createViewer(opts = {}) {
       case 'conveyor': buildConveyor(e, item); break;
       case 'rail': buildRail(e, item); break;
       case 'dock': place(item.group, e, elevation); buildDock(e, item); break;
+      case 'rm': place(item.group, e, elevation); buildRm(e, item); break;
       case 'fireDoor': place(item.group, e, elevation); buildFireDoor(e, item); break;
       case 'area': place(item.group, e, elevation); buildArea(e, item); break;
       case 'label':

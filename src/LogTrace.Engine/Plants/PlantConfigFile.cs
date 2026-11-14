@@ -216,7 +216,7 @@ public static class PlantConfigFile
         foreach (var e in elements)
         {
             if (e.Aliases is { Count: > 0 } && !LayoutElement.CanHaveAliases(e.Type))
-                issues.Add(new($"「{Label(e)}」不能有別名；只有站點、搬送機、對接設備、防火門、電梯可以。", [e.Id]));
+                issues.Add(new($"「{Label(e)}」不能有別名；只有站點、搬送機、Conv、防火門、電梯可以。", [e.Id]));
             if (e.Aliases?.Any(string.IsNullOrWhiteSpace) == true)
                 issues.Add(new($"「{Label(e)}」有空白的別名。", [e.Id]));
             if (e.Rotation is { } r && !AllowedRotations.Contains(r))
@@ -226,7 +226,7 @@ public static class PlantConfigFile
                 LayoutElement? End(string? id) => elements.FirstOrDefault(x => x.Id == id && LayoutElement.CanBeConveyorEnd(x.Type));
                 var (from, to) = (End(e.From), End(e.To));
                 if (from is null || to is null)
-                    issues.Add(new($"輸送線「{Label(e)}」的兩端必須是站點、對接設備或搬送機。", [e.Id]));
+                    issues.Add(new($"輸送線「{Label(e)}」的兩端必須是站點、Conv 或搬送機。", [e.Id]));
                 else if ((from.Type == LayoutElementType.Vehicle && e.FromPoint is null) || (to.Type == LayoutElementType.Vehicle && e.ToPoint is null))
                     issues.Add(new($"輸送線「{Label(e)}」連到搬送機的那一端沒有交接點。", [e.Id]));
                 else if (!LayoutFloors.NameComparer.Equals(LayoutFloors.FloorOf(from, floors, _ => null), LayoutFloors.FloorOf(to, floors, _ => null)))

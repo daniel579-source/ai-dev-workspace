@@ -34,7 +34,7 @@ public static class FieldKinds
     /// <summary>所有欄位種類與中文名稱（依畫面顯示順序）。</summary>
     public static IReadOnlyList<(string Kind, string Label)> All { get; } =
     [
-        (Station, "站點"), (Vehicle, "搬送機"), (Dock, "對接設備"), (FireDoor, "防火門"), (Elevator, "電梯"), (Storage, "儲位"),
+        (Station, "站點"), (Vehicle, "搬送機"), (Dock, "Conv"), (FireDoor, "防火門"), (Elevator, "電梯"), (Storage, "儲位"),
         (Command, "命令"), (CommandType, "命令類型"), (Segment, "段"), (Source, "來源"), (Destination, "目的地"),
         (Pallet, "棧板"), (Bin, "桶"),
         (Signal, "訊號"), (SignalValue, "訊號值"), (StationMode, "站點模式"), (StationStatus, "運轉狀態"),

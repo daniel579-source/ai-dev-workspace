@@ -114,7 +114,7 @@ public sealed class ElevatorTests
         var issues = PlantConfigFile.Validate(new PlantConfigDocument { Plant = "範例廠", Layout = bad });
         Assert.Contains(issues, i => i.Message.Contains("「9F」不在樓層清單中") && i.ElementIds.SequenceEqual(["ev-1"]));
         Assert.Contains(issues, i => i.Message.Contains("至少要服務兩個樓層") && i.ElementIds.SequenceEqual(["ev-2"]));
-        Assert.Contains(issues, i => i.Message.Contains("兩端必須是站點、對接設備或搬送機") && i.ElementIds.SequenceEqual(["cv-1"]));
+        Assert.Contains(issues, i => i.Message.Contains("兩端必須是站點、Conv 或搬送機") && i.ElementIds.SequenceEqual(["cv-1"]));
     }
 
     [Fact]

@@ -109,8 +109,8 @@ public sealed class DockLayouts
     const Orientation H = Orientation.Horizontal, V = Orientation.Vertical;
 
     /// <summary>
-    /// 回放：Layout 為主，事件清單在旁；下方為詳細資訊、元素狀態等分頁（含知識庫）、原始 LOG。
-    /// 搜尋：事件清單為主，搜尋面板在前；下方為原始 LOG、Layout、元素狀態等分頁（含知識庫）。
+    /// 回放：Layout 為主，事件清單在旁；下方為詳細資訊、元素狀態等分頁（含知識庫）、原始 LOG、異常紀錄。
+    /// 搜尋：事件清單為主，搜尋面板在前；下方為原始 LOG、Layout、元素狀態等分頁（含知識庫）、異常紀錄。
     /// </summary>
     LayoutRoot Build(string name)
     {
@@ -122,13 +122,13 @@ public sealed class DockLayouts
                 Panel(4, H, V,
                     Panel(5, V, H, Pane(1.6, H, "events"), Pane(1, H, "detail")),
                     Pane(1.4, V, "timeline"),
-                    Panel(3, V, H, Pane(1.4, H, "rawlog"), Pane(1, H, "playback"), Pane(1, H, states)))),
+                    Panel(3, V, H, Pane(1.4, H, "rawlog"), Pane(1, H, "playback"), Pane(1, H, states), Pane(1.4, H, "incidents")))),
             _ => Panel(1, H, H,
                 Pane(1, H, "cases", "search"),
                 Panel(4, H, V,
                     Panel(5, V, H, Pane(1, H, "events"), Pane(1.2, H, "playback")),
                     Pane(1.4, V, "timeline"),
-                    Panel(3, V, H, Pane(1, H, "detail"), Pane(1, H, states), Pane(1, H, "rawlog")))),
+                    Panel(3, V, H, Pane(1, H, "detail"), Pane(1, H, states), Pane(1, H, "rawlog"), Pane(1.4, H, "incidents")))),
         };
         return new LayoutRoot { RootPanel = main };
     }

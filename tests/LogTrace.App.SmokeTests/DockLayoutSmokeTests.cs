@@ -11,7 +11,7 @@ namespace LogTrace.App.SmokeTests;
 [Trait("Category", "UI")]
 public sealed class DockLayoutSmokeTests : IDisposable
 {
-    static readonly string[] Panels = ["案件", "搜尋", "事件清單", "Layout 回放", "時間軸", "詳細資訊", "元素狀態", "命令", "設備狀態表", "未對應", "知識庫", "原始 LOG"];
+    static readonly string[] Panels = ["案件", "搜尋", "事件清單", "Layout 回放", "時間軸", "詳細資訊", "元素狀態", "命令", "設備狀態表", "未對應", "知識庫", "原始 LOG", "異常紀錄"];
 
     readonly TempFolder _tmp = new();
     readonly string _dataRoot;

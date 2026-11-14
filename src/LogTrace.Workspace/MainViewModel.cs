@@ -56,7 +56,36 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RefreshCases();
         RefreshPlants();
         Playback.GoToEvent = GoToEvent;
+        Incidents = new Incidents.IncidentsViewModel(ui.Confirm) { PickEvent = PickIncidentEvent, GoToStableId = GoToStableId };
         LoadRecentSearches();
+    }
+
+    /// <summary>異常紀錄面板（ADR-0016，#110）。</summary>
+    public Incidents.IncidentsViewModel Incidents { get; }
+
+    /// <summary>異常紀錄引用的訊息最多保存的字數（遮罩後）。</summary>
+    const int IncidentMessageLength = 300;
+
+    /// <summary>
+    /// 給異常紀錄的選取事件：時間、模組與遮罩後的訊息（不論目前是否顯示敏感資訊，一律遮罩，ADR-0009），
+    /// 以及事件的警報代碼與設備編號。
+    /// </summary>
+    Incidents.IncidentEventPick? PickIncidentEvent()
+    {
+        if (SelectedEvent is not { Event: var e }) return null;
+        var message = _masker.Mask(e.Message).ReplaceLineEndings(" ");
+        if (message.Length > IncidentMessageLength) message = message[..IncidentMessageLength] + "…";
+        return new(new LogTrace.Engine.Incidents.IncidentEvent(e.Sequence, e.Id.ToString(), e.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff"), e.Module, message),
+            _selectedFields.Where(f => f.Kind == FieldKinds.AlarmCode).Select(f => f.Value).Distinct().ToList(),
+            _selectedFields.Where(f => FieldKinds.Identifiers.Contains(f.Kind)).Select(f => f.Value).Distinct().ToList());
+    }
+
+    /// <summary>以穩定識別碼選取目前案件中的事件；找不到時傳回 false。</summary>
+    bool GoToStableId(string stableId)
+    {
+        if (_allRows.FirstOrDefault(r => r.Event.Id.ToString() == stableId) is not { } row) return false;
+        GoToEvent(row.Sequence);
+        return true;
     }
 
     /// <summary>Layout 回放（ADR-0008 第 6 點）；目前時刻＝事件清單選取的事件。</summary>

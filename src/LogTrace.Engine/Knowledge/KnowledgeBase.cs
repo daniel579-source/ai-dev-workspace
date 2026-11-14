@@ -61,7 +61,14 @@ public sealed class KnowledgeBase
     /// 案件所用廠別的知識庫檔路徑：先看快照的來源路徑，再依廠別名稱找存放位置下的設定檔（與找新版設定的順序相同）。
     /// 找不到設定檔時傳回 null；知識庫檔本身不一定存在。
     /// </summary>
-    public static string? PathFor(string plantName, string? snapshotSource, PlantConfigLibrary library)
+    public static string? PathFor(string plantName, string? snapshotSource, PlantConfigLibrary library) =>
+        PlantConfigPathFor(plantName, snapshotSource, library) is { } path ? PathBeside(path) : null;
+
+    /// <summary>
+    /// 案件所用廠別的設定檔路徑（知識庫與異常紀錄都放在它旁邊）：先看快照的來源路徑，再依廠別名稱找存放位置下的設定檔。
+    /// 找不到時傳回 null。
+    /// </summary>
+    public static string? PlantConfigPathFor(string plantName, string? snapshotSource, PlantConfigLibrary library)
     {
         var candidates = new List<string>();
         if (snapshotSource is not null && File.Exists(snapshotSource)) candidates.Add(snapshotSource);
@@ -70,7 +77,7 @@ public sealed class KnowledgeBase
         {
             try
             {
-                if (string.Equals(PlantConfigFile.Load(path).Plant, plantName, StringComparison.Ordinal)) return PathBeside(path);
+                if (string.Equals(PlantConfigFile.Load(path).Plant, plantName, StringComparison.Ordinal)) return path;
             }
             catch (Exception ex) when (ex is PlantConfigFormatException or IOException or UnauthorizedAccessException)
             {

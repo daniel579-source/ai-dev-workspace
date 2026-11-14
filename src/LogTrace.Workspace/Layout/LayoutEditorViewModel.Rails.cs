@@ -69,7 +69,7 @@ public sealed partial class LayoutEditorViewModel
             RailSegments.Clear();
             foreach (var i in segments) RailSegments.Add(i);
         }
-        var choices = SelectedElement is { IsVehicle: true } v
+        var choices = SelectedElement is { CanHaveRail: true } v
             ? Elements.Where(e => e.IsRail && SameFloor(FloorOf(e), FloorOf(v))).Order(LayoutElementTypes.ListOrder).ToList()
             : [];
         SyncOrder(RailChoices, choices);
@@ -235,14 +235,14 @@ public sealed partial class LayoutEditorViewModel
     [RelayCommand]
     void ClearVehicleRail()
     {
-        if (SelectedElement is { IsVehicle: true } v) v.Rail = null;
+        if (SelectedElement is { CanHaveRail: true } v) v.Rail = null;
     }
 
     /// <summary>刪除導軌時，指定它的搬送機自動清除指定（使用者決定，可以復原）。傳回清除的台數。</summary>
     int ClearRailsOf(IReadOnlySet<string> removedRailIds)
     {
         int n = 0;
-        foreach (var v in Elements.Where(e => e.IsVehicle && e.Rail is { } r && removedRailIds.Contains(r)))
+        foreach (var v in Elements.Where(e => e.CanHaveRail && e.Rail is { } r && removedRailIds.Contains(r)))
         {
             v.Rail = null;
             n++;

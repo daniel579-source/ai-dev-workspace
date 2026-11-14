@@ -140,7 +140,7 @@ public sealed class WorldModel
         {
             if (x.Effect is not (EffectKinds.AlarmRaised or EffectKinds.AlarmCleared)) continue;
             var target = Resolve(x.Get(FieldKinds.Vehicle)) ?? Resolve(x.Get(FieldKinds.Station)) ?? Resolve(x.Get(FieldKinds.Dock))
-                ?? Resolve(x.Get(FieldKinds.Elevator));
+                ?? Resolve(x.Get(FieldKinds.Elevator)) ?? Resolve(x.Get(FieldKinds.Rm));
             if (target is null) continue;
             if (open.Remove(target.Id, out var o)) list.Add((target.Id, o.Code, o.Start, x.Sequence));
             if (x.Effect == EffectKinds.AlarmRaised) open[target.Id] = (x.Get(FieldKinds.AlarmCode), x.Sequence);
@@ -171,7 +171,7 @@ public sealed class WorldModel
             return e.Type switch
             {
                 LayoutElementType.Station => (LocationKind.Station, e.Id),
-                LayoutElementType.Vehicle => (LocationKind.Vehicle, e.Id),
+                LayoutElementType.Vehicle or LayoutElementType.Rm => (LocationKind.Vehicle, e.Id),
                 LayoutElementType.Dock => (LocationKind.Delivered, e.Id),
                 _ => (LocationKind.Unknown, code),
             };
@@ -254,6 +254,8 @@ public sealed class WorldModel
         long seq = x.Sequence;
         w.Sequence = seq;
         string? Element(string kind, LayoutElementType type) => Resolve(x.Get(kind)) is { } e && e.Type == type ? e.Id : null;
+        // 執行命令一段的設備：RM 欄位對應到 RM 元素（ADR-0019，#123），或搬送機欄位對應到搬送機（STV）
+        string? Carrier() => Element(FieldKinds.Rm, LayoutElementType.Rm) ?? Element(FieldKinds.Vehicle, LayoutElementType.Vehicle);
 
         switch (x.Effect)
         {
@@ -298,7 +300,7 @@ public sealed class WorldModel
                 }
                 break;
             }
-            case EffectKinds.SegmentDispatched when x.Get(FieldKinds.Command) is { } id && Element(FieldKinds.Vehicle, LayoutElementType.Vehicle) is { } vh:
+            case EffectKinds.SegmentDispatched when x.Get(FieldKinds.Command) is { } id && Carrier() is { } vh:
             {
                 var c = CommandOf(w, id, seq);
                 (c.Status, c.StatusCause, c.Segment, c.Vehicle, c.SegmentDestination) =
@@ -328,7 +330,7 @@ public sealed class WorldModel
                 if (kind == LocationKind.Station) StationOf(w, at);
                 (c.Status, c.StatusCause, c.Segment) = (kind == LocationKind.Delivered ? CommandStatus.Delivered : CommandStatus.SegmentArrived, seq,
                     ParseInt(x.Get(FieldKinds.Segment)) ?? c.Segment);
-                var vh = Element(FieldKinds.Vehicle, LayoutElementType.Vehicle) ?? c.Vehicle;
+                var vh = Carrier() ?? c.Vehicle;
                 if (vh is not null)
                 {
                     var v = VehicleOf(w, vh);
@@ -347,7 +349,7 @@ public sealed class WorldModel
                     && PalletOf(w, c, preexisting: false) is { } fp)
                     MovePallet(w, fp, LocationKind.Storage, slot, seq);
                 (c.Status, c.StatusCause, c.Segment) = (CommandStatus.SegmentFinished, seq, segment ?? c.Segment);
-                var vh = Element(FieldKinds.Vehicle, LayoutElementType.Vehicle) ?? c.Vehicle;
+                var vh = Carrier() ?? c.Vehicle;
                 if (vh is not null)
                 {
                     var v = VehicleOf(w, vh);
@@ -372,7 +374,7 @@ public sealed class WorldModel
                 if (c.Status != CommandStatus.Delivered) (c.Status, c.StatusCause) = (CommandStatus.Completed, seq);
                 break;
             }
-            case EffectKinds.Connection when Element(FieldKinds.Vehicle, LayoutElementType.Vehicle) is { } vh:
+            case EffectKinds.Connection when Carrier() is { } vh:
             {
                 var v = VehicleOf(w, vh);
                 if (x.Get(FieldKinds.Online) is { } online) (v.Connection, v.ConnectionCause) = (online, seq);
@@ -429,7 +431,7 @@ public sealed class WorldModel
             case EffectKinds.AlarmRaised or EffectKinds.AlarmCleared:
             {
                 var target = Resolve(x.Get(FieldKinds.Vehicle)) ?? Resolve(x.Get(FieldKinds.Station)) ?? Resolve(x.Get(FieldKinds.Dock))
-                    ?? Resolve(x.Get(FieldKinds.Elevator));
+                    ?? Resolve(x.Get(FieldKinds.Elevator)) ?? Resolve(x.Get(FieldKinds.Rm));
                 if (target is null) break;
                 if (x.Effect == EffectKinds.AlarmRaised) w.Alarms[target.Id] = new AlarmState(x.Get(FieldKinds.AlarmCode), seq);
                 else w.Alarms.Remove(target.Id);

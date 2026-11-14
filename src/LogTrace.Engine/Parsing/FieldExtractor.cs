@@ -13,6 +13,8 @@ public static class FieldKinds
     public const string FireDoor = "fireDoor";
     /// <summary>電梯的編號（LOG 樣式待確認，ADR-0005 第 11 點）；不和搬送機共用。</summary>
     public const string Elevator = "elevator";
+    /// <summary>RM 的編號（ADR-0019，#123 使用者決定另設欄位）；不和搬送機（STV）共用。LOG 樣式待確認。</summary>
+    public const string Rm = "rm";
     public const string Storage = "storage";
     public const string Command = "command";
     public const string CommandType = "commandType";
@@ -34,7 +36,7 @@ public static class FieldKinds
     /// <summary>所有欄位種類與中文名稱（依畫面顯示順序）。</summary>
     public static IReadOnlyList<(string Kind, string Label)> All { get; } =
     [
-        (Station, "站點"), (Vehicle, "搬送機"), (Dock, "Conv"), (FireDoor, "防火門"), (Elevator, "電梯"), (Storage, "儲位"),
+        (Station, "站點"), (Vehicle, "搬送機"), (Dock, "Conv"), (FireDoor, "防火門"), (Elevator, "電梯"), (Rm, "RM"), (Storage, "儲位"),
         (Command, "命令"), (CommandType, "命令類型"), (Segment, "段"), (Source, "來源"), (Destination, "目的地"),
         (Pallet, "棧板"), (Bin, "桶"),
         (Signal, "訊號"), (SignalValue, "訊號值"), (StationMode, "站點模式"), (StationStatus, "運轉狀態"),
@@ -42,7 +44,7 @@ public static class FieldKinds
     ];
 
     /// <summary>可以對應到 Layout 元素別名的欄位（ADR-0006 第 2、3 點）。</summary>
-    public static IReadOnlyList<string> Identifiers { get; } = [Station, Vehicle, Dock, FireDoor, Elevator];
+    public static IReadOnlyList<string> Identifiers { get; } = [Station, Vehicle, Dock, FireDoor, Elevator, Rm];
 
     public static bool IsKnown(string kind) => All.Any(k => k.Kind == kind);
 
@@ -90,14 +92,14 @@ public static class EffectKinds
         (StationStatus, "站點運轉狀態（自動／手動等）", [FieldKinds.Station, FieldKinds.StationStatus]),
         (PalletRead, "在站點讀到棧板（與桶）", [FieldKinds.Station, FieldKinds.Pallet]),
         (CommandCreated, "建立命令", [FieldKinds.Command]),
-        (SegmentDispatched, "命令的一段派給搬送機", [FieldKinds.Command, FieldKinds.Vehicle, FieldKinds.Destination]),
+        (SegmentDispatched, "命令的一段派給搬送機或 RM", [FieldKinds.Command, $"{FieldKinds.Vehicle}|{FieldKinds.Rm}", FieldKinds.Destination]),
         (SegmentArrived, "命令的一段抵達目的地", [FieldKinds.Command, FieldKinds.Destination]),
         (SegmentFinished, "命令的一段作業完成（LOG 沒有記錄地點）", [FieldKinds.Command]),
         (CommandCompleted, "命令完成", [FieldKinds.Command]),
         (CommandCancelled, "命令取消（樣式待確認）", [FieldKinds.Command]),
-        (Connection, "搬送機連線狀態或自動／手動", [FieldKinds.Vehicle, $"{FieldKinds.Online}|{FieldKinds.Mode}"]),
-        (AlarmRaised, "警報發生", [$"{FieldKinds.Vehicle}|{FieldKinds.Station}|{FieldKinds.Dock}|{FieldKinds.Elevator}"]),
-        (AlarmCleared, "警報復歸", [$"{FieldKinds.Vehicle}|{FieldKinds.Station}|{FieldKinds.Dock}|{FieldKinds.Elevator}"]),
+        (Connection, "搬送機或 RM 的連線狀態或自動／手動", [$"{FieldKinds.Vehicle}|{FieldKinds.Rm}", $"{FieldKinds.Online}|{FieldKinds.Mode}"]),
+        (AlarmRaised, "警報發生", [$"{FieldKinds.Vehicle}|{FieldKinds.Station}|{FieldKinds.Dock}|{FieldKinds.Elevator}|{FieldKinds.Rm}"]),
+        (AlarmCleared, "警報復歸", [$"{FieldKinds.Vehicle}|{FieldKinds.Station}|{FieldKinds.Dock}|{FieldKinds.Elevator}|{FieldKinds.Rm}"]),
         (FireDoorOpened, "防火門開（樣式待確認）", [FieldKinds.FireDoor]),
         (FireDoorClosed, "防火門關（樣式待確認）", [FieldKinds.FireDoor]),
         (ElevatorDispatched, "命令的一段派給電梯（樣式待確認）", [FieldKinds.Command, FieldKinds.Elevator, FieldKinds.Destination]),

@@ -77,6 +77,10 @@ public sealed partial class LayoutElementViewModel : ObservableObject
     public bool IsFireDoor => Type == LayoutElementType.FireDoor;
     public bool IsRail => Type == LayoutElementType.Rail;
     public bool IsVehicle => Type == LayoutElementType.Vehicle;
+    public bool IsRm => Type == LayoutElementType.Rm;
+
+    /// <summary>可以指定所走的導軌：搬送機（STV）與 RM（ADR-0019）。</summary>
+    public bool CanHaveRail => Type is LayoutElementType.Vehicle or LayoutElementType.Rm;
     public bool IsElevator => Type == LayoutElementType.Elevator;
 
     /// <summary>電梯服務的樓層（ADR-0006 第 15 點）；每次修改整個換掉。電梯不使用 Floor。</summary>
@@ -286,7 +290,7 @@ public sealed partial class LayoutElementViewModel : ObservableObject
             Levels = IsRack ? Levels : null,
             LevelHeight = IsRack ? LevelHeight : null,
             DoorState = IsFireDoor ? DoorState : null,
-            Rail = IsVehicle && !string.IsNullOrEmpty(Rail) ? Rail : null,
+            Rail = CanHaveRail && !string.IsNullOrEmpty(Rail) ? Rail : null,
             Conveyors = IsFireDoor && Conveyors.Count > 0 ? [.. Conveyors] : null,
             Props = PropsModel(),
             Extra = _extra,
@@ -302,7 +306,7 @@ public static class LayoutElementTypes
 {
     public static IReadOnlyList<LayoutElementType> Addable { get; } =
     [
-        LayoutElementType.Station, LayoutElementType.Rack, LayoutElementType.Vehicle, LayoutElementType.Dock,
+        LayoutElementType.Station, LayoutElementType.Rack, LayoutElementType.Vehicle, LayoutElementType.Rm, LayoutElementType.Dock,
         LayoutElementType.FireDoor, LayoutElementType.Elevator, LayoutElementType.Conveyor, LayoutElementType.Rail, LayoutElementType.Area, LayoutElementType.Label,
     ];
 
@@ -354,6 +358,7 @@ public static class LayoutElementTypes
         LayoutElementType.Station => "站點",
         LayoutElementType.Rack => "料架",
         LayoutElementType.Vehicle => "搬送機",
+        LayoutElementType.Rm => "RM",
         LayoutElementType.Dock => "Conv", // 設定檔的 type 仍為 dock（2026-11-14 使用者決定改名）
         LayoutElementType.FireDoor => "防火門",
         LayoutElementType.Rail => "導軌",
@@ -369,6 +374,7 @@ public static class LayoutElementTypes
         LayoutElementType.Station => "st",
         LayoutElementType.Rack => "rk",
         LayoutElementType.Vehicle => "vh",
+        LayoutElementType.Rm => "rm",
         LayoutElementType.Dock => "eq",
         LayoutElementType.FireDoor => "fd",
         LayoutElementType.Rail => "rl",
@@ -385,6 +391,7 @@ public static class LayoutElementTypes
         LayoutElementType.Station => (2, 2, 1.2),
         LayoutElementType.Rack => (12, 1.5, 0),
         LayoutElementType.Vehicle => (2.5, 1.2, 2),
+        LayoutElementType.Rm => (2, 1.2, 12.5), // 與新料架預設的高度相同（5 層 × 2.5 公尺，#123 使用者決定）
         LayoutElementType.Dock => (2, 2, 1.5),
         LayoutElementType.FireDoor => (2, 0.5, 3),
         LayoutElementType.Elevator => (2, 2, 3),

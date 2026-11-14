@@ -26,7 +26,21 @@ public enum LayoutElementType
     Rail,
     /// <summary>電梯（有 LOG 意義，可以有別名）：在樓層之間搬送貨物；和搬送機是不同的種類（ADR-0006 第 15 點）。</summary>
     Elevator,
+    /// <summary>RM（有 LOG 意義，可以有別名，ADR-0019）：只在 Conv 與料架之間搬運；可以指定所走的導軌。</summary>
+    Rm,
 }
+
+/// <summary>雙深料架的深淺（ADR-0019）：離所屬 RM 近的為淺。JSON 中為 shallow、deep。</summary>
+public enum RowDepth
+{
+    Shallow,
+    Deep,
+}
+
+/// <summary>
+/// 排的配置表的一列（ADR-0019 第 3 點，選填）：排號、所屬的 RM（元素 id）；雙深時再填深淺與配對的排號（同一側相鄰、同列同層）。
+/// </summary>
+public sealed record LayoutRow(string Row, string? Rm = null, RowDepth? Depth = null, string? Pair = null);
 
 /// <summary>防火門的開關狀態。JSON 中以小寫英文字串保存（open、closed）。</summary>
 public enum DoorState
@@ -107,7 +121,8 @@ public sealed class LayoutElement
     public Dictionary<string, JsonElement>? Extra { get; set; }
 
     public static bool CanHaveAliases(LayoutElementType type) =>
-        type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Dock or LayoutElementType.FireDoor or LayoutElementType.Elevator;
+        type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Dock or LayoutElementType.FireDoor or LayoutElementType.Elevator
+            or LayoutElementType.Rm;
 
     /// <summary>可以當作輸送線兩端的元素：站點、對接設備、搬送機。</summary>
     public static bool CanBeConveyorEnd(LayoutElementType type) =>
@@ -329,6 +344,9 @@ public sealed class LayoutSection
 
     public List<LayoutElement> Elements { get; set; } = [];
 
+    /// <summary>排的配置表（ADR-0019，選填）；null 或空＝單深、排不屬於任何 RM。</summary>
+    public List<LayoutRow>? Rows { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extra { get; set; }
 }
@@ -343,15 +361,16 @@ public sealed class PlantConfigDocument
     /// <summary>
     /// 程式能讀寫的格式版本。2：輸送線的 bidirectional 與交接點（#63）。3：防火門（舊版程式不認得 fireDoor 這個種類）。
     /// 4：導軌（#100，舊版程式不認得 rail 這個種類）。5：電梯（#102）。6：樓板高度（#113，樓層寫成物件，舊版程式讀不了）。
-    /// 存檔時只寫實際用到的最低版本，讓舊版程式照常開啟（ADR-0006 第 7 點）。
+    /// 7：RM 與排的配置表（#123，ADR-0019）。存檔時只寫實際用到的最低版本，讓舊版程式照常開啟（ADR-0006 第 7 點）。
     /// </summary>
-    public const int CurrentFormatVersion = 6;
+    public const int CurrentFormatVersion = 7;
 
     /// <summary>
-    /// 這份設定需要的格式版本：有填樓板高度時為 6；有電梯時為 5；有導軌時為 4；有防火門時為 3；有雙向或連到搬送機（有交接點）的輸送線時為 2；否則為 1。
+    /// 這份設定需要的格式版本：有 RM 或排的配置表時為 7；有填樓板高度時為 6；有電梯時為 5；有導軌時為 4；有防火門時為 3；有雙向或連到搬送機（有交接點）的輸送線時為 2；否則為 1。
     /// </summary>
     public int RequiredFormatVersion() =>
-        Layout.Floors?.Any(f => f.Height is not null) == true ? 6
+        Layout.Elements.Any(e => e.Type == LayoutElementType.Rm) || Layout.Rows is { Count: > 0 } ? 7
+        : Layout.Floors?.Any(f => f.Height is not null) == true ? 6
         : Layout.Elements.Any(e => e.Type == LayoutElementType.Elevator) ? 5
         : Layout.Elements.Any(e => e.Type == LayoutElementType.Rail) ? 4
         : Layout.Elements.Any(e => e.Type == LayoutElementType.FireDoor) ? 3

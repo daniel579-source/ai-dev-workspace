@@ -521,6 +521,7 @@
                                         <ListView.View>
                                             <GridView>
                                                 <GridViewColumn Header="層" DisplayMemberBinding="{Binding Level}" Width="40" />
+                                                <GridViewColumn Header="深淺" DisplayMemberBinding="{Binding Depth}" Width="40" />
                                                 <GridViewColumn Header="儲位" DisplayMemberBinding="{Binding StorageCode}" Width="80" />
                                                 <GridViewColumn Header="棧板" DisplayMemberBinding="{Binding Content}" Width="110" />
                                                 <GridViewColumn Header="造成這個狀態的事件" Width="260">

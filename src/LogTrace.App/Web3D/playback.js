@@ -27,6 +27,14 @@ function applyState(state) {
         if (s.x != null && s.y != null) item.group.position.set(s.x, item.group.position.y, s.y);
         else item.group.position.set(e.x + e.w / 2, item.group.position.y, e.y + e.h / 2);
         break;
+      case 'rm':
+        // RM（ADR-0019）：沿導軌的位置與載貨台高度都是推估
+        setColor(item.body, color, faded);
+        item.cargo.visible = !!s.loaded;
+        if (s.x != null && s.y != null) item.group.position.set(s.x, item.group.position.y, s.y);
+        else item.group.position.set(e.x + e.w / 2, item.group.position.y, e.y + e.h / 2);
+        item.carriage.position.y = item.baseH + 0.05 + Math.min(Math.max(s.lift ?? 0, 0), Math.max(e.height - 1.2, 0));
+        break;
       case 'elevator': {
         setColor(item.body, color, faded);
         item.cargo.visible = !!s.loaded;
@@ -64,7 +72,7 @@ function applyState(state) {
     }
     if (item.label) {
       const l = item.label;
-      l.name.textContent = (s.badge ? `[${s.badge}] ` : '') + e.name + (s.inconsistent ? ' ⚠' : '') + (s.estimated && e.type === 'vehicle' ? '（推估位置）' : '');
+      l.name.textContent = (s.badge ? `[${s.badge}] ` : '') + e.name + (s.inconsistent ? ' ⚠' : '') + (s.estimated && (e.type === 'vehicle' || e.type === 'rm') ? '（推估位置）' : '');
       l.summary.textContent = s.summary || '';
       l.div.title = s.inconsistent ? '不一致（點選看詳細）' : '';
       l.div.classList.toggle('alarm', s.look === 'alarm');

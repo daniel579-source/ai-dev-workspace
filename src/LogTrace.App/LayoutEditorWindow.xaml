@@ -269,7 +269,7 @@
                         </StackPanel>
 
                         <!-- 搬送機所走的導軌（ADR-0006 第 14 點）：只列同一層的導軌 -->
-                        <DockPanel Visibility="{Binding IsVehicle, Converter={StaticResource Visible}}">
+                        <DockPanel Visibility="{Binding CanHaveRail, Converter={StaticResource Visible}}">
                             <TextBlock Text="導軌" Style="{StaticResource Field}" />
                             <Button DockPanel.Dock="Right" Content="×" Padding="6,0" Margin="4,0,0,0" ToolTip="清除導軌指定"
                                     Command="{Binding DataContext.ClearVehicleRailCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
@@ -397,6 +397,31 @@
                             <TextBlock Text="高度（m）" Style="{StaticResource Field}" />
                             <TextBox Text="{Binding Height}" />
                         </DockPanel>
+
+                        <!-- RM 負責的排（排的配置表，ADR-0019）：雙深時填深淺與配對的排 -->
+                        <StackPanel Visibility="{Binding IsRm, Converter={StaticResource Visible}}" Margin="0,4,0,0">
+                            <TextBlock Text="負責的排（排的配置表；單深只填排號）" Foreground="#555" Margin="0,2" />
+                            <ItemsControl ItemsSource="{Binding DataContext.RmRows, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          AutomationProperties.AutomationId="RmRows">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel Margin="0,1">
+                                            <Button DockPanel.Dock="Right" Content="×" Padding="4,0" Margin="4,0,0,0" ToolTip="刪除這一排"
+                                                    Command="{Binding DataContext.RemoveRmRowCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
+                                            <TextBlock Text="排" VerticalAlignment="Center" Margin="0,0,2,0" />
+                                            <TextBox Text="{Binding Row, UpdateSourceTrigger=PropertyChanged}" Width="36" AutomationProperties.AutomationId="RmRowNumber" />
+                                            <ComboBox ItemsSource="{Binding DataContext.RowDepthChoices, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                      SelectedItem="{Binding Depth}" Width="56" Margin="4,0,0,0" AutomationProperties.AutomationId="RmRowDepth" />
+                                            <TextBlock Text="配對" VerticalAlignment="Center" Margin="6,0,2,0" />
+                                            <TextBox Text="{Binding Pair, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="RmRowPair" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Content="＋ 新增一排" HorizontalAlignment="Left" Padding="6,1" Margin="0,2,0,0"
+                                    Command="{Binding DataContext.AddRmRowCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    AutomationProperties.AutomationId="AddRmRow" />
+                        </StackPanel>
 
                         <!-- 料架 -->
                         <StackPanel Visibility="{Binding IsRack, Converter={StaticResource Visible}}">

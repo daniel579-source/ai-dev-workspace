@@ -60,7 +60,9 @@ public sealed partial class MainViewModel
         KnowledgeIssues.Clear();
         if (_case is { } c)
         {
-            _knowledgePath = KnowledgeBase.PathFor(c.Info.Plant.Name, c.PlantSnapshotSource, new PlantConfigLibrary(_plantsRoot));
+            var plantPath = KnowledgeBase.PlantConfigPathFor(c.Info.Plant.Name, c.PlantSnapshotSource, new PlantConfigLibrary(_plantsRoot));
+            _knowledgePath = plantPath is null ? null : KnowledgeBase.PathBeside(plantPath);
+            Incidents.Open(plantPath, c.Info.Plant.Name, c.Info.Name); // 異常紀錄與知識庫放在同一個廠別設定檔旁邊（ADR-0016 第 4 點）
             try
             {
                 _knowledge = _knowledgePath is null ? null : KnowledgeBase.Load(_knowledgePath);
@@ -71,6 +73,7 @@ public sealed partial class MainViewModel
             }
             foreach (var issue in _knowledge?.Issues ?? []) KnowledgeIssues.Add($"第 {issue.Line} 行：{issue.Reason}");
         }
+        else Incidents.Close();
         ShowKnowledge(_knowledge?.Search(KnowledgeQuery) ?? []);
         UpdateKnowledgeStatus();
         ReloadKnowledgeCommand.NotifyCanExecuteChanged();

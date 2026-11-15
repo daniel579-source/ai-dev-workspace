@@ -15,7 +15,7 @@ LogTrace 發佈資料夾中包含下列第三方元件。授權全文在 `licens
 | Squid-Box.SevenZipSharp.Lite | 1.6.2.24 | 呼叫 7-Zip 解開壓縮檔 | LGPL-3.0-only | `licenses\SevenZipSharp-LGPL-3.0.txt`（LGPL-3.0 以 GPL-3.0 為基礎：`licenses\GPL-3.0.txt`） |
 | 7-Zip（`7z\7za.dll`，來自 7z.Libs 26.4.0） | 26.04 | 解開 7z／zip | GNU LGPL（部分程式碼為 BSD 3-clause、BSD 2-clause） | `licenses\7-Zip-7za-License.txt`（另有一份在 `7z\License.txt`） |
 | Microsoft.Web.WebView2（`Microsoft.Web.WebView2.Core.dll`、`.Wpf.dll`、`.WinForms.dll`、`WebView2Loader.dll`） | 1.0.4314.35 | 在 WPF 中內嵌瀏覽器元件（3D 回放，ADR-0017） | BSD 3-Clause 形式的 Microsoft 授權；第三方聲明見 NOTICE | `licenses\Microsoft.Web.WebView2-LICENSE.txt`、`licenses\Microsoft.Web.WebView2-NOTICE.txt` |
-| Microsoft Edge WebView2 Runtime（固定版本，`WebView2Runtime\`） | 157.0.4341.60 | 3D 回放的瀏覽器引擎（隨程式打包，ADR-0017 第 2 點） | Microsoft 的 WebView2 Runtime 授權條款；散布方式見 <https://learn.microsoft.com/microsoft-edge/webview2/concepts/distribution>（**散布條款待確認**）。內含的 Chromium 等開放原始碼元件授權，可執行 `WebView2Runtime\show_third_party_software_licenses.bat` 查看 | — |
+| Microsoft Edge WebView2 Runtime（固定版本，`WebView2Runtime\`） | 157.0.4341.60 | 3D 回放與 Layout 編輯器的瀏覽器引擎（隨程式打包，ADR-0017 第 2 點） | Microsoft Software License Terms – Microsoft Edge WebView2 Runtime（第 2 節允許隨應用程式散布目的碼，須符合 2(b) 的要求）；內含的 Chromium 等開放原始碼元件授權，可執行 `WebView2Runtime\show_third_party_software_licenses.bat` 查看 | `licenses\Microsoft-Edge-WebView2-Runtime-License.txt` |
 | three.js（`web3d\vendor\three\`：three.module.js、three.core.js、OrbitControls.js、CSS2DRenderer.js） | 0.187.0 | 3D 繪製（回放 ADR-0017、Layout 編輯器 ADR-0018） | MIT | `licenses\three.js-LICENSE.txt` |
 
 ## 說明
@@ -23,6 +23,8 @@ LogTrace 發佈資料夾中包含下列第三方元件。授權全文在 `licens
 - **LGPL 元件**（SevenZipSharp、7-Zip）以獨立的 DLL 動態載入，沒有修改；使用者可以自行替換為相容的版本。原始碼：SevenZipSharp <https://github.com/squid-box/SevenZipSharp>、7-Zip <https://www.7-zip.org/>。
 - 只發佈 7-Zip 的 `7za.dll`，不包含有 unRAR 授權限制的 `7z.dll`。
 - 測試用的元件（xUnit、FlaUI 等）不在發佈資料夾中，不列入本清單。
-- **WebView2 Runtime** 是 Microsoft 的固定版本 Runtime（.cab 解開，未修改），程式只使用這一份；安全性修正要靠重新發佈程式（ADR-0017 尚存風險）。
+- **WebView2 Runtime** 是 Microsoft 的固定版本 Runtime（.cab 解開，未修改），直接從 Microsoft 下載站取得並確認數位簽章，程式只使用這一份；安全性修正要靠重新發佈程式（ADR-0017 尚存風險）。授權條款全文取自 <https://developer.microsoft.com/microsoft-edge/api/eula/webview2>（2026-11-15）。
+  - 程式已停用 SmartScreen（`IsReputationCheckingRequired = false`，並以瀏覽器參數關閉），因此不需要條款第 9(a) 節的 SmartScreen 通知；網路一律封鎖，Runtime 無法傳送資料。
+  - 條款第 2(b)(ii) 節要求「散布者與外部終端使用者」同意至少同等保護 Microsoft 的條款；本程式目前只在公司內部使用，是否需要另外提供終端使用者條款，以及第 2(b)(iv) 節的賠償責任，**待法務確認**（ADR-0017 待確認）。
 - three.js 的檔案取自 npm 套件 `three@0.187.0`，未修改。
 - 本清單由 `dotnet list package --include-transitive` 的結果與各套件的授權宣告整理（2026-10-16，#29；2026-11-14 加入 WebView2 與 three.js，#113）。新增或升級套件時要同步更新。

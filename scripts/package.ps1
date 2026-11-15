@@ -27,7 +27,7 @@ if ($LASTEXITCODE -ne 0) { throw "dotnet publish 失敗（$LASTEXITCODE）" }
 # 3D 回放與 Layout 編輯器（ADR-0017、ADR-0018）：WebView2 Runtime、網頁與 three.js、授權
 foreach ($f in 'LogTrace.exe', '7z/7za.dll', '7z/License.txt', '使用說明.md', 'THIRD-PARTY-NOTICES.md', 'licenses/Apache-2.0.txt', 'licenses/AvalonDock-LICENSE.txt',
                'WebView2Loader.dll', 'WebView2Runtime/msedgewebview2.exe', 'web3d/index.html', 'web3d/editor.html', 'web3d/common.js', 'web3d/vendor/three/three.module.js',
-               'licenses/three.js-LICENSE.txt', 'licenses/Microsoft.Web.WebView2-LICENSE.txt') {
+               'licenses/three.js-LICENSE.txt', 'licenses/Microsoft.Web.WebView2-LICENSE.txt', 'licenses/Microsoft-Edge-WebView2-Runtime-License.txt') {
     if (-not (Test-Path (Join-Path $folder $f))) { throw "發佈資料夾缺少 $f" }
 }
 # 不得包含有 unRAR 授權限制的 7z.dll

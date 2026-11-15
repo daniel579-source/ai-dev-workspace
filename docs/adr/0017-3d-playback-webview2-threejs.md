@@ -114,7 +114,12 @@
 
 ## 待確認
 
-1. WebView2 固定版本 Runtime 的**散布條款**：大小已量測（第 11 點）；授權條款全文尚未取得，`THIRD-PARTY-NOTICES.md` 暫附 Microsoft 的散布說明連結，標示待確認。
+1. WebView2 固定版本 Runtime 的**散布條款**（2026-11-15 取得並核對）：條款全文存於 `licenses\Microsoft-Edge-WebView2-Runtime-License.txt`（來源 developer.microsoft.com 的 EULA）。對照結果：
+   - 第 2(a) 節允許隨應用程式散布目的碼；我們散布未修改的 Runtime（符合）。
+   - 第 2(b)(i) 在應用程式中加入重要的主要功能（符合）；2(b)(iii) 直接從 Microsoft 取得（符合，下載站並確認數位簽章）。
+   - 第 2(c)、4(c)、4(e)：不使用 Microsoft 商標暗示背書、不移除聲明、不單獨提供 Runtime（符合）。
+   - 第 3(b)、9(a) 節 SmartScreen 通知：程式已停用 SmartScreen，不需要通知（符合）；網路封鎖，Runtime 無法傳送資料（第 3(a) 節）。
+   - **待法務確認**：第 2(b)(ii) 節「散布者與外部終端使用者須同意至少同等保護 Microsoft 的條款」——目前只在公司內部使用，是否需要另外提供終端使用者條款；第 2(b)(iv) 節的賠償責任；第 4(e) 節與第 2 節散布權的關係（一般解讀為第 2 節是例外）。
 2. ~~three.js 採用的版本~~：0.187.0（第 11 點）。
 3. ~~樓板高度的欄位名稱與格式版本~~：見 ADR-0006 第 13 點。
 4. ~~2D 檢視設定的處理~~：第 11 點。

@@ -131,11 +131,16 @@ public sealed class PlaybackViewModelTests : IDisposable
     }
 
     [Fact]
-    public async Task 對接設備顯示已交出的棧板()
+    public async Task 對接設備_抵達後等待完成回報_收到完成回報後顯示已交出的棧板()
     {
         await OpenPrototypeCase();
         MoveTo("00040002 第2段 抵達 EQ901");
+        P.SelectElementCommand.Execute(El("eq-1"));
+        Assert.Equal("等待完成回報 1", El("eq-1").Summary);
+        Assert.Equal(ElementLook.Occupied, El("eq-1").Look);
+        Assert.Contains(P.Detail, d => d.Label == "等待完成回報" && d.Value.StartsWith("PLT-EX-0002"));
 
+        MoveTo("完成回報 00040002");
         P.SelectElementCommand.Execute(El("eq-1"));
 
         Assert.Equal("已交出 1", El("eq-1").Summary);

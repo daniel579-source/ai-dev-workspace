@@ -172,7 +172,7 @@ public sealed class WorldModel
             {
                 LayoutElementType.Station => (LocationKind.Station, e.Id),
                 LayoutElementType.Vehicle or LayoutElementType.Rm => (LocationKind.Vehicle, e.Id),
-                LayoutElementType.Dock => (LocationKind.Delivered, e.Id),
+                LayoutElementType.Dock => (LocationKind.AtDock, e.Id),
                 _ => (LocationKind.Unknown, code),
             };
         return StorageCode.TryParse(_storageRule, code, out _) ? (LocationKind.Storage, code) : (LocationKind.Unknown, code);
@@ -209,7 +209,7 @@ public sealed class WorldModel
 
     /// <summary>位置對應到的 Layout 元素 id（站點、搬送機、已交出的對接設備）；儲位與不明為 null。</summary>
     static string? ElementAt(LocationKind kind, string? id) =>
-        kind is LocationKind.Station or LocationKind.Vehicle or LocationKind.Delivered ? id : null;
+        kind is LocationKind.Station or LocationKind.Vehicle or LocationKind.AtDock or LocationKind.Delivered ? id : null;
 
     /// <summary>防火門在此刻是否關著：LOG 確定的狀態優先，沒有 LOG 事件時用平時狀態（推估）。</summary>
     public static bool IsClosed(WorldState w, string doorId, DoorState? usual) =>
@@ -335,8 +335,8 @@ public sealed class WorldModel
                     : c.Pallet is { } pid && w.Pallets.TryGetValue(pid, out var known) ? known : null;
                 if (p is not null) MovePallet(w, p, kind, at, seq);
                 if (kind == LocationKind.Station) StationOf(w, at);
-                (c.Status, c.StatusCause, c.Segment) = (kind == LocationKind.Delivered ? CommandStatus.Delivered : CommandStatus.SegmentArrived, seq,
-                    ParseInt(x.Get(FieldKinds.Segment)) ?? c.Segment);
+                (c.Status, c.StatusCause, c.Segment, c.ArrivedDock) = (CommandStatus.SegmentArrived, seq,
+                    ParseInt(x.Get(FieldKinds.Segment)) ?? c.Segment, kind == LocationKind.AtDock ? at : null);
                 var vh = Carrier() ?? c.Vehicle;
                 if (vh is not null)
                 {
@@ -377,8 +377,15 @@ public sealed class WorldModel
             }
             case EffectKinds.CommandCompleted when x.Get(FieldKinds.Command) is { } id:
             {
+                // 交給對接設備並收到完成回報時，才標示「已交出」（ADR-0005 第 2 點）
                 var c = CommandOf(w, id, seq);
-                if (c.Status != CommandStatus.Delivered) (c.Status, c.StatusCause) = (CommandStatus.Completed, seq);
+                if (c.Status == CommandStatus.SegmentArrived && c.ArrivedDock is { } dock)
+                {
+                    (c.Status, c.StatusCause) = (CommandStatus.Delivered, seq);
+                    if (c.Pallet is { } pid && w.Pallets.TryGetValue(pid, out var p) && p.Location == LocationKind.AtDock && p.LocationId == dock)
+                        MovePallet(w, p, LocationKind.Delivered, dock, seq);
+                }
+                else if (c.Status != CommandStatus.Delivered) (c.Status, c.StatusCause) = (CommandStatus.Completed, seq);
                 break;
             }
             case EffectKinds.Connection when Carrier() is { } vh:
@@ -410,8 +417,8 @@ public sealed class WorldModel
                 var (kind, at) = Locate(dest);
                 if (c.Pallet is { } pid && w.Pallets.TryGetValue(pid, out var p)) MovePallet(w, p, kind, at, seq);
                 if (kind == LocationKind.Station) StationOf(w, at);
-                (c.Status, c.StatusCause, c.Segment) = (kind == LocationKind.Delivered ? CommandStatus.Delivered : CommandStatus.SegmentArrived, seq,
-                    ParseInt(x.Get(FieldKinds.Segment)) ?? c.Segment);
+                (c.Status, c.StatusCause, c.Segment, c.ArrivedDock) = (CommandStatus.SegmentArrived, seq,
+                    ParseInt(x.Get(FieldKinds.Segment)) ?? c.Segment, kind == LocationKind.AtDock ? at : null);
                 if (ev is not null)
                 {
                     var e = ElevatorOf(w, ev);

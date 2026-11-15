@@ -735,10 +735,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         var presence = c.Info.Plant.PresenceSignal;
         var model = await Task.Run(() => new WorldModel(effects, doc.Layout, presence));
+        // 可能卡住（推估，ADR-0005 第 5 點 2026-11-16 補充，#142）
+        var stalls = rows.Count == 0 ? [] : await Task.Run(() =>
+        {
+            var times = rows.ToDictionary(r => r.Sequence, r => r.Event.Timestamp);
+            return Stalls.Find(model, s => times.TryGetValue(s, out var t) ? t : null, rows[^1].Event.Timestamp, doc.EffectiveStallThresholdSeconds, gaps);
+        });
         var hasStateRules = c.Info.Plant.ParseRules.Any(r => r.Effect is { } e && e != EffectKinds.Signal);
-        Playback.Load(model, doc.Layout, rows.Select(r => r.Event).ToList(), hasStateRules, doc.StationModeNames);
+        Playback.Load(model, doc.Layout, rows.Select(r => r.Event).ToList(), hasStateRules, doc.StationModeNames, stalls);
         var names = doc.Layout.Elements.ToDictionary(e => e.Id, e => e.Name ?? e.Id);
-        LoadMoment(changes, model.AlarmPeriods().Select(a => ($"{names.GetValueOrDefault(a.ElementId, a.ElementId)} {a.Code}", a.StartSequence, a.EndSequence)), gaps);
+        LoadMoment(changes, model.AlarmPeriods().Select(a => ($"{names.GetValueOrDefault(a.ElementId, a.ElementId)} {a.Code}", a.StartSequence, a.EndSequence)), gaps, stalls);
     }
 
     static (List<string> Modules, List<EventRowViewModel> Rows) LoadAll(Case c, TextMasker masker)

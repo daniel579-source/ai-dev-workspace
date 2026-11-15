@@ -2,6 +2,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LogTrace.Engine.Events;
+using LogTrace.Engine.Playback;
 using LogTrace.Workspace.Playback;
 
 namespace LogTrace.Workspace;
@@ -115,10 +116,11 @@ public sealed partial class MainViewModel
     }
 
     /// <summary>載入案件後：狀態變化的事件與時間軸。</summary>
-    void LoadMoment(IReadOnlyList<long> changes, IEnumerable<(string Label, long Start, long? End)> alarms, IEnumerable<LogGap> gaps)
+    void LoadMoment(IReadOnlyList<long> changes, IEnumerable<(string Label, long Start, long? End)> alarms, IEnumerable<LogGap> gaps,
+        IEnumerable<Stall>? stalls = null)
     {
         _changes = changes.Distinct().Order().ToArray();
-        Timeline.Load(_allRows, _changes, alarms, Modules.ToList(), gaps);
+        Timeline.Load(_allRows, _changes, alarms, Modules.ToList(), gaps, stalls);
         LoadCommands();
         IsPlaying = false;
         FocusedElement = null;

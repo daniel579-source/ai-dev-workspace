@@ -157,6 +157,10 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     [ObservableProperty]
     public partial string? InconsistentText { get; set; }
 
+    /// <summary>可能卡住（推估，ADR-0005 第 5 點 2026-11-16 補充，#142）：貨物在這個元素上卡住（命令沒有下一步或站點沒有派送）。</summary>
+    [ObservableProperty]
+    public partial bool IsStalled { get; set; }
+
     /// <summary>防火門的狀態是推估（還沒有 LOG 事件，用 Layout 的平時狀態）；畫面以虛線框表示。</summary>
     [ObservableProperty]
     public partial bool IsEstimated { get; set; }
@@ -185,6 +189,9 @@ public sealed partial class PlaybackViewModel : ObservableObject
 {
     WorldModel? _model;
     VehicleMotion? _motion;
+    IReadOnlyList<Stall> _stalls = [];
+    /// <summary>目前時刻的可能卡住：元素 id → 卡住的時段（含與沒有 LOG 重疊而不判定的）。</summary>
+    Dictionary<string, List<Stall>> _stallsNow = new(StringComparer.Ordinal);
 
     /// <summary>世界模型；沒有 Layout 時為 null。</summary>
     public WorldModel? Model => _model;
@@ -245,6 +252,8 @@ public sealed partial class PlaybackViewModel : ObservableObject
     public void Clear(string message)
     {
         _model = null;
+        _stalls = [];
+        _stallsNow.Clear();
         _state = new();
         Scene = SceneLayout.Empty;
         SceneNow = SceneState.Empty;
@@ -260,9 +269,10 @@ public sealed partial class PlaybackViewModel : ObservableObject
 
     /// <summary>載入 Layout 與世界模型；events 用來顯示造成狀態的事件。</summary>
     public void Load(WorldModel model, LayoutSection layout, IReadOnlyList<LogEvent> events, bool hasStateRules,
-        IReadOnlyList<KeyValuePair<string, string>>? stationModeNames = null)
+        IReadOnlyList<KeyValuePair<string, string>>? stationModeNames = null, IReadOnlyList<Stall>? stalls = null)
     {
         _model = model;
+        _stalls = stalls ?? [];
         _stationModeNames = (stationModeNames ?? []).GroupBy(p => p.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Value, StringComparer.Ordinal);
         _storageRule = layout.StorageCodeRule;
         _events = events.ToDictionary(e => e.Sequence);
@@ -290,7 +300,12 @@ public sealed partial class PlaybackViewModel : ObservableObject
         MomentText = sequence == 0 || !_events.TryGetValue(sequence, out var e)
             ? "案件開始（所有元素都是未知）"
             : $"{e.Timestamp:yyyy-MM-dd HH:mm:ss.ffff}　事件 #{sequence}";
-        foreach (var el in Elements) Update(el);
+        UpdateStallsNow();
+        foreach (var el in Elements)
+        {
+            Update(el);
+            el.IsStalled = _stallsNow.TryGetValue(el.Id, out var stalls) && stalls.Any(s => !s.OverlapsNoLog);
+        }
         UpdateConveyorBlocks();
         UpdateDetail();
         UpdateSideView();
@@ -553,6 +568,40 @@ public sealed partial class PlaybackViewModel : ObservableObject
             Detail.Add(Line("異常中", $"警報 {alarm.Code}" + (_model.IsAlarmNeverReset(el.Id, alarm) ? "（未見復歸紀錄）" : ""), alarm.Cause));
         foreach (var c in w.Commands.Values.Where(c => c.Vehicle == el.Id && !c.IsFinished))
             Detail.Add(Line("命令", CommandText(c), c.StatusCause));
+        foreach (var s in _stallsNow.GetValueOrDefault(el.Id) ?? [])
+            Detail.Add(s.OverlapsNoLog
+                ? Line("超過門檻", $"{s.Reason}；這段時間有模組沒有 LOG，不判定為可能卡住（可能只是 LOG 缺漏）", s.LastSequence)
+                : Line("可能卡住", $"推估：{s.Reason}（LOG 沒有記錄卡住，不推測原因）", s.LastSequence));
+    }
+
+    /// <summary>目前時刻的可能卡住，依貨物所在的元素整理（#142）。</summary>
+    void UpdateStallsNow()
+    {
+        _stallsNow = new(StringComparer.Ordinal);
+        if (_momentTime is not { } now) return;
+        foreach (var s in _stalls.Where(s => s.IsActiveAt(now)))
+            if (StallElement(s) is { } id)
+            {
+                if (!_stallsNow.TryGetValue(id, out var list)) _stallsNow[id] = list = [];
+                list.Add(s);
+            }
+    }
+
+    /// <summary>
+    /// 卡住的標記放在哪個元素（Jev 0.88）：棧板當時所在的元素（站點、搬送機、電梯、對接設備；在儲位時為該儲位的料架）；
+    /// 沒有棧板或位置不明時，放在執行這個命令的搬送機。
+    /// </summary>
+    string? StallElement(Stall s)
+    {
+        var w = _state;
+        if (s.Pallet is { } pid && w.Pallets.TryGetValue(pid, out var p))
+        {
+            if (p.Location is LocationKind.Station or LocationKind.Vehicle or LocationKind.Elevator or LocationKind.AtDock or LocationKind.Delivered)
+                return p.LocationId;
+            if (p.Location == LocationKind.Storage && p.LocationId is { } code && StorageCode.TryParse(_storageRule, code, out var at))
+                return Elements.FirstOrDefault(e => e.IsRack && e.Model.Row == at.Row && e.Model.ColFrom <= at.Column && at.Column <= e.Model.ColTo)?.Id;
+        }
+        return s.Command is { } cmd && w.Commands.TryGetValue(cmd, out var c) ? c.Vehicle : null;
     }
 
     string PalletText(PalletState p) =>
@@ -604,7 +653,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
     void UpdateEquipment()
     {
         var rows = Elements.Where(e => e.Type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Rm or LayoutElementType.Dock or LayoutElementType.FireDoor or LayoutElementType.Elevator)
-            .Select(e => new EquipmentRowViewModel(e.Id, e.Name, e.TypeLabel, e.Aliases, EquipmentState(e), _state.Alarms.ContainsKey(e.Id) || e.IsInconsistent, e.Look,
+            .Select(e => new EquipmentRowViewModel(e.Id, e.Name, e.TypeLabel, e.Aliases, EquipmentState(e), _state.Alarms.ContainsKey(e.Id) || e.IsInconsistent || e.IsStalled, e.Look,
                 e.IsElevator ? e.CurrentFloorText ?? "—" : e.Floor))
             .Where(r => !OnlyAbnormal || r.IsAbnormal);
         Func<EquipmentRowViewModel, string> key = SortBy switch
@@ -626,6 +675,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
         var parts = new List<string>();
         if (w.Alarms.TryGetValue(e.Id, out var alarm))
             parts.Add($"異常中（警報 {alarm.Code}{(_model?.IsAlarmNeverReset(e.Id, alarm) == true ? "，未見復歸紀錄" : "")}）");
+        if (e.IsStalled) parts.Add("可能卡住（推估）");
         switch (e.Type)
         {
             case LayoutElementType.Station:

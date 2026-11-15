@@ -17,6 +17,8 @@ public sealed class TimelineCanvas : FrameworkElement
     static readonly Brush Background = Freeze(0xF8FAFC);
     static readonly Brush DensityBrush = Freeze(0x94A3B8);
     static readonly Brush AlarmBrush = new SolidColorBrush(Color.FromArgb(0x70, 0xDC, 0x26, 0x26));
+    // 可能卡住（推估，#142）：和警報同一列，橘色
+    static readonly Brush StallBrush = new SolidColorBrush(Color.FromArgb(0x80, 0xF5, 0x9E, 0x0B));
     static readonly Pen UncertainPen = new(Freeze(0xB45309), 1);
     static readonly Pen SearchPen = new(Freeze(0xEAB308), 2);
     static readonly Pen CursorPen = new(Brushes.Black, 2);
@@ -106,7 +108,7 @@ public sealed class TimelineCanvas : FrameworkElement
             dc.DrawRectangle(GapBrush, null, new Rect(gap.From * w, GapTop + gap.Row * GapRowStep, Math.Max(2, (gap.To - gap.From) * w), GapRowHeight));
         // 警報期間（紅色區段）
         foreach (var span in t.AlarmSpans)
-            dc.DrawRectangle(AlarmBrush, null, new Rect(span.From * w, 0, Math.Max(2, (span.To - span.From) * w), 8));
+            dc.DrawRectangle(span.Stalled ? StallBrush : AlarmBrush, null, new Rect(span.From * w, 0, Math.Max(2, (span.To - span.From) * w), 8));
         // 時間不確定的位置
         foreach (var f in t.UncertainMarks) dc.DrawLine(UncertainPen, new Point(f * w, h - 6), new Point(f * w, h));
         // 搜尋符合的位置
@@ -137,12 +139,15 @@ public sealed class TimelineCanvas : FrameworkElement
         else if (!IsDetail) UpdateGapToolTip(e.GetPosition(this).X);
     }
 
-    /// <summary>滑鼠在沒有 LOG 的時段上時，提示改為模組、起訖與長度（#84）。</summary>
+    /// <summary>滑鼠在沒有 LOG 的時段或可能卡住的時段上時，提示改為說明（#84、#142）。</summary>
     void UpdateGapToolTip(double x)
     {
         _defaultToolTip ??= ToolTip;
-        var gaps = Timeline is { HasData: true } t && ActualWidth > 0 ? t.GapsAtPosition(x / ActualWidth) : [];
-        object? tip = gaps.Count == 0 ? _defaultToolTip : string.Join("\n", gaps.Select(TimelineViewModel.Describe));
+        var lines = Timeline is { HasData: true } t && ActualWidth > 0
+            ? t.StallsAtPosition(x / ActualWidth).Select(TimelineViewModel.Describe)
+                .Concat(t.GapsAtPosition(x / ActualWidth).Select(TimelineViewModel.Describe)).ToList()
+            : [];
+        object? tip = lines.Count == 0 ? _defaultToolTip : string.Join("\n", lines);
         if (!Equals(ToolTip, tip)) ToolTip = tip;
     }
 

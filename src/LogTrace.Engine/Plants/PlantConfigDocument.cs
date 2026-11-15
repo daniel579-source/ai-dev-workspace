@@ -406,6 +406,15 @@ public sealed class PlantConfigDocument
     /// </summary>
     public List<KeyValuePair<string, int>> GapThresholds { get; set; } = [];
 
+    /// <summary>
+    /// 可能卡住的門檻秒數（ADR-0005 第 5 點 2026-11-16 補充，#142）：命令某一段或站點讀到棧板後，超過這麼久沒有下一步時標示「可能卡住（推估）」。
+    /// null 表示預設 300 秒；0 表示不判定。舊版程式不認得這個欄位時略過，不影響開啟，所以不升格式版本。
+    /// </summary>
+    public int? StallThresholdSeconds { get; set; }
+
+    /// <summary>實際使用的可能卡住門檻秒數。</summary>
+    public int EffectiveStallThresholdSeconds => StallThresholdSeconds ?? Playback.Stalls.DefaultThresholdSeconds;
+
     /// <summary>個人資料的遮罩規則（正規表示式，ADR-0009 第 1 點）。</summary>
     public List<string> MaskPatterns { get; set; } = [.. Search.TextMasker.DefaultPatterns];
 

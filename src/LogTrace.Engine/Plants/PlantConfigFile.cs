@@ -176,6 +176,9 @@ public static class PlantConfigFile
         foreach (var module in doc.GapThresholds.Select(p => p.Key.Trim()).Where(m => m.Length > 0 && !modules.Contains(m)).Distinct(StringComparer.OrdinalIgnoreCase))
             issues.Add(new($"沒有 LOG 的門檻的模組「{module}」不在模組順序中，請從模組順序中選擇。", []));
 
+        if (doc.StallThresholdSeconds is < 0)
+            issues.Add(new("可能卡住的門檻必須是 0 以上的整數秒（0 表示不判定）。", []));
+
         foreach (var pattern in doc.MaskPatterns)
             if (Search.TextMasker.Check(pattern) is { } problem) issues.Add(new(problem, []));
 

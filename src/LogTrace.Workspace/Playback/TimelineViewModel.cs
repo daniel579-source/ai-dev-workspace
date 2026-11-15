@@ -1,4 +1,5 @@
 using LogTrace.Engine.Events;
+using LogTrace.Engine.Playback;
 
 namespace LogTrace.Workspace.Playback;
 
@@ -8,8 +9,8 @@ namespace LogTrace.Workspace.Playback;
 /// <param name="ModuleIndex">模組在案件模組順序中的位置（決定顏色）。</param>
 public readonly record struct TimelineTick(double Fraction, bool IsChange, int ModuleIndex);
 
-/// <summary>時間軸總覽上的一段警報期間（位置為 0～1）。</summary>
-public readonly record struct TimelineSpan(double From, double To, string Label, bool NeverReset);
+/// <summary>時間軸總覽上的一段警報期間（位置為 0～1）；Stalled 為「可能卡住（推估）」的時段（和警報同一列，以不同顏色區分，#142）。</summary>
+public readonly record struct TimelineSpan(double From, double To, string Label, bool NeverReset, bool Stalled = false);
 
 /// <summary>時間軸總覽上，一個模組沒有 LOG 的時段（位置為 0～1；Row 為模組的列）。</summary>
 public readonly record struct TimelineGap(int Row, double From, double To, LogGap Gap);
@@ -57,6 +58,9 @@ public sealed class TimelineViewModel
     /// <summary>各模組沒有 LOG 的時段（FR-037）。</summary>
     public IReadOnlyList<TimelineGap> Gaps { get; private set; } = [];
 
+    /// <summary>可能卡住（推估）的時段，含與沒有 LOG 重疊而不判定的（滑鼠提示用，#142）。</summary>
+    public IReadOnlyList<Stall> Stalls { get; private set; } = [];
+
     /// <summary>目前時刻在總覽上的位置。</summary>
     public double Cursor { get; private set; }
 
@@ -74,6 +78,7 @@ public sealed class TimelineViewModel
         DetailTicks = [];
         GapRows = [];
         Gaps = [];
+        Stalls = [];
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -82,9 +87,10 @@ public sealed class TimelineViewModel
     /// <param name="alarms">警報期間（開始與結束的事件序號；沒有復歸時結束為 null）。</param>
     /// <param name="modules">案件的模組（依模組順序），每個模組一列。</param>
     /// <param name="gaps">沒有 LOG 的時段（LogGaps.Find）。</param>
+    /// <param name="stalls">可能卡住的時段（Stalls.Find）；與沒有 LOG 重疊的不畫，只在滑鼠提示中說明。</param>
     public void Load(IReadOnlyList<EventRowViewModel> rows, IEnumerable<long> changes,
         IEnumerable<(string Label, long Start, long? End)> alarms,
-        IReadOnlyList<string>? modules = null, IEnumerable<LogGap>? gaps = null)
+        IReadOnlyList<string>? modules = null, IEnumerable<LogGap>? gaps = null, IEnumerable<Stall>? stalls = null)
     {
         _rows = rows;
         _changes = changes.ToHashSet();
@@ -107,6 +113,9 @@ public sealed class TimelineViewModel
             .Select(a => new TimelineSpan(FractionOf(bySeq[a.Start].Event.Timestamp),
                 a.End is { } e && bySeq.TryGetValue(e, out var end) ? FractionOf(end.Event.Timestamp) : 1.0, a.Label, a.End is null))
             .ToList();
+        Stalls = (stalls ?? []).ToList();
+        AlarmSpans = [.. AlarmSpans, .. Stalls.Where(s => !s.OverlapsNoLog)
+            .Select(s => new TimelineSpan(FractionOf(s.From), FractionOf(s.To), "可能卡住（推估）：" + s.Reason, false, Stalled: true))];
         UncertainMarks = rows.Where(r => (r.Event.Flags & (EventFlags.TimeBackward | EventFlags.TimeInvalid)) != 0)
             .Select(r => FractionOf(r.Event.Timestamp)).Distinct().ToList();
         SearchMarks = [];
@@ -149,6 +158,15 @@ public sealed class TimelineViewModel
         Gaps.Where(g => g.From <= fraction && fraction <= g.To).OrderBy(g => g.Row).Select(g => g.Gap).ToList();
 
     /// <summary>滑鼠提示，例如「模組 PLC：08:10:00～08:20:00 沒有 LOG（10 分鐘；可能是閒置或缺漏）」。</summary>
+    /// <summary>總覽上某個位置（0～1）的可能卡住（滑鼠提示用），含與沒有 LOG 重疊而不判定的。</summary>
+    public IReadOnlyList<Stall> StallsAtPosition(double fraction) =>
+        Stalls.Where(s => FractionOf(s.From) <= fraction && fraction <= FractionOf(s.To)).ToList();
+
+    /// <summary>可能卡住的說明；與沒有 LOG 重疊時說明不判定。</summary>
+    public static string Describe(Stall stall) => stall.OverlapsNoLog
+        ? $"{stall.Reason}；這段時間有模組沒有 LOG，不判定為可能卡住（可能只是 LOG 缺漏）"
+        : $"可能卡住（推估）：{stall.Reason}";
+
     public static string Describe(LogGap gap) =>
         $"模組 {gap.Module}：{gap.From:HH:mm:ss}～{gap.To:HH:mm:ss} 沒有 LOG（{LogGap.FormatLength(gap.Length)}；可能是閒置或缺漏）";
 

@@ -42,7 +42,8 @@ public sealed record SceneElementState(
     bool Blocked = false, bool BlockedEstimated = false, bool Loaded = false, bool Executing = false,
     string? Summary = null, double? X = null, double? Y = null,
     string? ElevatorFloor = null, string? MovingFrom = null, string? MovingTo = null,
-    IReadOnlyList<int[]>? RackSlots = null, int? SelectedColumn = null, double? Lift = null, string? CargoLabel = null);
+    IReadOnlyList<int[]>? RackSlots = null, int? SelectedColumn = null, double? Lift = null, string? CargoLabel = null,
+    bool Stalled = false);
 
 /// <summary>場景的目前時刻狀態；目前時刻或選取改變時傳。</summary>
 public sealed record SceneState(long Sequence, IReadOnlyList<SceneElementState> Elements)
@@ -186,7 +187,9 @@ public static class PlaybackScene
                     break;
             }
         }
-        return new SceneState(world.Sequence, list);
+        // 可能卡住（推估，#142）：所有種類的元素都可能帶這個標記
+        var stalled = elements.Where(e => e.IsStalled).Select(e => e.Id).ToHashSet(StringComparer.Ordinal);
+        return new SceneState(world.Sequence, stalled.Count == 0 ? list : list.Select(s => stalled.Contains(s.Id) ? s with { Stalled = true } : s).ToList());
     }
 
     /// <summary>

@@ -62,6 +62,8 @@ public static class EffectKinds
     /// <summary>站點的運轉狀態（#70）。</summary>
     public const string StationStatus = "stationStatus";
     public const string PalletRead = "palletRead";
+    /// <summary>棧板加入一個桶（ADR-0005 第 2 點 2026-11-15 補充）：桶加到棧板的桶清單（去除重複），不移動棧板。</summary>
+    public const string BinAdded = "binAdded";
     public const string CommandCreated = "commandCreated";
     public const string SegmentDispatched = "segmentDispatched";
     public const string SegmentArrived = "segmentArrived";
@@ -91,6 +93,7 @@ public static class EffectKinds
         (StationMode, "站點模式", [FieldKinds.Station, FieldKinds.StationMode]),
         (StationStatus, "站點運轉狀態（自動／手動等）", [FieldKinds.Station, FieldKinds.StationStatus]),
         (PalletRead, "在站點讀到棧板（與桶）", [FieldKinds.Station, FieldKinds.Pallet]),
+        (BinAdded, "棧板加入一個桶（每行一個桶，累加）", [FieldKinds.Pallet, FieldKinds.Bin]),
         (CommandCreated, "建立命令", [FieldKinds.Command]),
         (SegmentDispatched, "命令的一段派給搬送機或 RM", [FieldKinds.Command, $"{FieldKinds.Vehicle}|{FieldKinds.Rm}", FieldKinds.Destination]),
         (SegmentArrived, "命令的一段抵達目的地", [FieldKinds.Command, FieldKinds.Destination]),

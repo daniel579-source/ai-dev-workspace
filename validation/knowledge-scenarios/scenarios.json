@@ -1,0 +1,317 @@
+[
+  {
+    "id": "S01",
+    "title": "單一警報",
+    "time": "2030-01-13T08:03:00",
+    "device": "st-2",
+    "question": "輸送站2 停止 E301",
+    "expected": {
+      "kb": [
+        "E301|光電感測器遮斷逾時（虛構）"
+      ],
+      "devices": [
+        "st-2"
+      ],
+      "alarms": [
+        "st-2|E301"
+      ],
+      "incidents": [],
+      "safety": [],
+      "stall": false,
+      "noLog": false
+    },
+    "mustNot": {
+      "alarms": []
+    }
+  },
+  {
+    "id": "S02",
+    "title": "上游的警報影響下游（佈局上下游）",
+    "time": "2030-01-13T08:23:00",
+    "device": "st-2",
+    "question": "輸送站2 貨物沒有進來",
+    "expected": {
+      "kb": [
+        "E302|輸送馬達過載（虛構）"
+      ],
+      "devices": [
+        "st-1",
+        "st-2"
+      ],
+      "alarms": [
+        "st-1|E302"
+      ],
+      "incidents": [
+        "IR-001"
+      ],
+      "safety": [],
+      "stall": false,
+      "noLog": false
+    },
+    "mustNot": {
+      "alarms": []
+    }
+  },
+  {
+    "id": "S03",
+    "title": "沿搬送路徑才找得到（搬送機警報）",
+    "time": "2030-01-13T08:44:00",
+    "device": "st-4",
+    "question": "出庫站4 貨物晚到",
+    "expected": {
+      "kb": [
+        "E101|搬送機行走馬達過載（虛構）"
+      ],
+      "devices": [
+        "st-4",
+        "vh-1"
+      ],
+      "alarms": [
+        "vh-1|E101"
+      ],
+      "incidents": [
+        "IR-002"
+      ],
+      "safety": [],
+      "stall": false,
+      "noLog": false
+    },
+    "mustNot": {
+      "alarms": []
+    }
+  },
+  {
+    "id": "S04",
+    "title": "沒有警報代碼的卡住（命令段之後）",
+    "time": "2030-01-13T09:06:00",
+    "device": "st-5",
+    "question": "出庫站5 貨物停住",
+    "expected": {
+      "kb": [],
+      "devices": [
+        "st-5"
+      ],
+      "alarms": [],
+      "incidents": [
+        "IR-003"
+      ],
+      "safety": [],
+      "stall": true,
+      "noLog": false
+    },
+    "mustNot": {
+      "alarms": []
+    }
+  },
+  {
+    "id": "S05",
+    "title": "時間窗外的干擾警報",
+    "time": "2030-01-13T09:22:00",
+    "device": "st-6",
+    "question": "輸送站6 條碼讀不到",
+    "expected": {
+      "kb": [
+        "E303|條碼讀取失敗（虛構）",
+        "E305|下游滿載（虛構）"
+      ],
+      "devices": [
+        "st-6",
+        "st-7"
+      ],
+      "alarms": [
+        "st-6|E303",
+        "st-7|E305"
+      ],
+      "incidents": [],
+      "safety": [],
+      "stall": false,
+      "noLog": false
+    },
+    "mustNot": {
+      "alarms": [
+        "st-6|E304"
+      ]
+    }
+  },
+  {
+    "id": "S06",
+    "title": "不相連設備的同時警報",
+    "time": "2030-01-13T09:42:00",
+    "device": "st-1",
+    "question": "入庫口1 光電異常",
+    "expected": {
+      "kb": [
+        "E301|光電感測器遮斷逾時（虛構）"
+      ],
+      "devices": [
+        "st-1"
+      ],
+      "alarms": [
+        "st-1|E301"
+      ],
+      "incidents": [],
+      "safety": [],
+      "stall": false,
+      "noLog": false
+    },
+    "mustNot": {
+      "alarms": [
+        "st-7|E306"
+      ]
+    }
+  },
+  {
+    "id": "S07",
+    "title": "與沒有 LOG 的時段重疊",
+    "time": "2030-01-13T10:05:00",
+    "device": "st-2",
+    "question": "輸送站2 停住",
+    "expected": {
+      "kb": [
+        "E307|站點定位逾時（虛構）"
+      ],
+      "devices": [
+        "st-2"
+      ],
+      "alarms": [
+        "st-2|E307"
+      ],
+      "incidents": [],
+      "safety": [],
+      "stall": false,
+      "noLog": true
+    },
+    "mustNot": {
+      "alarms": []
+    }
+  },
+  {
+    "id": "S08",
+    "title": "安全清單（警報代碼）",
+    "time": "2030-01-13T10:22:00",
+    "device": "vh-2",
+    "question": "SSCA02 停止",
+    "expected": {
+      "kb": [
+        "E201|防火門感知器動作（虛構）"
+      ],
+      "devices": [
+        "vh-2"
+      ],
+      "alarms": [
+        "vh-2|E201"
+      ],
+      "incidents": [],
+      "safety": [
+        "防火"
+      ],
+      "stall": false,
+      "noLog": false
+    },
+    "mustNot": {
+      "alarms": []
+    }
+  },
+  {
+    "id": "S09",
+    "title": "安全清單（關鍵字）",
+    "time": "2030-01-13T10:42:00",
+    "device": "st-6",
+    "question": "輸送站6 冒煙",
+    "expected": {
+      "kb": [
+        "E308|輸送帶馬達過熱（虛構）"
+      ],
+      "devices": [
+        "st-6"
+      ],
+      "alarms": [
+        "st-6|E308"
+      ],
+      "incidents": [],
+      "safety": [
+        "冒煙"
+      ],
+      "stall": false,
+      "noLog": false
+    },
+    "mustNot": {
+      "alarms": []
+    }
+  },
+  {
+    "id": "S10",
+    "title": "過去的異常紀錄（警報代碼相同、設備不同）",
+    "time": "2030-01-13T11:02:00",
+    "device": "st-3",
+    "question": "輸送站3 停止 E302",
+    "expected": {
+      "kb": [
+        "E302|輸送馬達過載（虛構）"
+      ],
+      "devices": [
+        "st-3"
+      ],
+      "alarms": [
+        "st-3|E302"
+      ],
+      "incidents": [
+        "IR-001"
+      ],
+      "safety": [],
+      "stall": false,
+      "noLog": false
+    },
+    "mustNot": {
+      "alarms": []
+    }
+  },
+  {
+    "id": "S11",
+    "title": "同一代碼有多條知識庫條目（站點發生）",
+    "time": "2030-01-13T11:22:00",
+    "device": "st-4",
+    "question": "出庫站4 馬達過載",
+    "expected": {
+      "kb": [
+        "E101|站點輸送馬達過載（虛構；站點發生時）"
+      ],
+      "devices": [
+        "st-4"
+      ],
+      "alarms": [
+        "st-4|E101"
+      ],
+      "incidents": [],
+      "safety": [],
+      "stall": false,
+      "noLog": false
+    },
+    "mustNot": {
+      "alarms": []
+    }
+  },
+  {
+    "id": "S12",
+    "title": "沒有警報代碼的卡住（讀到棧板後沒有派送）",
+    "time": "2030-01-13T11:46:00",
+    "device": "st-1",
+    "question": "入庫口1 讀到棧板後沒有動",
+    "expected": {
+      "kb": [],
+      "devices": [
+        "st-1"
+      ],
+      "alarms": [],
+      "incidents": [
+        "IR-004"
+      ],
+      "safety": [],
+      "stall": true,
+      "noLog": false
+    },
+    "mustNot": {
+      "alarms": []
+    }
+  }
+]

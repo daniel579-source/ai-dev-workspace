@@ -215,6 +215,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         StationModeNames.Clear();
         foreach (var (code, name) in doc.StationModeNames) AddModeName(new StationModeNameViewModel(code, name));
         GapThresholds.Clear();
+        StallThreshold = doc.EffectiveStallThresholdSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
         foreach (var (module, seconds) in doc.GapThresholds) AddGapThreshold(new GapThresholdViewModel(module, seconds.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         Revision = doc.Revision;
         RevisionInfo = doc.Revision == 0 ? "尚未存檔"
@@ -295,6 +296,9 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         _document.PresenceSignal = PresenceSignal.Trim();
         _document.StationModeNames = StationModeNames.Select(r => r.ToModel()).ToList();
         _document.GapThresholds = GapThresholds.Select(r => r.ToModel()).ToList();
+        // 秒數不是整數時存成 -1，由存檔前的檢查擋下；和預設相同時不寫入，舊的設定檔不多出欄位
+        var stall = int.TryParse(StallThreshold.Trim(), out var stallSeconds) ? stallSeconds : -1;
+        _document.StallThresholdSeconds = stall == LogTrace.Engine.Playback.Stalls.DefaultThresholdSeconds && _document.StallThresholdSeconds is null ? null : stall;
         try
         {
             PlantConfigFile.Save(_document, path);
@@ -1050,6 +1054,12 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     public partial string PresenceSignal { get; set; } = "";
 
     partial void OnPresenceSignalChanged(string value) => IsDirty = true;
+
+    /// <summary>可能卡住的門檻秒數（ADR-0005 第 5 點，#142）；0 表示不判定。</summary>
+    [ObservableProperty]
+    public partial string StallThreshold { get; set; } = "300";
+
+    partial void OnStallThresholdChanged(string value) => IsDirty = true;
 
     /// <summary>站點模式代號的名稱（ADR-0005 第 3 點）；回放畫面顯示名稱，沒填的代號直接顯示。</summary>
     public ObservableCollection<StationModeNameViewModel> StationModeNames { get; } = [];

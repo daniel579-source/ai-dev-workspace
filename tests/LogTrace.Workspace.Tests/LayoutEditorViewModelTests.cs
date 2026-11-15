@@ -391,6 +391,30 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     }
 
     [Fact]
+    public void 可能卡住的門檻_預設300秒_修改後存檔讀回_不是整數時無法存檔()
+    {
+        _vm.PlantName = "範例廠";
+        Assert.Equal("300", _vm.StallThreshold);
+        _vm.SaveCommand.Execute(null);
+        var other = new LayoutEditorViewModel(_library, _ui);
+        other.OpenConfigCommand.Execute(Assert.Single(other.Configs));
+        Assert.Null(PlantConfigFile.Load(other.FilePath!).StallThresholdSeconds); // 和預設相同時不寫入
+
+        other.StallThreshold = "600";
+        Assert.True(other.IsDirty);
+        other.SaveCommand.Execute(null);
+        Assert.Equal(600, PlantConfigFile.Load(other.FilePath!).StallThresholdSeconds);
+        var third = new LayoutEditorViewModel(_library, _ui);
+        third.OpenConfigCommand.Execute(Assert.Single(third.Configs));
+        Assert.Equal("600", third.StallThreshold);
+
+        third.StallThreshold = "五分鐘";
+        third.SaveCommand.Execute(null);
+        Assert.Contains("可能卡住的門檻必須是 0 以上的整數秒", third.Status);
+        Assert.Equal(2, third.Revision);
+    }
+
+    [Fact]
     public void 沒有LOG的門檻_模組選項跟著模組順序_不在模組順序中的舊名稱保留顯示但無法存檔()
     {
         _vm.PlantName = "範例廠";

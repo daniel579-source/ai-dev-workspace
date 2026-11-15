@@ -74,13 +74,16 @@ function applyState(state) {
     if (e.type === 'vehicle' || e.type === 'rm' || e.type === 'elevator') setCargoLabel(item, s.loaded ? s.cargoLabel : null);
     if (item.label) {
       const l = item.label;
-      l.name.textContent = (s.badge ? `[${s.badge}] ` : '') + e.name + (s.inconsistent ? ' ⚠' : '') + (s.estimated && (e.type === 'vehicle' || e.type === 'rm') ? '（推估位置）' : '');
+      l.name.textContent = (s.badge ? `[${s.badge}] ` : '') + e.name + (s.inconsistent ? ' ⚠' : '') + (s.estimated && (e.type === 'vehicle' || e.type === 'rm') ? '（推估位置）' : '')
+        + (s.stalled ? '　可能卡住（推估）' : '');
       l.summary.textContent = s.summary || '';
-      l.div.title = s.inconsistent ? '不一致（點選看詳細）' : '';
+      l.div.title = s.inconsistent ? '不一致（點選看詳細）' : s.stalled ? '可能卡住（推估；點選看依據）' : '';
       l.div.classList.toggle('alarm', s.look === 'alarm');
       l.div.classList.toggle('selected', !!s.selected);
       // 設備名稱只在點選時顯示（#128）：沒有選取時透明，但仍可點選；文字、區域照常顯示
-      l.div.classList.toggle('muted', !s.selected && e.type !== 'label' && e.type !== 'area');
+      // 可能卡住（#142）時名稱一直顯示，否則只看得到點選的設備
+      l.div.classList.toggle('muted', !s.selected && !s.stalled && e.type !== 'label' && e.type !== 'area');
+      l.div.classList.toggle('stalled', !!s.stalled);
       l.div.classList.toggle('estimated', !!s.estimated);
     }
     if (s.selected) selected = item;

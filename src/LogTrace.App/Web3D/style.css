@@ -21,3 +21,5 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #F8FAFC; fon
 .cargo-label { pointer-events: none; background: #1E3A8A; color: #FFFFFF; font: 600 10px "Segoe UI", "Microsoft JhengHei UI", sans-serif; padding: 0 3px; border-radius: 2px; white-space: nowrap; }
 /* 回放：沒有選取的設備名稱透明（仍可點選，#128） */
 .label.muted { opacity: 0; }
+/* 可能卡住（推估，#142）：橘色虛線框 */
+.label.stalled { border: 1px dashed #F59E0B; color: #B45309; }

@@ -283,6 +283,13 @@ public sealed class WorldModel
                 if (kind == LocationKind.Station) StationOf(w, at);
                 break;
             }
+            case EffectKinds.BinAdded when x.Get(FieldKinds.Pallet) is { } id && x.GetAll(FieldKinds.Bin) is { Count: > 0 } added:
+            {
+                // 每行一個桶的紀錄：累加到桶清單（去除重複），不移動棧板；棧板還沒有紀錄時先建立，位置未知（ADR-0005 第 2 點）
+                if (!w.Pallets.TryGetValue(id, out var p)) w.Pallets[id] = p = new PalletState { Id = id };
+                p.Bins = [.. (p.Bins ?? []).Concat(added).Distinct(StringComparer.Ordinal)];
+                break;
+            }
             case EffectKinds.CommandCreated when x.Get(FieldKinds.Command) is { } id:
             {
                 var c = CommandOf(w, id, seq);

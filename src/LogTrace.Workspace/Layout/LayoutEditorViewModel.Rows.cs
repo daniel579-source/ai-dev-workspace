@@ -85,9 +85,12 @@ public sealed partial class LayoutEditorViewModel
     void AddRmRow()
     {
         if (SelectedElement is not { IsRm: true } rm) return;
+        // 排號照儲位規則中排的碼數補零（例如 RRCCCLL → 01），才會和儲位編號中的寫法相同
+        int width = Math.Max(1, StorageCodeRule.Count(c => c == 'R'));
+        string Text(int n) => n.ToString(System.Globalization.CultureInfo.InvariantCulture).PadLeft(width, '0');
         int n = 1;
-        while (_rows.Any(r => r.Row.Trim() == n.ToString(System.Globalization.CultureInfo.InvariantCulture))) n++;
-        var item = new RowItemViewModel(n.ToString(System.Globalization.CultureInfo.InvariantCulture), RowItemViewModel.Single, "");
+        while (_rows.Any(r => r.Row.Trim() == Text(n))) n++;
+        var item = new RowItemViewModel(Text(n), RowItemViewModel.Single, "");
         item.PropertyChanged += OnRowChanged;
         RmRows.Add(item);
         WriteBackRows();

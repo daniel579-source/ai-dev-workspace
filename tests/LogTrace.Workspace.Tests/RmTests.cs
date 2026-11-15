@@ -49,7 +49,7 @@ public sealed class RmEditorTests : IDisposable
         var rm = AddRm();
         _vm.AddRmRowCommand.Execute(null);
         _vm.AddRmRowCommand.Execute(null);
-        Assert.Equal(["1", "2"], _vm.RmRows.Select(r => r.Row));
+        Assert.Equal(["1", "2"], _vm.RmRows.Select(r => r.Row)); // 沒有儲位規則：不補零
         (_vm.RmRows[0].Depth, _vm.RmRows[0].Pair) = (RowItemViewModel.Deep, "2");
         (_vm.RmRows[1].Depth, _vm.RmRows[1].Pair) = (RowItemViewModel.Shallow, "1");
 
@@ -63,6 +63,17 @@ public sealed class RmEditorTests : IDisposable
         Assert.Empty(_vm.RmRows); // 只在選取 RM 時列出
         _vm.SelectedElement = _vm.Elements.Single(e => e.Id == rm.Id);
         Assert.Equal(2, _vm.RmRows.Count);
+    }
+
+    [Fact]
+    public void 新增一排時排號依儲位規則補零()
+    {
+        _vm.StorageCodeRule = "RRCCCLL";
+        AddRm();
+        _vm.AddRmRowCommand.Execute(null);
+        _vm.AddRmRowCommand.Execute(null);
+
+        Assert.Equal(["01", "02"], _vm.RmRows.Select(r => r.Row));
     }
 
     [Fact]

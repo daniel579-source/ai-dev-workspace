@@ -141,13 +141,23 @@ public sealed class WorldModelTests : IDisposable
     }
 
     [Fact]
-    public void 交給對接設備_棧板已交出_命令完成()
+    public void 抵達對接設備_收到完成回報前_棧板在對接設備上_命令未完成()
     {
         var w = At("00040002 第2段 抵達 EQ901");
 
+        Assert.Equal((LocationKind.AtDock, "eq-1"), (w.Pallets["PLT-EX-0002"].Location, w.Pallets["PLT-EX-0002"].LocationId));
+        Assert.Equal(CommandStatus.SegmentArrived, w.Commands["00040002"].Status);
+        Assert.False(w.Commands["00040002"].IsFinished);
+    }
+
+    [Fact]
+    public void 交給對接設備並收到完成回報_棧板已交出_命令已交出()
+    {
+        var w = At("完成回報 00040002");
+
         Assert.Equal((LocationKind.Delivered, "eq-1"), (w.Pallets["PLT-EX-0002"].Location, w.Pallets["PLT-EX-0002"].LocationId));
         Assert.Equal(CommandStatus.Delivered, w.Commands["00040002"].Status);
-        Assert.Equal(CommandStatus.Delivered, At("完成回報 00040002").Commands["00040002"].Status); // 完成回報不會蓋掉「已交出」
+        Assert.False(_world.IsUnfinishedInCase("00040002"));
     }
 
     [Fact]
@@ -193,7 +203,7 @@ public sealed class WorldModelTests : IDisposable
         Assert.Contains("切換為自動模式", MessageOf(w.Vehicles["vh-2"].ModeCause));
         Assert.Contains("派送 00040003", MessageOf(w.Vehicles["vh-2"].WorkCause));
         Assert.Contains("警報發生 A-02", MessageOf(w.Alarms["st-2"].Cause));
-        Assert.Contains("00040002 第2段 抵達 EQ901", MessageOf(w.Pallets["PLT-EX-0002"].LocationCause));
+        Assert.Contains("完成回報 00040002", MessageOf(w.Pallets["PLT-EX-0002"].LocationCause)); // 收到完成回報才算已交出
         Assert.Contains("完成回報 00040001", MessageOf(w.Commands["00040001"].StatusCause));
         Assert.All(w.Pallets.Values, p => Assert.Contains(_events, e => e.Sequence == p.LocationCause));
     }

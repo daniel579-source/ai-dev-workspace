@@ -356,8 +356,11 @@ public sealed partial class PlaybackViewModel : ObservableObject
             case LayoutElementType.Dock:
             {
                 var delivered = w.PalletsAt(LocationKind.Delivered, el.Id).Count();
-                el.Summary = delivered > 0 ? $"已交出 {delivered}" : null;
-                el.Look = w.Alarms.ContainsKey(el.Id) ? ElementLook.Alarm : delivered > 0 ? ElementLook.Empty : ElementLook.Unknown;
+                var waiting = w.PalletsAt(LocationKind.AtDock, el.Id).Count();
+                el.Summary = DockSummary(waiting, delivered);
+                el.Look = w.Alarms.ContainsKey(el.Id) ? ElementLook.Alarm
+                    : waiting > 0 ? ElementLook.Occupied
+                    : delivered > 0 ? ElementLook.Empty : ElementLook.Unknown;
                 break;
             }
             case LayoutElementType.FireDoor:
@@ -521,6 +524,8 @@ public sealed partial class PlaybackViewModel : ObservableObject
                 break;
             }
             case LayoutElementType.Dock:
+                foreach (var p in w.PalletsAt(LocationKind.AtDock, el.Id))
+                    Detail.Add(Line("等待完成回報", PalletText(p), p.LocationCause));
                 foreach (var p in w.PalletsAt(LocationKind.Delivered, el.Id))
                     Detail.Add(Line("已交出", PalletText(p), p.LocationCause));
                 if (Detail.Count == 0) Detail.Add(Line("已交出", "無", null));
@@ -645,7 +650,8 @@ public sealed partial class PlaybackViewModel : ObservableObject
                 break;
             case LayoutElementType.Dock:
                 var delivered = w.PalletsAt(LocationKind.Delivered, e.Id).Count();
-                parts.Add(delivered > 0 ? $"已交出 {delivered}" : "未交出");
+                var waiting = w.PalletsAt(LocationKind.AtDock, e.Id).Count();
+                parts.Add(DockSummary(waiting, delivered) ?? "未交出");
                 break;
             case LayoutElementType.Elevator:
                 w.Elevators.TryGetValue(e.Id, out var ev);
@@ -712,4 +718,8 @@ public sealed partial class PlaybackViewModel : ObservableObject
     {
         if (sequence is { } s) GoToEvent?.Invoke(s);
     }
+
+    /// <summary>對接設備的摘要：抵達但還沒有完成回報的棧板，與已交出的棧板（ADR-0005 第 2 點）。</summary>
+    static string? DockSummary(int waiting, int delivered) =>
+        string.Join("、", new[] { waiting > 0 ? $"等待完成回報 {waiting}" : null, delivered > 0 ? $"已交出 {delivered}" : null }.OfType<string>()) is { Length: > 0 } t ? t : null;
 }

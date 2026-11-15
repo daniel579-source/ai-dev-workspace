@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- #89：ADR-0015 規則關聯圖的虛構情境集驗證（不是正式產品） -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\LogTrace.Engine\LogTrace.Engine.csproj" />
+  </ItemGroup>
+
+</Project>

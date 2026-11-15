@@ -1,0 +1,42 @@
+[
+  {
+    "id": "IR-001",
+    "kind": "alarm",
+    "alarmCodes": [
+      "E302"
+    ],
+    "devices": [
+      "st-1"
+    ],
+    "symptom": "入庫口1 輸送馬達過載，下游貨物停住（虛構）"
+  },
+  {
+    "id": "IR-002",
+    "kind": "alarm",
+    "alarmCodes": [
+      "E101"
+    ],
+    "devices": [
+      "vh-1"
+    ],
+    "symptom": "搬送機 SSCA01 行走馬達過載，貨物晚到（虛構）"
+  },
+  {
+    "id": "IR-003",
+    "kind": "stall",
+    "alarmCodes": [],
+    "devices": [
+      "st-5"
+    ],
+    "symptom": "出庫站5 貨物停住沒有繼續搬（虛構）"
+  },
+  {
+    "id": "IR-004",
+    "kind": "stall",
+    "alarmCodes": [],
+    "devices": [
+      "st-1"
+    ],
+    "symptom": "入庫口1 讀到棧板後一直沒有派送（虛構）"
+  }
+]

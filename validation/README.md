@@ -12,6 +12,7 @@
 | `src/TechValidation.DataGen` | 虛構 LOG 產生器（「日期 → 模組」結構、Big5／UTF-8、延續行、輪替檔） | T-02 |
 | `src/TechValidation.Bench` | 匯入、索引大小、搜尋、正規表示式、串連、快照、排序、可攜性的量測，並與 DuckDB、Lucene.NET 比較 | T-03～T-13 |
 | `src/TechValidation.UiSpike` | WPF＋AvalonDock：10 萬筆事件清單、時間軸、2D 畫布、版面儲存與還原；自我檢查 | ADR-0007 第 1～4 項、T-01 |
+| `src/TechValidation.KnowledgeGraph` | 知識檢索的規則關聯圖（ADR-0015）：以 `knowledge-scenarios\` 的虛構情境集量測知識庫條目、相關設備與警報、異常紀錄、安全清單的召回與精確度，並與關鍵字比對比較（#89）。參考 `src/LogTrace.Engine` | ADR-0015 |
 | `tests/TechValidation.Tests` | 正規化（T-13）與解析規則的單元測試 | — |
 
 ## 需要
@@ -34,6 +35,9 @@ dotnet run -c Release --project src/TechValidation.Bench -- --logs D:\tv-data\lo
 
 # 3. 冷快取：重新開機後，沿用已匯入的案件只跑查詢
 dotnet run -c Release --project src/TechValidation.Bench -- --logs D:\tv-data\logs --work D:\tv-data\work --reuse --skip-compare --cold --report results\bench-<電腦名稱>-cold.md
+
+# 知識檢索的規則關聯圖（#89，ADR-0015）：虛構情境集在 knowledge-scenarios\（generate.py 可以重新產生）
+dotnet run -c Release --project src/TechValidation.KnowledgeGraph -- --data knowledge-scenarios --report results\knowledge-graph-89-<電腦名稱>.md
 
 # 4. UI 驗證：發佈 self-contained 單一資料夾
 dotnet publish src/TechValidation.UiSpike -c Release -o publish\UiSpike

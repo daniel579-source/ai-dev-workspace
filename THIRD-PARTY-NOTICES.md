@@ -25,6 +25,6 @@ LogTrace 發佈資料夾中包含下列第三方元件。授權全文在 `licens
 - 測試用的元件（xUnit、FlaUI 等）不在發佈資料夾中，不列入本清單。
 - **WebView2 Runtime** 是 Microsoft 的固定版本 Runtime（.cab 解開，未修改），直接從 Microsoft 下載站取得並確認數位簽章，程式只使用這一份；安全性修正要靠重新發佈程式（ADR-0017 尚存風險）。授權條款全文取自 <https://developer.microsoft.com/microsoft-edge/api/eula/webview2>（2026-11-15）。
   - 程式已停用 SmartScreen（`IsReputationCheckingRequired = false`，並以瀏覽器參數關閉），因此不需要條款第 9(a) 節的 SmartScreen 通知；網路一律封鎖，Runtime 無法傳送資料。
-  - 條款第 2(b)(ii) 節要求「散布者與外部終端使用者」同意至少同等保護 Microsoft 的條款；本程式目前只在公司內部使用，是否需要另外提供終端使用者條款，以及第 2(b)(iv) 節的賠償責任，**待法務確認**（ADR-0017 待確認）。
+  - 條款第 2(b)(ii) 節要求「散布者與外部終端使用者」同意至少同等保護 Microsoft 的條款；本程式只在公司內部由 2 人使用、不對外散布（使用者，2026-11-15），可能不適用；是否需要另外提供終端使用者條款，以及第 2(b)(iv) 節的賠償責任，**待法務確認**（ADR-0017 待確認）。
 - three.js 的檔案取自 npm 套件 `three@0.187.0`，未修改。
 - 本清單由 `dotnet list package --include-transitive` 的結果與各套件的授權宣告整理（2026-10-16，#29；2026-11-14 加入 WebView2 與 three.js，#113）。新增或升級套件時要同步更新。

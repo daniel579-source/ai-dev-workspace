@@ -79,6 +79,8 @@ function applyState(state) {
       l.div.title = s.inconsistent ? '不一致（點選看詳細）' : '';
       l.div.classList.toggle('alarm', s.look === 'alarm');
       l.div.classList.toggle('selected', !!s.selected);
+      // 設備名稱只在點選時顯示（#128）：沒有選取時透明，但仍可點選；文字、區域照常顯示
+      l.div.classList.toggle('muted', !s.selected && e.type !== 'label' && e.type !== 'area');
       l.div.classList.toggle('estimated', !!s.estimated);
     }
     if (s.selected) selected = item;

@@ -34,6 +34,8 @@ public enum LayoutElementType
     Fence,
     /// <summary>圍欄門（輔助，ADR-0020）：放在圍欄缺口的門；LOG 沒有記錄開關與模式，不推導狀態。</summary>
     FenceGate,
+    /// <summary>EQ（輔助，ADR-0020 補充）：其他公司的對接設備外觀；不推導狀態，門朝緊鄰的 Conv。</summary>
+    Eq,
 }
 
 /// <summary>雙深料架的深淺（ADR-0019）：離所屬 RM 近的為淺。JSON 中為 shallow、deep。</summary>
@@ -373,16 +375,17 @@ public sealed class PlantConfigDocument
     /// <summary>
     /// 程式能讀寫的格式版本。2：輸送線的 bidirectional 與交接點（#63）。3：防火門（舊版程式不認得 fireDoor 這個種類）。
     /// 4：導軌（#100，舊版程式不認得 rail 這個種類）。5：電梯（#102）。6：樓板高度（#113，樓層寫成物件，舊版程式讀不了）。
-    /// 7：RM 與排的配置表（#123，ADR-0019）。8：工站點、圍欄、圍欄門（ADR-0020）。
+    /// 7：RM 與排的配置表（#123，ADR-0019）。8：工站點、圍欄、圍欄門（ADR-0020）。9：EQ（ADR-0020 補充）。
     /// 存檔時只寫實際用到的最低版本，讓舊版程式照常開啟（ADR-0006 第 7 點）。
     /// </summary>
-    public const int CurrentFormatVersion = 8;
+    public const int CurrentFormatVersion = 9;
 
     /// <summary>
     /// 這份設定需要的格式版本：有 RM 或排的配置表時為 7；有填樓板高度時為 6；有電梯時為 5；有導軌時為 4；有防火門時為 3；有雙向或連到搬送機（有交接點）的輸送線時為 2；否則為 1。
     /// </summary>
     public int RequiredFormatVersion() =>
-        Layout.Elements.Any(e => e.Type is LayoutElementType.Workstation or LayoutElementType.Fence or LayoutElementType.FenceGate) ? 8
+        Layout.Elements.Any(e => e.Type == LayoutElementType.Eq) ? 9
+        : Layout.Elements.Any(e => e.Type is LayoutElementType.Workstation or LayoutElementType.Fence or LayoutElementType.FenceGate) ? 8
         : Layout.Elements.Any(e => e.Type == LayoutElementType.Rm) || Layout.Rows is { Count: > 0 } ? 7
         : Layout.Floors?.Any(f => f.Height is not null) == true ? 6
         : Layout.Elements.Any(e => e.Type == LayoutElementType.Elevator) ? 5

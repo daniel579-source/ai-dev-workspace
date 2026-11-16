@@ -6,6 +6,9 @@ namespace LogTrace.Engine.Tests;
 // 廠別設定檔（ADR-0006 第 7 點）。內容全部是虛構的。
 public sealed class PlantConfigFileTests : IDisposable
 {
+    /// <summary>比程式支援的格式版本新一版（測試「較新的格式版本」用）。</summary>
+    static readonly int Newer = Engine.Plants.PlantConfigDocument.CurrentFormatVersion + 1;
+
     readonly TempFolder _tmp = new();
 
     public void Dispose() => _tmp.Dispose();
@@ -84,11 +87,11 @@ public sealed class PlantConfigFileTests : IDisposable
     public void 讀到較新的格式版本時_明確提示()
     {
         var path = PathOf("新版.json");
-        File.WriteAllText(path, """{ "formatVersion": 9, "plant": "虛構", "revision": 1, "layout": { "elements": [] } }""");
+        File.WriteAllText(path, $$"""{ "formatVersion": {{Newer}}, "plant": "虛構", "revision": 1, "layout": { "elements": [] } }""");
 
         var ex = Assert.Throws<PlantConfigFormatException>(() => PlantConfigFile.Load(path));
 
-        Assert.Contains("格式版本是 9", ex.Message);
+        Assert.Contains($"格式版本是 {Newer}", ex.Message);
         Assert.Contains("較新版的 LogTrace", ex.Message);
     }
 

@@ -48,6 +48,10 @@ function applyState(state) {
         for (const [side, gate] of Object.entries(item.gates || {})) setColor(gate, 0xF59E0B, s.openGate === side ? 0.12 : 0.85);
         break;
       }
+      case 'eq':
+        // 門的開關（推估，ADR-0020 補充）：往外開約 100 度
+        if (item.door) item.door.rotation.y = s.doorOpen ? -1.75 : 0;
+        break;
       case 'rack': {
         const slots = s.rackSlots || [];
         const m = new THREE.Matrix4();

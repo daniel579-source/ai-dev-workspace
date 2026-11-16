@@ -309,7 +309,7 @@ public static class LayoutElementTypes
 {
     public static IReadOnlyList<LayoutElementType> Addable { get; } =
     [
-        LayoutElementType.Station, LayoutElementType.Workstation, LayoutElementType.Rack, LayoutElementType.Vehicle, LayoutElementType.Rm, LayoutElementType.Dock,
+        LayoutElementType.Station, LayoutElementType.Workstation, LayoutElementType.Rack, LayoutElementType.Vehicle, LayoutElementType.Rm, LayoutElementType.Dock, LayoutElementType.Eq,
         LayoutElementType.FireDoor, LayoutElementType.Elevator, LayoutElementType.Conveyor, LayoutElementType.Rail, LayoutElementType.Fence, LayoutElementType.FenceGate,
         LayoutElementType.Area, LayoutElementType.Label,
     ];
@@ -373,6 +373,7 @@ public static class LayoutElementTypes
         LayoutElementType.Workstation => "工站點",
         LayoutElementType.Fence => "圍欄",
         LayoutElementType.FenceGate => "圍欄門",
+        LayoutElementType.Eq => "EQ",
         _ => type.ToString(),
     };
 
@@ -392,6 +393,7 @@ public static class LayoutElementTypes
         LayoutElementType.Workstation => "ws",
         LayoutElementType.Fence => "fc",
         LayoutElementType.FenceGate => "fg",
+        LayoutElementType.Eq => "eqp", // Conv（dock）已經用 eq
         _ => "el",
     };
 
@@ -401,6 +403,7 @@ public static class LayoutElementTypes
         LayoutElementType.Station => (2, 2, 0.8),
         LayoutElementType.Workstation => (2, 2, 0.8),
         LayoutElementType.FenceGate => (1, 0.1, 2.5),
+        LayoutElementType.Eq => (1.5, 1.5, 1.8),
         LayoutElementType.Rack => (12, 1.5, 0),
         LayoutElementType.Vehicle => (2.5, 1.2, 0.8),
         LayoutElementType.Rm => (2, 1.2, 12.5), // 與新料架預設的高度相同（5 層 × 2.5 公尺，#123 使用者決定）

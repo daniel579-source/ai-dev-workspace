@@ -7,6 +7,9 @@ namespace LogTrace.Workspace.Tests;
 // 建立案件時選擇廠別、編輯器的 LOG 設定（#34）。內容全部是虛構的。
 public sealed class PlantSelectionViewModelTests : IDisposable
 {
+    /// <summary>比程式支援的格式版本新一版（測試「較新的格式版本」用）。</summary>
+    static readonly int Newer = Engine.Plants.PlantConfigDocument.CurrentFormatVersion + 1;
+
     readonly TempFolder _tmp = new();
     readonly FakeUserInteraction _ui = new();
     readonly string _plantsRoot;
@@ -203,7 +206,7 @@ public sealed class PlantSelectionViewModelTests : IDisposable
     {
         var path = Path.Combine(_plantsRoot, "新版.json");
         Directory.CreateDirectory(_plantsRoot);
-        File.WriteAllText(path, """{ "formatVersion": 9, "plant": "虛構" }""");
+        File.WriteAllText(path, $$"""{ "formatVersion": {{Newer}}, "plant": "虛構" }""");
         _vm.RefreshPlants();
         _vm.SelectedPlant = _vm.Plants.Single(p => p.Path == path);
 
@@ -211,7 +214,7 @@ public sealed class PlantSelectionViewModelTests : IDisposable
         _vm.CreateCaseCommand.Execute(null);
 
         Assert.Null(_vm.CurrentCaseFolder);
-        Assert.Contains("格式版本是 9", _vm.Status);
+        Assert.Contains($"格式版本是 {Newer}", _vm.Status);
     }
 
     [Fact]

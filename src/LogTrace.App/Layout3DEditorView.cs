@@ -169,6 +169,9 @@ public sealed class Layout3DEditorView : Web3DView
             case "key":
                 Key(Str(m, "key"), Flag(m, "ctrl"), m.TryGetProperty("x", out var x) && x.ValueKind == JsonValueKind.Number ? x.GetDouble() : null, Num(m, "y"));
                 break;
+            case "view":
+                _vm.ViewCenter = (Num(m, "x"), Num(m, "y"));
+                break;
         }
     }
 

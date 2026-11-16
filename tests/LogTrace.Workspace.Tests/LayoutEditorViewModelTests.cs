@@ -46,6 +46,17 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     }
 
     [Fact]
+    public void 畫面回報中心後_新增的元件放在畫面正中央_導軌以中心對齊()
+    {
+        _vm.ViewCenter = (30, 20);
+
+        var station = Add(LayoutElementType.Station); // 預設 2 × 2
+        Assert.Equal((29d, 19d), (station.X, station.Y));
+        var rail = Add(LayoutElementType.Rail); // 直線 20 公尺
+        Assert.Equal([(20d, 20d), (40d, 20d)], rail.RailPoints.Select(p => (p.X, p.Y)));
+    }
+
+    [Fact]
     public void 元素清單先依類型_同類型依名稱自然排序_名稱空白的在前_不改變畫布與存檔順序()
     {
         var dock = Add(LayoutElementType.Dock);

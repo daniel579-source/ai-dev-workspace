@@ -279,7 +279,10 @@ export function createViewer(opts = {}) {
     // 載貨台：在兩支立柱之間，向料架兩側伸出（深 e.h）；高度由狀態的 lift 決定
     item.carriage = new THREE.Group();
     item.carriage.add(box(e.w - mast * 2 - 0.04, 0.12, e.h * 1.1, mat(0x475569, { transparent: true }), 0, 0.06, 0));
-    item.carriage.add(rollers(e.w - mast * 2 - 0.1, e.h, 0.15, 0.18, 0.035));
+    // 載貨台的滾筒：軸沿寬度方向（2026-11-16 使用者要求轉 90 度，ADR-0020 補充）
+    const carriageRollers = rollers(e.h, e.w - mast * 2 - 0.1, 0.15, 0.18, 0.035);
+    carriageRollers.rotation.y = Math.PI / 2;
+    item.carriage.add(carriageRollers);
     item.cargo = box(Math.min(e.w, 1.1) * 0.7, 0.8, Math.min(e.h, 1.1) * 0.8, mat(COLOR.cargo, { transparent: true }), 0, 0.6, 0);
     item.cargo.visible = false;
     item.carriage.add(item.cargo);

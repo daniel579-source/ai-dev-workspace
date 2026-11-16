@@ -240,7 +240,7 @@
                         </StackPanel>
 
                         <!-- 導軌（ADR-0006 第 14 點） -->
-                        <StackPanel Visibility="{Binding IsRail, Converter={StaticResource Visible}}">
+                        <StackPanel Visibility="{Binding IsPath, Converter={StaticResource Visible}}">
                             <DockPanel>
                                 <TextBlock Text="樓層" Style="{StaticResource Field}" />
                                 <ComboBox ItemsSource="{Binding DataContext.Floors, RelativeSource={RelativeSource AncestorType=Window}}" SelectedItem="{Binding Floor}" />

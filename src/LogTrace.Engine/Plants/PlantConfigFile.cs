@@ -253,7 +253,7 @@ public static class PlantConfigFile
                 LayoutElement? End(string? id) => elements.FirstOrDefault(x => x.Id == id && LayoutElement.CanBeConveyorEnd(x.Type));
                 var (from, to) = (End(e.From), End(e.To));
                 if (from is null || to is null)
-                    issues.Add(new($"輸送線「{Label(e)}」的兩端必須是站點、Conv 或搬送機。", [e.Id]));
+                    issues.Add(new($"輸送線「{Label(e)}」的兩端必須是站點、工站點、Conv 或搬送機。", [e.Id]));
                 else if ((from.Type == LayoutElementType.Vehicle && e.FromPoint is null) || (to.Type == LayoutElementType.Vehicle && e.ToPoint is null))
                     issues.Add(new($"輸送線「{Label(e)}」連到搬送機的那一端沒有交接點。", [e.Id]));
                 else if (!LayoutFloors.NameComparer.Equals(LayoutFloors.FloorOf(from, floors, _ => null), LayoutFloors.FloorOf(to, floors, _ => null)))
@@ -267,12 +267,13 @@ public static class PlantConfigFile
                 foreach (var f in served.Where(f => LayoutFloors.Canonical(f, floors) is null).Distinct(LayoutFloors.NameComparer))
                     issues.Add(new($"電梯「{Label(e)}」服務的樓層「{f}」不在樓層清單中。", [e.Id]));
             }
-            if (e.Type == LayoutElementType.Rail)
+            if (LayoutElement.HasPath(e.Type))
             {
+                var kind = e.Type == LayoutElementType.Fence ? "圍欄" : "導軌";
                 if ((e.Points?.Count ?? 0) < 2)
-                    issues.Add(new($"導軌「{Label(e)}」至少要有 2 個點。", [e.Id]));
+                    issues.Add(new($"{kind}「{Label(e)}」至少要有 2 個點。", [e.Id]));
                 if (e.Points?.Any(p => Math.Abs(p.Bulge) > RailPath.MaxBulge) == true)
-                    issues.Add(new($"導軌「{Label(e)}」有超過半圓的弧（凸度必須在 -1～1 之間）。", [e.Id]));
+                    issues.Add(new($"{kind}「{Label(e)}」有超過半圓的弧（凸度必須在 -1～1 之間）。", [e.Id]));
             }
             if (e.Rail is { } railId)
             {

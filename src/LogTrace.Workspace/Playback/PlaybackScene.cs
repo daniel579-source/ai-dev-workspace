@@ -21,7 +21,7 @@ public sealed record SceneElement(
     double X, double Y, double W, double H, int Rotation, double Height,
     int? Levels = null, double? LevelHeight = null, int? ColFrom = null, int? ColTo = null,
     IReadOnlyList<double[]>? Path = null, bool Closed = false, bool Bidirectional = false,
-    IReadOnlyList<string>? ServedFloors = null);
+    IReadOnlyList<string>? ServedFloors = null, IReadOnlyList<string>? Gates = null);
 
 /// <summary>場景的靜態部分；載入案件時傳一次。</summary>
 public sealed record SceneLayout(IReadOnlyList<SceneFloor> Floors, IReadOnlyList<SceneElement> Elements)
@@ -43,7 +43,7 @@ public sealed record SceneElementState(
     string? Summary = null, double? X = null, double? Y = null,
     string? ElevatorFloor = null, string? MovingFrom = null, string? MovingTo = null,
     IReadOnlyList<int[]>? RackSlots = null, int? SelectedColumn = null, double? Lift = null, string? CargoLabel = null,
-    bool Stalled = false);
+    bool Stalled = false, string? OpenGate = null);
 
 /// <summary>場景的目前時刻狀態；目前時刻或選取改變時傳。</summary>
 public sealed record SceneState(long Sequence, IReadOnlyList<SceneElementState> Elements)
@@ -60,12 +60,14 @@ public static class PlaybackScene
     /// </summary>
     public static double DefaultHeight(LayoutElementType type) => type switch
     {
-        LayoutElementType.Station => 0.8,
-        LayoutElementType.Vehicle => 0.6,
+        // 除了料架、電梯、RM 之外的設備預設 0.8 公尺（ADR-0020 第 2 點）
+        LayoutElementType.Station or LayoutElementType.Workstation => 0.8,
+        LayoutElementType.Vehicle => 0.8,
         LayoutElementType.Rm => 10, // 立柱的高度；載貨台依儲位的層移動（ADR-0019）
-        LayoutElementType.Dock => 1.5,
+        LayoutElementType.Dock => 0.8,
+        LayoutElementType.Fence or LayoutElementType.FenceGate => 2.5, // 黃色網狀圍欄（ADR-0020）
         LayoutElementType.FireDoor => 3,
-        LayoutElementType.Conveyor => 0.6,
+        LayoutElementType.Conveyor => 0.8,
         LayoutElementType.Rack => 1,
         LayoutElementType.Elevator => 1.2, // 台車的高度；井道依服務的樓層
         LayoutElementType.Label => 2,
@@ -107,10 +109,11 @@ public static class PlaybackScene
             var type = JsonNamingPolicy.CamelCase.ConvertName(m.Type.ToString());
             switch (m.Type)
             {
-                case LayoutElementType.Rail:
+                case LayoutElementType.Rail or LayoutElementType.Fence:
                 {
                     var path = RailPath.Of(m).Polyline().Select(p => new[] { p.X, p.Y }).ToList();
-                    list.Add(new SceneElement(e.Id, type, e.Name, e.Floor, 0, 0, 0, 0, 0, DefaultHeight(m.Type), Path: path, Closed: m.Closed == true));
+                    var height = m.Type == LayoutElementType.Fence && m.Height is > 0 ? m.Height.Value : DefaultHeight(m.Type);
+                    list.Add(new SceneElement(e.Id, type, e.Name, e.Floor, 0, 0, 0, 0, 0, height, Path: path, Closed: m.Closed == true));
                     break;
                 }
                 case LayoutElementType.Conveyor:
@@ -130,7 +133,7 @@ public static class PlaybackScene
                 }
                 default:
                     list.Add(new SceneElement(e.Id, type, e.Name, e.Floor, e.X, e.Y, e.W, e.H, e.Rotation, m.Height is > 0 ? m.Height.Value : DefaultHeight(m.Type),
-                        ServedFloors: e.IsElevator ? e.ServedFloors : null));
+                        ServedFloors: e.IsElevator ? e.ServedFloors : null, Gates: e.IsElevator ? ElevatorGates.SidesOf(m, layout) : null));
                     break;
             }
         }
@@ -163,7 +166,7 @@ public static class PlaybackScene
                     list.Add(new SceneElementState(e.Id, look, isSelected, Estimated: e.IsEstimated,
                         Loaded: world.PalletsAt(LocationKind.Elevator, e.Id).Any(), Executing: moving, Summary: e.Summary,
                         ElevatorFloor: moving ? null : ev?.Floor, MovingFrom: moving ? ev!.FromFloor : null, MovingTo: moving ? ev!.ToFloor : null,
-                        CargoLabel: CargoLabel(world, LocationKind.Elevator, e.Id, cargoByPallet)));
+                        CargoLabel: CargoLabel(world, LocationKind.Elevator, e.Id, cargoByPallet), OpenGate: e.OpenGate));
                     break;
                 }
                 case LayoutElementType.Rack:
@@ -176,7 +179,7 @@ public static class PlaybackScene
                         SelectedColumn: selectedCell is not null && e.Cells.Contains(selectedCell) ? selectedCell.Column : null));
                     break;
                 }
-                case LayoutElementType.Station:
+                case LayoutElementType.Station or LayoutElementType.Workstation:
                     list.Add(new SceneElementState(e.Id, look, isSelected, Presence: e.PresenceLight switch { "●" => "on", "○" => "off", _ => "unknown" },
                         Badge: e.StatusBadge, Inconsistent: e.IsInconsistent, Loaded: e.Look == ElementLook.Occupied || world.PalletsAt(LocationKind.Station, e.Id).Any(),
                         Summary: e.Summary));

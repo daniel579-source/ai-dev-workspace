@@ -98,7 +98,7 @@ public sealed partial class LayoutEditorViewModel
     {
         var primary = SelectedElement;
         var handles = new List<EditorHandle>();
-        if (primary is { IsRail: true })
+        if (primary is { IsPath: true })
             handles.AddRange(primary.RailHandles.Select(h => new EditorHandle(h.IsPoint ? "railPoint" : "railSegment", primary.Id, h.X, h.Y, h.Index, h.IsSelected)));
         if (primary is { IsConveyor: true })
         {
@@ -107,7 +107,7 @@ public sealed partial class LayoutEditorViewModel
         }
         return new EditorSceneState(CurrentFloor, OnlyCurrentFloor, Elements.Where(e => e.IsSelected).Select(e => e.Id).ToList(), primary?.Id,
             CanResize: primary is { HasGeometry: true }, CanHeight: primary is not null && CanDragHeight(primary),
-            CanRotate: primary is not null && (primary.HasGeometry || primary.IsRail),
+            CanRotate: primary is not null && (primary.HasGeometry || primary.IsPath),
             Elements.Where(e => e.HasIssue).Select(e => e.Id).ToList(), handles);
     }
 }

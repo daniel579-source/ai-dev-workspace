@@ -33,16 +33,15 @@ public sealed class LayoutEditorViewModelTests : IDisposable
         {
             var e = Add(type);
             Assert.Equal(type, e.Type);
-            if (type == LayoutElementType.Rail) Assert.Equal(2, e.RailPoints.Count); // 導軌沒有寬深：直線範本（ADR-0006 第 14 點）
+            if (LayoutElement.HasPath(type)) Assert.Equal(2, e.RailPoints.Count); // 導軌、圍欄沒有寬深：直線範本（ADR-0006 第 14 點、ADR-0020）
             else Assert.True(e.W > 0 && e.H > 0);
         }
-        var conveyor = Add(LayoutElementType.Conveyor); // 已有站點、搬送機與對接設備，可以加輸送線
+        var conveyor = Add(LayoutElementType.Conveyor); // 已有站點、工站點、搬送機與對接設備，可以加輸送線
 
         Assert.Equal(LayoutElementType.Conveyor, conveyor.Type);
-        Assert.Equal(["st-1", "vh-1"], new[] { conveyor.From!, conveyor.To! });
-        Assert.NotNull(conveyor.ToPoint); // 連到搬送機的那一端有交接點
-        Assert.Equal(11, _vm.Elements.Count);
-        Assert.Equal(11, _vm.Elements.Select(e => e.Id).Distinct().Count());
+        Assert.Equal(["st-1", "ws-1"], new[] { conveyor.From!, conveyor.To! }); // 依加入的順序：站點、工站點（ADR-0020）
+        Assert.Equal(14, _vm.Elements.Count);
+        Assert.Equal(14, _vm.Elements.Select(e => e.Id).Distinct().Count());
         Assert.True(_vm.IsDirty);
     }
 

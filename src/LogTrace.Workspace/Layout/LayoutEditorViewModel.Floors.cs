@@ -288,7 +288,7 @@ public sealed partial class LayoutEditorViewModel
     void MoveSelectionToFloor()
     {
         if (MoveTargetFloor is not { } target) return;
-        var items = Selection.Where(e => (e.HasGeometry || e.IsRail) && !e.IsElevator).ToList(); // 電梯以服務的樓層表示
+        var items = Selection.Where(e => (e.HasGeometry || e.IsPath) && !e.IsElevator).ToList(); // 電梯以服務的樓層表示
         Batch(() =>
         {
             foreach (var e in items) e.Floor = target;

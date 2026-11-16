@@ -102,8 +102,9 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     public bool IsRack => Type == LayoutElementType.Rack;
     public bool IsFireDoor => Type == LayoutElementType.FireDoor;
     public bool IsRail => Type == LayoutElementType.Rail;
-    public bool HasGeometry => !IsConveyor && !IsRail;
-    public bool IsAuxiliary => Type is LayoutElementType.Conveyor or LayoutElementType.Area or LayoutElementType.Label or LayoutElementType.Rail;
+    public bool HasGeometry => !IsConveyor && !LayoutElement.HasPath(Type);
+    public bool IsAuxiliary => Type is LayoutElementType.Conveyor or LayoutElementType.Area or LayoutElementType.Label or LayoutElementType.Rail
+        or LayoutElementType.Fence or LayoutElementType.FenceGate; // 圍欄與圍欄門不推導狀態（ADR-0020）
 
     public double X { get; }
     public double Y { get; }
@@ -156,6 +157,10 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     /// <summary>不一致的說明（滑鼠停留時顯示）。</summary>
     [ObservableProperty]
     public partial string? InconsistentText { get; set; }
+
+    /// <summary>電梯：抵達後朝目的地的那一側閘門畫成開（推估，ADR-0020 第 3 點）；其他時間或其他元素為 null。</summary>
+    [ObservableProperty]
+    public partial string? OpenGate { get; set; }
 
     /// <summary>可能卡住（推估，ADR-0005 第 5 點 2026-11-16 補充，#142）：貨物在這個元素上卡住（命令沒有下一步或站點沒有派送）。</summary>
     [ObservableProperty]
@@ -275,6 +280,9 @@ public sealed partial class PlaybackViewModel : ObservableObject
         _stalls = stalls ?? [];
         _stationModeNames = (stationModeNames ?? []).GroupBy(p => p.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Value, StringComparer.Ordinal);
         _storageRule = layout.StorageCodeRule;
+        _gates = layout.Elements.Where(e => e.Type == LayoutElementType.Elevator)
+            .ToDictionary(e => e.Id, e => ElevatorGates.SidesOf(e, layout), StringComparer.Ordinal);
+        _effectAt = model.Effects.GroupBy(x => x.Sequence).ToDictionary(g => g.Key, g => g.ToList());
         _events = events.ToDictionary(e => e.Sequence);
         _motion = new VehicleMotion(model.Effects, layout, seq => _events.TryGetValue(seq, out var ev) ? ev.Timestamp : null);
         var byId = layout.Elements.GroupBy(e => e.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
@@ -327,7 +335,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
         var w = _state;
         switch (el.Type)
         {
-            case LayoutElementType.Station:
+            case LayoutElementType.Station or LayoutElementType.Workstation:
             {
                 w.Stations.TryGetValue(el.Id, out var s);
                 var pallets = w.PalletsAt(LocationKind.Station, el.Id).Select(p => p.Id).ToList();
@@ -366,6 +374,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
                     : e?.IsMoving == true ? ElementLook.Executing
                     : load.Count > 0 ? ElementLook.Occupied
                     : e is null ? ElementLook.Unknown : ElementLook.Empty;
+                el.OpenGate = OpenGateOf(el, e);
                 break;
             }
             case LayoutElementType.Dock:
@@ -415,6 +424,22 @@ public sealed partial class PlaybackViewModel : ObservableObject
     }
 
     Dictionary<string, string> _stationModeNames = [];
+    Dictionary<string, IReadOnlyList<string>> _gates = new(StringComparer.Ordinal);
+    Dictionary<long, List<Engine.Parsing.EventEffect>> _effectAt = [];
+
+    /// <summary>
+    /// 電梯朝目的地的閘門是否開著（推估，ADR-0020 第 3 點）：台車已抵達（目前樓層依 LOG）且還沒有下一次派送時，
+    /// 抵達事件的目的地設備在哪一側，且那一側有閘門，就畫成開。
+    /// </summary>
+    string? OpenGateOf(PlaybackElementViewModel el, ElevatorState? e)
+    {
+        if (e is null || e.IsMoving || e.Work == VehicleWork.Executing || e.FloorBasis != ElevatorFloorBasis.Arrived || e.FloorCause is not { } seq) return null;
+        if (_model is null || !_gates.TryGetValue(el.Id, out var gates) || gates.Count == 0) return null;
+        var dest = _effectAt.GetValueOrDefault(seq)?.Select(x => x.Get(Engine.Parsing.FieldKinds.Destination)).OfType<string>().FirstOrDefault();
+        if (_model.Resolve(dest) is not { } target || target.Id == el.Id) return null;
+        var side = ElevatorGates.SideFacing(el.Model, (target.X ?? 0) + (target.W ?? 0) / 2, (target.Y ?? 0) + (target.H ?? 0) / 2);
+        return gates.Contains(side) ? side : null;
+    }
     IReadOnlyList<LayoutRow> _rows = [];
     DateTime? _momentTime;
 
@@ -489,7 +514,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
         if (Floors.Count > 1 && !el.IsElevator) Detail.Add(Line("樓層", el.Floor, null));
         switch (el.Type)
         {
-            case LayoutElementType.Station:
+            case LayoutElementType.Station or LayoutElementType.Workstation:
             {
                 w.Stations.TryGetValue(el.Id, out var s);
                 Detail.Add(Line("在席", s?.Presence switch { true => "ON", false => "OFF", null => "未知" }, s?.PresenceCause));
@@ -536,6 +561,10 @@ public sealed partial class PlaybackViewModel : ObservableObject
                 }, e?.WorkCause));
                 foreach (var p in w.PalletsAt(LocationKind.Elevator, el.Id))
                     Detail.Add(Line("載著", PalletText(p), p.LocationCause));
+                if (_gates.GetValueOrDefault(el.Id) is { Count: > 0 } gates)
+                    Detail.Add(Line("閘門", el.OpenGate is null
+                        ? $"{gates.Count} 處，關著（推估：LOG 沒有記錄閘門）"
+                        : $"{gates.Count} 處；朝目的地的那一處開著（推估：抵達後依目的地方向，LOG 沒有記錄閘門）", e?.FloorCause));
                 break;
             }
             case LayoutElementType.Dock:
@@ -652,7 +681,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
 
     void UpdateEquipment()
     {
-        var rows = Elements.Where(e => e.Type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Rm or LayoutElementType.Dock or LayoutElementType.FireDoor or LayoutElementType.Elevator)
+        var rows = Elements.Where(e => e.Type is LayoutElementType.Station or LayoutElementType.Workstation or LayoutElementType.Vehicle or LayoutElementType.Rm or LayoutElementType.Dock or LayoutElementType.FireDoor or LayoutElementType.Elevator)
             .Select(e => new EquipmentRowViewModel(e.Id, e.Name, e.TypeLabel, e.Aliases, EquipmentState(e), _state.Alarms.ContainsKey(e.Id) || e.IsInconsistent || e.IsStalled, e.Look,
                 e.IsElevator ? e.CurrentFloorText ?? "—" : e.Floor))
             .Where(r => !OnlyAbnormal || r.IsAbnormal);
@@ -678,7 +707,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
         if (e.IsStalled) parts.Add("可能卡住（推估）");
         switch (e.Type)
         {
-            case LayoutElementType.Station:
+            case LayoutElementType.Station or LayoutElementType.Workstation:
                 w.Stations.TryGetValue(e.Id, out var s);
                 parts.Add("在席 " + (s?.Presence switch { true => "ON", false => "OFF", null => "未知" }));
                 if (s?.Mode is { } mode) parts.Add("模式 " + StationModeText(mode)); // 模式未知時不顯示

@@ -170,7 +170,7 @@ public sealed class WorldModel
         if (Resolve(code) is { } e)
             return e.Type switch
             {
-                LayoutElementType.Station => (LocationKind.Station, e.Id),
+                LayoutElementType.Station or LayoutElementType.Workstation => (LocationKind.Station, e.Id), // 工站點比照站點（ADR-0020）
                 LayoutElementType.Vehicle or LayoutElementType.Rm => (LocationKind.Vehicle, e.Id),
                 LayoutElementType.Dock => (LocationKind.AtDock, e.Id),
                 _ => (LocationKind.Unknown, code),
@@ -254,12 +254,14 @@ public sealed class WorldModel
         long seq = x.Sequence;
         w.Sequence = seq;
         string? Element(string kind, LayoutElementType type) => Resolve(x.Get(kind)) is { } e && e.Type == type ? e.Id : null;
+        // 站點欄位：站點或工站點（ADR-0020，工站點的狀態推導比照站點）
+        string? Station() => Resolve(x.Get(FieldKinds.Station)) is { } e && LayoutElement.IsStationLike(e.Type) ? e.Id : null;
         // 執行命令一段的設備：RM 欄位對應到 RM 元素（ADR-0019，#123），或搬送機欄位對應到搬送機（STV）
         string? Carrier() => Element(FieldKinds.Rm, LayoutElementType.Rm) ?? Element(FieldKinds.Vehicle, LayoutElementType.Vehicle);
 
         switch (x.Effect)
         {
-            case EffectKinds.Signal when Element(FieldKinds.Station, LayoutElementType.Station) is { } st && x.Get(FieldKinds.Signal) is { } name:
+            case EffectKinds.Signal when Station() is { } st && x.Get(FieldKinds.Signal) is { } name:
             {
                 bool on = string.Equals(x.Get(FieldKinds.SignalValue), "ON", StringComparison.OrdinalIgnoreCase);
                 var s = StationOf(w, st);
@@ -267,10 +269,10 @@ public sealed class WorldModel
                 else s.Signals[name.Trim()] = (on, seq);
                 break;
             }
-            case EffectKinds.StationMode when Element(FieldKinds.Station, LayoutElementType.Station) is { } st:
+            case EffectKinds.StationMode when Station() is { } st:
                 (StationOf(w, st).Mode, StationOf(w, st).ModeCause) = (x.Get(FieldKinds.StationMode), seq);
                 break;
-            case EffectKinds.StationStatus when Element(FieldKinds.Station, LayoutElementType.Station) is { } st && x.Get(FieldKinds.StationStatus) is { } status:
+            case EffectKinds.StationStatus when Station() is { } st && x.Get(FieldKinds.StationStatus) is { } status:
                 (StationOf(w, st).Status, StationOf(w, st).StatusCause) = (status.Trim(), seq);
                 break;
 

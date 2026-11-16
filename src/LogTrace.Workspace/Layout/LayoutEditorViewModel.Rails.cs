@@ -38,15 +38,15 @@ public sealed partial class LayoutEditorViewModel
 
     /// <summary>元素的範圍（樓層座標）：導軌依路徑計算，其他依位置與尺寸。</summary>
     static (double Left, double Top, double Right, double Bottom) BoundsOf(LayoutElementViewModel e) =>
-        e.IsRail ? e.Path().Bounds() : LayoutGeometry.Bounds(e.X, e.Y, e.W, e.H, e.Rotation);
+        e.IsPath ? e.Path().Bounds() : LayoutGeometry.Bounds(e.X, e.Y, e.W, e.H, e.Rotation);
 
     static (double Left, double Top, double Right, double Bottom) BoundsOf(LayoutElement e) =>
-        e.Type == LayoutElementType.Rail ? RailPath.Of(e).Bounds() : LayoutGeometry.Bounds(e.X ?? 0, e.Y ?? 0, e.W ?? 0, e.H ?? 0, e.Rotation ?? 0);
+        LayoutElement.HasPath(e.Type) ? RailPath.Of(e).Bounds() : LayoutGeometry.Bounds(e.X ?? 0, e.Y ?? 0, e.W ?? 0, e.H ?? 0, e.Rotation ?? 0);
 
     /// <summary>更新導軌在畫面上的路徑與把手（選取的導軌才有把手）、段的清單與搬送機的導軌選單。</summary>
     void RefreshRails()
     {
-        foreach (var r in Elements.Where(e => e.IsRail))
+        foreach (var r in Elements.Where(e => e.IsPath))
         {
             var path = r.Path();
             r.RailPathData = path.ToPathData(r.OffsetX, r.OffsetY);
@@ -62,7 +62,7 @@ public sealed partial class LayoutEditorViewModel
                 foreach (var h in handles) r.RailHandles.Add(h);
             }
         }
-        var segments = SelectedElement is { IsRail: true } rail
+        var segments = SelectedElement is { IsPath: true } rail
             ? Enumerable.Range(0, rail.Path().SegmentCount).Select(i => new RailSegmentItem(i, $"第 {i + 1} 段")).ToList() : [];
         if (!segments.SequenceEqual(RailSegments))
         {
@@ -100,13 +100,16 @@ public sealed partial class LayoutEditorViewModel
     [RelayCommand]
     void AddRailLoop() => AddRail(loop: true);
 
-    void AddRail(bool loop)
+    void AddRail(bool loop) => AddPath(LayoutElementType.Rail, loop);
+
+    /// <summary>新增折線元素（導軌或圍欄，ADR-0020）：直線或跑道形範本，建立後就是一般的路徑。</summary>
+    void AddPath(LayoutElementType type, bool loop)
     {
-        var id = NextId(LayoutElementType.Rail);
+        var id = NextId(type);
         var top = SnapTo(Elements.Where(e => !e.IsConveyor && SameFloor(FloorOf(e), CurrentFloor)).Select(e => BoundsOf(e).Bottom).DefaultIfEmpty(0).Max() + 1);
         var model = new LayoutElement
         {
-            Id = id, Type = LayoutElementType.Rail, Name = $"導軌 {id[(id.IndexOf('-') + 1)..]}", Floor = CurrentFloor,
+            Id = id, Type = type, Name = $"{LayoutElementTypes.Label(type)} {id[(id.IndexOf('-') + 1)..]}", Floor = CurrentFloor,
             // 跑道形的半圓往外鼓 3 公尺：起點右移 3 公尺，左邊的半圓才不會超出畫布
             Points = loop ? RailPath.LoopTemplate(4, top) : RailPath.StraightTemplate(1, top), Closed = loop ? true : null,
         };
@@ -114,7 +117,7 @@ public sealed partial class LayoutEditorViewModel
         Attach(vm);
         SelectedElement = vm;
         IsDirty = true;
-        Status = loop ? "已新增跑道形導軌。" : "已新增導軌。";
+        Status = $"已新增{(loop ? "跑道形" : "")}{LayoutElementTypes.Label(type)}。";
     }
 
     // ---- 把手 ----
@@ -156,7 +159,7 @@ public sealed partial class LayoutEditorViewModel
     [RelayCommand]
     void InsertRailPoint()
     {
-        if (SelectedElement is not { IsRail: true } rail || SelectedRailSegment is not { } seg) return;
+        if (SelectedElement is not { IsPath: true } rail || SelectedRailSegment is not { } seg) return;
         var path = rail.Path();
         var (points, index) = path.InsertAt(path.SegmentMiddle(seg));
         if (index < 0) return;
@@ -167,7 +170,7 @@ public sealed partial class LayoutEditorViewModel
     /// <summary>在畫布上雙擊導軌：在雙擊處（投影到路徑上的位置）插入一點。</summary>
     public void InsertRailPointAt(LayoutElementViewModel rail, double x, double y)
     {
-        if (!rail.IsRail) return;
+        if (!rail.IsPath) return;
         SelectedElement = rail;
         var path = rail.Path();
         var (points, index) = path.InsertAt(path.Project(x - rail.OffsetX, y - rail.OffsetY).Distance);
@@ -180,7 +183,7 @@ public sealed partial class LayoutEditorViewModel
     [RelayCommand]
     void DeleteRailPoint()
     {
-        if (SelectedElement is not { IsRail: true } rail || SelectedRailPoint is not { } i) return;
+        if (SelectedElement is not { IsPath: true } rail || SelectedRailPoint is not { } i) return;
         if (rail.RailPoints.Count <= 2)
         {
             Status = "導軌至少要有 2 個點。";
@@ -196,7 +199,7 @@ public sealed partial class LayoutEditorViewModel
     [RelayCommand]
     void StraightenRailSegment()
     {
-        if (SelectedElement is not { IsRail: true } rail || SelectedRailSegment is not { } seg || seg >= rail.RailPoints.Count) return;
+        if (SelectedElement is not { IsPath: true } rail || SelectedRailSegment is not { } seg || seg >= rail.RailPoints.Count) return;
         var points = rail.RailPoints.ToList();
         points[seg] = points[seg] with { B = null };
         SetRailPoints(rail, points, $"第 {seg + 1} 段已改成直線。");

@@ -192,7 +192,7 @@ public sealed class Layout3DEditorView : Web3DView
                     vm.ToggleSelect(element);
                     return;
                 }
-                if (Num(m, "detail") >= 2 && element.IsRail)
+                if (Num(m, "detail") >= 2 && element.IsPath)
                 {
                     vm.InsertRailPointAt(element, _startX, _startY); // 雙擊導軌：插入一點
                     return;

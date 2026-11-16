@@ -73,9 +73,12 @@ public sealed partial class LayoutElementViewModel : ObservableObject
     public bool IsRack => Type == LayoutElementType.Rack;
     public bool IsConveyor => Type == LayoutElementType.Conveyor;
     /// <summary>有位置與尺寸（x、y、w、h、rotation）的元素；輸送線與導軌沒有。</summary>
-    public bool HasGeometry => !IsConveyor && !IsRail;
+    public bool HasGeometry => !IsConveyor && !IsPath;
     public bool IsFireDoor => Type == LayoutElementType.FireDoor;
     public bool IsRail => Type == LayoutElementType.Rail;
+    /// <summary>以折線編輯的元素：導軌與圍欄（ADR-0020）。</summary>
+    public bool IsPath => LayoutElement.HasPath(Type);
+    public bool IsFence => Type == LayoutElementType.Fence;
     public bool IsVehicle => Type == LayoutElementType.Vehicle;
     public bool IsRm => Type == LayoutElementType.Rm;
 
@@ -258,7 +261,7 @@ public sealed partial class LayoutElementViewModel : ObservableObject
 
     public LayoutElement ToModel()
     {
-        if (IsRail)
+        if (IsPath)
             return new LayoutElement
             {
                 Id = Id, Type = Type, Name = Name, Floor = string.IsNullOrWhiteSpace(Floor) ? null : Floor,
@@ -306,8 +309,9 @@ public static class LayoutElementTypes
 {
     public static IReadOnlyList<LayoutElementType> Addable { get; } =
     [
-        LayoutElementType.Station, LayoutElementType.Rack, LayoutElementType.Vehicle, LayoutElementType.Rm, LayoutElementType.Dock,
-        LayoutElementType.FireDoor, LayoutElementType.Elevator, LayoutElementType.Conveyor, LayoutElementType.Rail, LayoutElementType.Area, LayoutElementType.Label,
+        LayoutElementType.Station, LayoutElementType.Workstation, LayoutElementType.Rack, LayoutElementType.Vehicle, LayoutElementType.Rm, LayoutElementType.Dock,
+        LayoutElementType.FireDoor, LayoutElementType.Elevator, LayoutElementType.Conveyor, LayoutElementType.Rail, LayoutElementType.Fence, LayoutElementType.FenceGate,
+        LayoutElementType.Area, LayoutElementType.Label,
     ];
 
     /// <summary>
@@ -366,6 +370,9 @@ public static class LayoutElementTypes
         LayoutElementType.Conveyor => "輸送線",
         LayoutElementType.Area => "區域",
         LayoutElementType.Label => "文字",
+        LayoutElementType.Workstation => "工站點",
+        LayoutElementType.Fence => "圍欄",
+        LayoutElementType.FenceGate => "圍欄門",
         _ => type.ToString(),
     };
 
@@ -382,17 +389,22 @@ public static class LayoutElementTypes
         LayoutElementType.Conveyor => "cv",
         LayoutElementType.Area => "ar",
         LayoutElementType.Label => "tx",
+        LayoutElementType.Workstation => "ws",
+        LayoutElementType.Fence => "fc",
+        LayoutElementType.FenceGate => "fg",
         _ => "el",
     };
 
     /// <summary>預設尺寸（寬、深、高，公尺）。</summary>
     public static (double W, double H, double Height) DefaultSize(LayoutElementType type) => type switch
     {
-        LayoutElementType.Station => (2, 2, 1.2),
+        LayoutElementType.Station => (2, 2, 0.8),
+        LayoutElementType.Workstation => (2, 2, 0.8),
+        LayoutElementType.FenceGate => (1, 0.1, 2.5),
         LayoutElementType.Rack => (12, 1.5, 0),
-        LayoutElementType.Vehicle => (2.5, 1.2, 2),
+        LayoutElementType.Vehicle => (2.5, 1.2, 0.8),
         LayoutElementType.Rm => (2, 1.2, 12.5), // 與新料架預設的高度相同（5 層 × 2.5 公尺，#123 使用者決定）
-        LayoutElementType.Dock => (2, 2, 1.5),
+        LayoutElementType.Dock => (2, 2, 0.8),
         LayoutElementType.FireDoor => (2, 0.5, 3),
         LayoutElementType.Elevator => (2, 2, 3),
         LayoutElementType.Area => (6, 4, 0),

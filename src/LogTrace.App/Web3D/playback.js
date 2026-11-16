@@ -16,6 +16,7 @@ function applyState(state) {
     const faded = s.estimated ? 0.5 : 1;
     switch (e.type) {
       case 'station':
+      case 'workstation': // 工站點比照站點（ADR-0020）
         setColor(item.body, color);
         setColor(item.light, s.presence === 'on' ? COLOR.presenceOn : s.presence === 'off' ? COLOR.presenceOff : COLOR.presenceUnknown, s.presence === 'unknown' ? 0.5 : 1);
         item.cargo.visible = !!s.loaded;
@@ -43,6 +44,8 @@ function applyState(state) {
         if (y == null && s.movingFrom && s.movingTo && at(s.movingFrom) != null && at(s.movingTo) != null) y = (at(s.movingFrom) + at(s.movingTo)) / 2; // 移動中：推估
         item.car.visible = y != null; // 目前樓層未取得資訊時不畫台車（不顯示猜測值）
         if (y != null) item.car.position.y = y;
+        // 閘門（ADR-0020）：抵達後朝目的地的那一側畫成開（推估，淡色），其他關著
+        for (const [side, gate] of Object.entries(item.gates || {})) setColor(gate, 0xF59E0B, s.openGate === side ? 0.12 : 0.85);
         break;
       }
       case 'rack': {

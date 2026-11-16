@@ -182,15 +182,33 @@ export function createViewer(opts = {}) {
     return instanced(list, frameMat);
   }
 
-  /** 四支腳撐起一層台面（狀態顏色），上面有滾筒與兩側護欄。 */
-  function deckLook(e, item) {
+  /** 四支腳撐起一層台面（狀態顏色），上面有滾筒；guards 為 true 時加兩側護欄。 */
+  function deckLook(e, item, guards = true) {
     const top = e.height;
     item.group.add(legs(e.w, e.h, top - 0.1));
     item.body = box(e.w - 0.08, 0.05, e.h - 0.08, mat(LOOK.unknown), 0, top - 0.11, 0);
     item.group.add(item.body);
-    item.group.add(instanced([at(0, top - 0.02, -e.h / 2 + 0.03, e.w, 0.1, 0.06), at(0, top - 0.02, e.h / 2 - 0.03, e.w, 0.1, 0.06)], frameMat));
+    if (guards) item.group.add(instanced([at(0, top - 0.02, -e.h / 2 + 0.03, e.w, 0.1, 0.06), at(0, top - 0.02, e.h / 2 - 0.03, e.w, 0.1, 0.06)], frameMat));
     item.group.add(rollers(e.w - 0.1, e.h - 0.16, top - 0.05));
     return top;
+  }
+
+  // 黃色網狀圍欄（ADR-0020）：立柱、上下橫桿與半透明的網面
+  const fenceMat = mat(0xEAB308);
+  const meshMat = mat(0xFACC15, { transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false });
+
+  /** 一段圍欄：沿 x 長 len，從 y0 到 y1；posts 為 true 時每約 2 公尺一支立柱。 */
+  function fencePanel(len, y0, y1, posts = true) {
+    const g = new THREE.Group();
+    const h = y1 - y0;
+    g.add(box(len, h, 0.02, meshMat, 0, y0 + h / 2, 0));
+    const bars = [at(0, y1 - 0.03, 0, len, 0.05, 0.05), at(0, y0 + 0.05, 0, len, 0.05, 0.05)];
+    if (posts) {
+      const n = Math.max(1, Math.round(len / 2));
+      for (let i = 0; i <= n; i++) bars.push(at(-len / 2 + (len / n) * i, (y0 + y1) / 2, 0, 0.06, h, 0.06));
+    }
+    g.add(instanced(bars, fenceMat));
+    return g;
   }
 
   /**
@@ -237,7 +255,10 @@ export function createViewer(opts = {}) {
     item.group.add(instanced([at(-e.w / 2 + 0.04, clearance + bodyH * 0.35, 0, 0.08, bodyH * 0.5, e.h * 0.85), at(e.w / 2 - 0.04, clearance + bodyH * 0.35, 0, 0.08, bodyH * 0.5, e.h * 0.85)], bumperMat));
     item.top = box(e.w * 0.8, e.height - bodyH, e.h * 0.7, mat(0x475569, { transparent: true }), 0, bodyH + (e.height - bodyH) / 2, 0);
     item.group.add(item.top);
-    item.group.add(rollers(e.w * 0.78, e.h * 0.62, e.height + 0.02, 0.18, 0.035));
+    // 頂面滾筒：軸沿長邊（2026-11-16 使用者要求轉 90 度，ADR-0020）
+    const topRollers = rollers(e.h * 0.62, e.w * 0.78, e.height + 0.02, 0.18, 0.035);
+    topRollers.rotation.y = Math.PI / 2;
+    item.group.add(topRollers);
     item.cargo = box(Math.min(e.w, 1.1) * 0.8, 0.8, Math.min(e.h, 1.1) * 0.8, mat(COLOR.cargo, { transparent: true }), 0, e.height + 0.45, 0);
     item.cargo.visible = false;
     item.group.add(item.cargo);
@@ -268,8 +289,54 @@ export function createViewer(opts = {}) {
   }
 
   function buildDock(e, item) {
-    // Conv（對接設備；2026-11-16 使用者要求與站點的圖對換）：四支腳撐起的台面與滾筒
-    deckLook(e, item);
+    // Conv（對接設備；2026-11-16 使用者要求與站點的圖對換）：四支腳撐起的台面與滾筒，兩側不要護欄（ADR-0020）
+    deckLook(e, item, false);
+  }
+
+  const towerColors = [0xDC2626, 0x2563EB, 0xF8FAFC, 0x16A34A, 0xFACC15]; // 紅、藍、白、綠、黃（由上而下）
+
+  function buildWorkstation(e, item) {
+    // 工站點（ADR-0020）：台面與滾筒、在席指示燈與貨物，一角有 5 色燈柱（裝飾，不代表狀態）
+    const top = deckLook(e, item);
+    item.light = new THREE.Mesh(new THREE.SphereGeometry(Math.min(0.18, Math.min(e.w, e.h) / 4), 12, 8), mat(COLOR.presenceUnknown, { transparent: true, opacity: 0.6 }));
+    item.light.position.set(e.w / 2 - 0.2, top + 0.12, -e.h / 2 + 0.2);
+    item.group.add(item.light);
+    item.cargo = box(Math.min(e.w, 1.1) * 0.8, 0.8, Math.min(e.h, 1.1) * 0.8, mat(COLOR.cargo), 0, top + 0.4, 0);
+    item.cargo.visible = false;
+    item.group.add(item.cargo);
+    const pole = Math.max(1.2, e.height + 1.0);
+    const px = -e.w / 2 + 0.12;
+    const pz = -e.h / 2 + 0.12;
+    item.group.add(box(0.05, pole, 0.05, frameMat, px, pole / 2, pz));
+    const seg = 0.14;
+    towerColors.forEach((c, i) => item.group.add(box(0.12, seg - 0.01, 0.12, mat(c), px, pole + seg * (towerColors.length - i - 0.5), pz)));
+  }
+
+  function buildFenceGate(e, item) {
+    // 圍欄門（ADR-0020）：門高約 1.8 公尺（畫成關著），上方到元素高度為黃色網狀，門邊有手動／自動旋鈕（裝飾）
+    const door = Math.min(1.8, e.height);
+    item.body = box(e.w - 0.08, door - 0.05, 0.03, mat(0xFDE68A, { transparent: true, opacity: 0.6, side: THREE.DoubleSide }), 0, (door - 0.05) / 2 + 0.05, 0);
+    item.group.add(item.body);
+    item.group.add(instanced([at(-e.w / 2 + 0.03, e.height / 2, 0, 0.06, e.height, 0.06), at(e.w / 2 - 0.03, e.height / 2, 0, 0.06, e.height, 0.06),
+      at(0, door, 0, e.w, 0.06, 0.06)], fenceMat));
+    if (e.height > door + 0.05) item.group.add(fencePanel(e.w, door, e.height, false));
+    item.group.add(box(0.12, 0.18, 0.06, darkMat, e.w / 2 + 0.1, 1.2, 0.05), box(0.05, 0.05, 0.03, mat(0xEF4444), e.w / 2 + 0.1, 1.2, 0.095));
+  }
+
+  function buildFence(e, item) {
+    // 圍欄（ADR-0020）：沿折線的黃色網狀圍欄，不參與狀態
+    const elevation = elevationOf(e.floor);
+    const pts = e.path || [];
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const [x1, y1] = pts[i];
+      const [x2, y2] = pts[i + 1];
+      const len = Math.hypot(x2 - x1, y2 - y1);
+      if (len < 1e-6) continue;
+      const seg = fencePanel(len, 0, e.height);
+      seg.position.set((x1 + x2) / 2, elevation, (y1 + y2) / 2);
+      seg.rotation.y = -Math.atan2(y2 - y1, x2 - x1);
+      item.group.add(seg);
+    }
   }
 
   function buildFireDoor(e, item) {
@@ -350,6 +417,26 @@ export function createViewer(opts = {}) {
     item.cargo = box(Math.min(e.w, 1.1) * 0.6, 0.8, Math.min(e.h, 1.1) * 0.6, mat(COLOR.cargo, { transparent: true }), 0, e.height + 0.4, 0);
     item.cargo.visible = false;
     item.car.add(item.body, item.cargo, rollers(e.w * 0.75, e.h * 0.7, e.height * 0.85 + 0.04, 0.18, 0.035));
+    // 台車四邊（ADR-0020）：對接的側面畫閘門（開為推估），其餘側面畫圍欄
+    const floorY = e.height * 0.85 + 0.08;
+    const guardH = 1.1;
+    const gates = new Set(e.gates || []);
+    item.gates = {};
+    const sides = {
+      xMin: [-e.w * 0.4, 0, Math.PI / 2, e.h * 0.8], xMax: [e.w * 0.4, 0, Math.PI / 2, e.h * 0.8],
+      zMin: [0, -e.h * 0.4, 0, e.w * 0.8], zMax: [0, e.h * 0.4, 0, e.w * 0.8],
+    };
+    for (const [side, [x, z, ry, len]] of Object.entries(sides)) {
+      const part = gates.has(side)
+        ? box(len, guardH, 0.04, mat(0xF59E0B, { transparent: true, opacity: 0.85 }), 0, floorY + guardH / 2, 0)
+        : fencePanel(len, floorY, floorY + guardH);
+      const holder = new THREE.Group();
+      holder.add(part);
+      holder.position.set(x, 0, z);
+      holder.rotation.y = ry;
+      if (gates.has(side)) item.gates[side] = part;
+      item.car.add(holder);
+    }
     item.group.add(item.car);
   }
 
@@ -416,6 +503,9 @@ export function createViewer(opts = {}) {
       case 'conveyor': buildConveyor(e, item); break;
       case 'rail': buildRail(e, item); break;
       case 'dock': place(item.group, e, elevation); buildDock(e, item); break;
+      case 'workstation': place(item.group, e, elevation); buildWorkstation(e, item); break;
+      case 'fenceGate': place(item.group, e, elevation); buildFenceGate(e, item); break;
+      case 'fence': buildFence(e, item); break;
       case 'rm': place(item.group, e, elevation); buildRm(e, item); break;
       case 'fireDoor': place(item.group, e, elevation); buildFireDoor(e, item); break;
       case 'area': place(item.group, e, elevation); buildArea(e, item); break;
@@ -430,7 +520,7 @@ export function createViewer(opts = {}) {
         item.body = box(e.w || 1, e.height, e.h || 1, mat(LOOK.unknown), 0, e.height / 2, 0);
         item.group.add(item.body);
     }
-    if (e.type !== 'rail' && e.type !== 'conveyor') {
+    if (e.type !== 'rail' && e.type !== 'conveyor' && e.type !== 'fence') {
       const aux = e.type === 'area' || e.type === 'label';
       item.label = makeLabel(e, aux);
       const parent = e.type === 'elevator' ? item.car : item.group;
@@ -603,7 +693,7 @@ export function createViewer(opts = {}) {
       if (!o) continue;
       const item = items.get(o.userData.id);
       if (!item) continue;
-      if (skipAux && (item.data.type === 'area' || item.data.type === 'rail')) continue;
+      if (skipAux && (item.data.type === 'area' || item.data.type === 'rail' || item.data.type === 'fence')) continue;
       return { item, hit };
     }
     return null;

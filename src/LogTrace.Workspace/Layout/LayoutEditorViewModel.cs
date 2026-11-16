@@ -455,9 +455,9 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     [RelayCommand]
     void AddElement(LayoutElementType type)
     {
-        if (type == LayoutElementType.Rail)
+        if (LayoutElement.HasPath(type))
         {
-            AddRail(loop: false); // 直線範本（ADR-0006 第 14 點）
+            AddPath(type, loop: false); // 直線範本（ADR-0006 第 14 點；圍欄 ADR-0020）
             return;
         }
         var id = NextId(type);
@@ -467,7 +467,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             var ends = Elements.Where(e => LayoutElement.CanBeConveyorEnd(e.Type)).ToList(); // 依加入的順序，不受清單排序影響
             if (ends.Count < 2)
             {
-                Status = "輸送線需要至少兩個站點、Conv 或搬送機。";
+                Status = "輸送線需要至少兩個站點、工站點、Conv 或搬送機。";
                 return;
             }
             model = new LayoutElement { Id = id, Type = type, Name = $"輸送線 {id[(id.IndexOf('-') + 1)..]}", From = ends[0].Id, To = ends[1].Id };
@@ -593,7 +593,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     public void SelectInRect(double x1, double y1, double x2, double y2, bool add)
     {
         var rect = (Math.Min(x1, x2), Math.Min(y1, y2), Math.Max(x1, x2), Math.Max(y1, y2));
-        var hits = Elements.Where(e => e.IsOnCanvas).Where(e => e.IsRail ? e.Path().TouchesRect(rect, e.OffsetX, e.OffsetY)
+        var hits = Elements.Where(e => e.IsOnCanvas).Where(e => e.IsPath ? e.Path().TouchesRect(rect, e.OffsetX, e.OffsetY)
             : e.HasGeometry
             ? LayoutGeometry.RectsTouch(LayoutGeometry.Bounds(e.ViewX, e.ViewY, e.W, e.H, e.Rotation), rect)
             : LayoutGeometry.SegmentTouchesRect(e.LineX1, e.LineY1, e.LineX2, e.LineY2, rect)).ToList();
@@ -612,7 +612,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(HasAnySelection))]
     void Copy()
     {
-        var shapes = Selection.Where(e => e.HasGeometry || e.IsRail).ToList();
+        var shapes = Selection.Where(e => e.HasGeometry || e.IsPath).ToList();
         var ids = shapes.Select(e => e.Id).ToHashSet();
         var conveyors = Elements.Where(e => e.IsConveyor && (e.IsSelected || ids.Contains(e.From ?? "") || ids.Contains(e.To ?? ""))).ToList();
         _clipboard = PlantConfigFile.SerializeElements(shapes.Concat(conveyors).Select(e => e.ToModel()));
@@ -793,7 +793,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         if (!element.IsSelected) SelectedElement = element;
         IReadOnlyList<LayoutElementViewModel> group = SelectionCount > 1 ? Selection : [element];
         _drag = group.Where(e => e.HasGeometry).Select(e => (e, e.X, e.Y, e.W, e.H)).ToList();
-        _railDrag = group.Where(e => e.IsRail).Select(e => (e, e.RailPoints)).ToList();
+        _railDrag = group.Where(e => e.IsPath).Select(e => (e, e.RailPoints)).ToList();
         _dragPrimary = element;
     }
 
@@ -879,7 +879,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanEditSelection))]
     void SetRotation(int angle)
     {
-        if (SelectedElement is { IsRail: true } rail)
+        if (SelectedElement is { IsPath: true } rail)
         {
             RotateRail(rail); // 導軌沒有角度：每按一次順時針轉 90 度
             return;
@@ -897,7 +897,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanEditSelection))]
     void RotateClockwise()
     {
-        if (SelectedElement is { IsRail: true } rail) RotateRail(rail);
+        if (SelectedElement is { IsPath: true } rail) RotateRail(rail);
         else if (SelectedElement is { HasGeometry: true } e) e.Rotation = (e.Rotation + 90) % 360;
     }
 

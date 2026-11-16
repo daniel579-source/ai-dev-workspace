@@ -28,6 +28,12 @@ public enum LayoutElementType
     Elevator,
     /// <summary>RM（有 LOG 意義，可以有別名，ADR-0019）：只在 Conv 與料架之間搬運；可以指定所走的導軌。</summary>
     Rm,
+    /// <summary>工站點（有 LOG 意義，可以有別名，ADR-0020）：一端給使用者操作的設備（例如堆高機），另一端接 Conv；狀態推導比照站點。</summary>
+    Workstation,
+    /// <summary>圍欄（輔助，ADR-0020）：沿折線的黃色網狀圍欄，只幫助辨識位置，不推導狀態。</summary>
+    Fence,
+    /// <summary>圍欄門（輔助，ADR-0020）：放在圍欄缺口的門；LOG 沒有記錄開關與模式，不推導狀態。</summary>
+    FenceGate,
 }
 
 /// <summary>雙深料架的深淺（ADR-0019）：離所屬 RM 近的為淺。JSON 中為 shallow、deep。</summary>
@@ -122,11 +128,17 @@ public sealed class LayoutElement
 
     public static bool CanHaveAliases(LayoutElementType type) =>
         type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Dock or LayoutElementType.FireDoor or LayoutElementType.Elevator
-            or LayoutElementType.Rm;
+            or LayoutElementType.Rm or LayoutElementType.Workstation;
 
-    /// <summary>可以當作輸送線兩端的元素：站點、對接設備、搬送機。</summary>
+    /// <summary>可以當作輸送線兩端的元素：站點、工站點（ADR-0020）、對接設備、搬送機。電梯不接輸送線（ADR-0006）。</summary>
     public static bool CanBeConveyorEnd(LayoutElementType type) =>
-        type is LayoutElementType.Station or LayoutElementType.Dock or LayoutElementType.Vehicle;
+        type is LayoutElementType.Station or LayoutElementType.Workstation or LayoutElementType.Dock or LayoutElementType.Vehicle;
+
+    /// <summary>狀態推導比照站點的種類：站點與工站點（ADR-0020）。</summary>
+    public static bool IsStationLike(LayoutElementType type) => type is LayoutElementType.Station or LayoutElementType.Workstation;
+
+    /// <summary>以折線（points）表示的種類：導軌與圍欄（ADR-0020）。</summary>
+    public static bool HasPath(LayoutElementType type) => type is LayoutElementType.Rail or LayoutElementType.Fence;
 }
 
 /// <summary>Layout 上的一個點（公尺）。</summary>
@@ -361,15 +373,17 @@ public sealed class PlantConfigDocument
     /// <summary>
     /// 程式能讀寫的格式版本。2：輸送線的 bidirectional 與交接點（#63）。3：防火門（舊版程式不認得 fireDoor 這個種類）。
     /// 4：導軌（#100，舊版程式不認得 rail 這個種類）。5：電梯（#102）。6：樓板高度（#113，樓層寫成物件，舊版程式讀不了）。
-    /// 7：RM 與排的配置表（#123，ADR-0019）。存檔時只寫實際用到的最低版本，讓舊版程式照常開啟（ADR-0006 第 7 點）。
+    /// 7：RM 與排的配置表（#123，ADR-0019）。8：工站點、圍欄、圍欄門（ADR-0020）。
+    /// 存檔時只寫實際用到的最低版本，讓舊版程式照常開啟（ADR-0006 第 7 點）。
     /// </summary>
-    public const int CurrentFormatVersion = 7;
+    public const int CurrentFormatVersion = 8;
 
     /// <summary>
     /// 這份設定需要的格式版本：有 RM 或排的配置表時為 7；有填樓板高度時為 6；有電梯時為 5；有導軌時為 4；有防火門時為 3；有雙向或連到搬送機（有交接點）的輸送線時為 2；否則為 1。
     /// </summary>
     public int RequiredFormatVersion() =>
-        Layout.Elements.Any(e => e.Type == LayoutElementType.Rm) || Layout.Rows is { Count: > 0 } ? 7
+        Layout.Elements.Any(e => e.Type is LayoutElementType.Workstation or LayoutElementType.Fence or LayoutElementType.FenceGate) ? 8
+        : Layout.Elements.Any(e => e.Type == LayoutElementType.Rm) || Layout.Rows is { Count: > 0 } ? 7
         : Layout.Floors?.Any(f => f.Height is not null) == true ? 6
         : Layout.Elements.Any(e => e.Type == LayoutElementType.Elevator) ? 5
         : Layout.Elements.Any(e => e.Type == LayoutElementType.Rail) ? 4

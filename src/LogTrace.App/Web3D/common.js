@@ -182,18 +182,44 @@ export function createViewer(opts = {}) {
     return instanced(list, frameMat);
   }
 
-  function buildStation(e, item) {
-    // 輸送站：四支腳、兩側護欄、台面（狀態顏色）與上面的滾筒
+  /** 四支腳撐起一層台面（狀態顏色），上面有滾筒與兩側護欄。 */
+  function deckLook(e, item) {
     const top = e.height;
     item.group.add(legs(e.w, e.h, top - 0.1));
     item.body = box(e.w - 0.08, 0.05, e.h - 0.08, mat(LOOK.unknown), 0, top - 0.11, 0);
     item.group.add(item.body);
     item.group.add(instanced([at(0, top - 0.02, -e.h / 2 + 0.03, e.w, 0.1, 0.06), at(0, top - 0.02, e.h / 2 - 0.03, e.w, 0.1, 0.06)], frameMat));
     item.group.add(rollers(e.w - 0.1, e.h - 0.16, top - 0.05));
+    return top;
+  }
+
+  /**
+   * 升降平台：底座、兩支立柱與頂部橫樑、中間的平台（狀態顏色）與滾筒。
+   * 滾筒的軸沿寬度方向（2026-11-16 使用者要求轉 90 度）。傳回平台頂面的高度。
+   */
+  function liftLook(e, item) {
+    const mast = Math.min(0.14, e.w / 6);
+    item.group.add(box(e.w, 0.08, e.h, darkMat, 0, 0.04, 0));
+    item.group.add(instanced([at(-e.w / 2 + mast / 2, e.height / 2, 0, mast, e.height, e.h * 0.9), at(e.w / 2 - mast / 2, e.height / 2, 0, mast, e.height, e.h * 0.9)], frameMat));
+    item.group.add(box(e.w, 0.1, mast, frameMat, 0, e.height - 0.05, 0));
+    item.body = box(e.w - mast * 2 - 0.04, 0.12, e.h * 0.85, mat(LOOK.unknown), 0, e.height * 0.45, 0);
+    item.group.add(item.body);
+    const platform = e.height * 0.45 + 0.08;
+    const r = rollers(e.h * 0.75, e.w - mast * 2 - 0.1, platform, 0.18, 0.035);
+    r.rotation.y = Math.PI / 2;
+    item.group.add(r);
+    return platform;
+  }
+
+  function buildStation(e, item) {
+    // 輸送站（2026-11-16 使用者要求與 Conv 的圖對換）：升降平台的外觀，加上在席指示燈與貨物
+    const platform = liftLook(e, item);
     item.light = new THREE.Mesh(new THREE.SphereGeometry(Math.min(0.18, Math.min(e.w, e.h) / 4), 12, 8), mat(COLOR.presenceUnknown, { transparent: true, opacity: 0.6 }));
-    item.light.position.set(e.w / 2 - 0.2, top + 0.12, -e.h / 2 + 0.2);
+    item.light.position.set(e.w / 2 - 0.2, e.height + 0.12, -e.h / 2 + 0.2);
     item.group.add(item.light);
-    item.cargo = box(Math.min(e.w, 1.1) * 0.8, 0.8, Math.min(e.h, 1.1) * 0.8, mat(COLOR.cargo), 0, top + 0.4, 0);
+    // 貨物放在平台上，高度不超過頂部橫樑（站點預設高 0.8 公尺時約 0.24 公尺）
+    const cargoH = Math.max(0.2, Math.min(0.6, e.height - 0.1 - platform - 0.02));
+    item.cargo = box(Math.min(e.w, 1.1) * 0.6, cargoH, Math.min(e.h, 1.1) * 0.8, mat(COLOR.cargo), 0, platform + cargoH / 2, 0);
     item.cargo.visible = false;
     item.group.add(item.cargo);
   }
@@ -242,14 +268,8 @@ export function createViewer(opts = {}) {
   }
 
   function buildDock(e, item) {
-    // Conv（對接設備，例如升降移載機）：底座、兩支立柱與頂部橫樑、中間的升降平台（狀態顏色）與滾筒
-    const mast = Math.min(0.14, e.w / 6);
-    item.group.add(box(e.w, 0.08, e.h, darkMat, 0, 0.04, 0));
-    item.group.add(instanced([at(-e.w / 2 + mast / 2, e.height / 2, 0, mast, e.height, e.h * 0.9), at(e.w / 2 - mast / 2, e.height / 2, 0, mast, e.height, e.h * 0.9)], frameMat));
-    item.group.add(box(e.w, 0.1, mast, frameMat, 0, e.height - 0.05, 0));
-    item.body = box(e.w - mast * 2 - 0.04, 0.12, e.h * 0.85, mat(LOOK.unknown), 0, e.height * 0.45, 0);
-    item.group.add(item.body);
-    item.group.add(rollers(e.w - mast * 2 - 0.1, e.h * 0.75, e.height * 0.45 + 0.08, 0.18, 0.035));
+    // Conv（對接設備；2026-11-16 使用者要求與站點的圖對換）：四支腳撐起的台面與滾筒
+    deckLook(e, item);
   }
 
   function buildFireDoor(e, item) {

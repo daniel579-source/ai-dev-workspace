@@ -451,7 +451,12 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         return prefix + n;
     }
 
-    /// <summary>新增元素，放在現有元素的下方，並選取它。</summary>
+    /// <summary>
+    /// 3D 畫面目前的中心（相機看的點，樓層座標，公尺）；畫面回報後才有。新增元件時放在這裡（2026-11-16 使用者要求）。
+    /// </summary>
+    public (double X, double Y)? ViewCenter { get; set; }
+
+    /// <summary>新增元素，放在目前畫面的正中央（還不知道畫面時放在現有元素的下方），並選取它。</summary>
     [RelayCommand]
     void AddElement(LayoutElementType type)
     {
@@ -483,12 +488,13 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         else
         {
             var (w, h, height) = LayoutElementTypes.DefaultSize(type);
-            // 放在現有元素的下方，避免疊在一起
-            var top = SnapTo(Elements.Where(e => !e.IsConveyor && OnFloor(e, CurrentFloor)).Select(e => BoundsOf(e).Bottom).DefaultIfEmpty(0).Max() + 1);
+            // 放在目前畫面的正中央（2026-11-16 使用者要求）；還不知道畫面時放在現有元素的下方，避免疊在一起
+            var (x, y) = ViewCenter is { } c ? (SnapTo(c.X - w / 2), SnapTo(c.Y - h / 2))
+                : (1, SnapTo(Elements.Where(e => !e.IsConveyor && OnFloor(e, CurrentFloor)).Select(e => BoundsOf(e).Bottom).DefaultIfEmpty(0).Max() + 1));
             model = new LayoutElement
             {
                 Id = id, Type = type, Name = $"新{LayoutElementTypes.Label(type)} {id[(id.IndexOf('-') + 1)..]}",
-                X = 1, Y = top, W = w, H = h, Rotation = 0, Height = height,
+                X = x, Y = y, W = w, H = h, Rotation = 0, Height = height,
                 Floor = type == LayoutElementType.Elevator ? null : CurrentFloor,
                 ServedFloors = type == LayoutElementType.Elevator ? [.. FloorList] : null, // 電梯預設服務所有樓層（使用者決定）
                 Aliases = LayoutElement.CanHaveAliases(type) ? [] : null,

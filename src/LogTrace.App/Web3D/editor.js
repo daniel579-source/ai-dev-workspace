@@ -263,4 +263,12 @@ listen({
   projection: (p) => v.setProjection(p),
 });
 
+// 畫面中心（相機看的點，樓層座標）：新增元件時放在這裡（2026-11-16 使用者要求）
+let viewTimer = null;
+v.controls.addEventListener('change', () => {
+  clearTimeout(viewTimer);
+  viewTimer = setTimeout(() => post({ kind: 'view', x: v.controls.target.x, y: v.controls.target.z }), 150);
+});
+
 post({ kind: 'ready' });
+post({ kind: 'view', x: v.controls.target.x, y: v.controls.target.z });

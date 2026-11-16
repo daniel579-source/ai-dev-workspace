@@ -51,3 +51,30 @@ public static class ElevatorGates
         return [.. new[] { XMin, XMax, ZMin, ZMax }.Where(sides.Contains)];
     }
 }
+
+/// <summary>
+/// EQ 的門（ADR-0020 補充）：朝緊鄰（0.3 公尺內）的 Conv；有好幾台時取最近的一台；沒有時朝元件前方（zMax，深度方向的 +y 側）。
+/// 側面的表示方式與 <see cref="ElevatorGates"/> 相同。
+/// </summary>
+public static class EqDoors
+{
+    public static (string Side, string? DockId) Of(LayoutElement eq, LayoutSection layout)
+    {
+        var floors = LayoutFloors.Of(layout);
+        var byId = layout.Elements.GroupBy(e => e.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        LayoutElement? Find(string? id) => id is not null && byId.TryGetValue(id, out var e) ? e : null;
+        var floor = LayoutFloors.FloorOf(eq, floors, Find);
+        var box = LayoutGeometry.Bounds(eq.X ?? 0, eq.Y ?? 0, eq.W ?? 0, eq.H ?? 0, eq.Rotation ?? 0);
+        LayoutElement? best = null;
+        double bestGap = double.MaxValue;
+        foreach (var d in layout.Elements.Where(e => e.Type == LayoutElementType.Dock))
+        {
+            if (!LayoutFloors.NameComparer.Equals(LayoutFloors.FloorOf(d, floors, Find), floor)) continue;
+            var b = LayoutGeometry.Bounds(d.X ?? 0, d.Y ?? 0, d.W ?? 0, d.H ?? 0, d.Rotation ?? 0);
+            double gap = Math.Max(Math.Max(0, Math.Max(b.Left - box.Right, box.Left - b.Right)), Math.Max(0, Math.Max(b.Top - box.Bottom, box.Top - b.Bottom)));
+            if (gap <= ElevatorGates.Adjacent && gap < bestGap) (best, bestGap) = (d, gap);
+        }
+        if (best is null) return (ElevatorGates.ZMax, null);
+        return (ElevatorGates.SideFacing(eq, (best.X ?? 0) + (best.W ?? 0) / 2, (best.Y ?? 0) + (best.H ?? 0) / 2), best.Id);
+    }
+}

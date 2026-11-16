@@ -100,4 +100,22 @@ public sealed class WorkstationFenceTests
         Assert.Equal([ElevatorGates.XMin], ElevatorGates.SidesOf(layout.Elements[0], layout));
         Assert.Equal(ElevatorGates.XMax, ElevatorGates.SideFacing(layout.Elements[0], 11, 14));
     }
+
+    [Fact]
+    public void EQ_門朝緊鄰最近的Conv_沒有時朝前方_用到EQ時格式版本9_沒有別名()
+    {
+        var eq = new LayoutElement { Id = "eqp-1", Type = LayoutElementType.Eq, Name = "EQ", X = 10, Y = 10, W = 1.5, H = 1.5, Rotation = 0 };
+        var near = new LayoutElement { Id = "eq-1", Type = LayoutElementType.Dock, Name = "Conv", Aliases = ["EQ1"], X = 11.6, Y = 10, W = 2, H = 1.5, Rotation = 0 };
+        var far = new LayoutElement { Id = "eq-2", Type = LayoutElementType.Dock, Name = "遠", Aliases = ["EQ2"], X = 10, Y = 13, W = 2, H = 2, Rotation = 0 };
+        var doc = new PlantConfigDocument { Plant = "虛構廠" };
+        doc.Layout.Elements = [eq, near, far];
+
+        Assert.Equal((ElevatorGates.XMax, "eq-1"), EqDoors.Of(eq, doc.Layout));
+        Assert.Equal(9, doc.RequiredFormatVersion());
+        Assert.False(LayoutElement.CanHaveAliases(LayoutElementType.Eq));
+        Assert.Empty(PlantConfigFile.Validate(doc));
+
+        doc.Layout.Elements = [eq, far];
+        Assert.Equal((ElevatorGates.ZMax, (string?)null), EqDoors.Of(eq, doc.Layout));
+    }
 }

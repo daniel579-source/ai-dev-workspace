@@ -279,7 +279,10 @@ export function createViewer(opts = {}) {
     // 載貨台：在兩支立柱之間，向料架兩側伸出（深 e.h）；高度由狀態的 lift 決定
     item.carriage = new THREE.Group();
     item.carriage.add(box(e.w - mast * 2 - 0.04, 0.12, e.h * 1.1, mat(0x475569, { transparent: true }), 0, 0.06, 0));
-    item.carriage.add(rollers(e.w - mast * 2 - 0.1, e.h, 0.15, 0.18, 0.035));
+    // 載貨台的滾筒：軸沿寬度方向（2026-11-16 使用者要求轉 90 度，ADR-0020 補充）
+    const carriageRollers = rollers(e.h, e.w - mast * 2 - 0.1, 0.15, 0.18, 0.035);
+    carriageRollers.rotation.y = Math.PI / 2;
+    item.carriage.add(carriageRollers);
     item.cargo = box(Math.min(e.w, 1.1) * 0.7, 0.8, Math.min(e.h, 1.1) * 0.8, mat(COLOR.cargo, { transparent: true }), 0, 0.6, 0);
     item.cargo.visible = false;
     item.carriage.add(item.cargo);
@@ -321,6 +324,34 @@ export function createViewer(opts = {}) {
       at(0, door, 0, e.w, 0.06, 0.06)], fenceMat));
     if (e.height > door + 0.05) item.group.add(fencePanel(e.w, door, e.height, false));
     item.group.add(box(0.12, 0.18, 0.06, darkMat, e.w / 2 + 0.1, 1.2, 0.05), box(0.05, 0.05, 0.03, mat(0xEF4444), e.w / 2 + 0.1, 1.2, 0.095));
+  }
+
+  // EQ 門的方向（以元件自己的座標）：把門的外側（+z）轉到那一側
+  const doorTurn = { zMax: 0, zMin: Math.PI, xMax: Math.PI / 2, xMin: -Math.PI / 2 };
+
+  function buildEq(e, item) {
+    // EQ（ADR-0020 補充）：其他公司的對接設備；像洗衣機或單門冰箱的箱體，一扇門朝緊鄰的 Conv（開為推估）
+    item.body = box(e.w * 0.98, e.height, e.h * 0.98, mat(0xF1F5F9), 0, e.height / 2, 0);
+    item.group.add(item.body);
+    item.group.add(box(e.w, 0.06, e.h, darkMat, 0, 0.03, 0)); // 底座
+    const side = e.door || 'zMax';
+    const along = side === 'xMin' || side === 'xMax' ? e.h : e.w; // 門的寬度
+    const depth = side === 'xMin' || side === 'xMax' ? e.w : e.h;
+    const holder = new THREE.Group();
+    holder.rotation.y = doorTurn[side] ?? 0;
+    holder.position.set(0, 0, 0);
+    const doorW = along * 0.86;
+    const doorH = e.height * 0.9;
+    item.door = new THREE.Group(); // 鉸鏈在門的左側
+    item.door.position.set(-doorW / 2, 0, depth / 2 + 0.01);
+    const panel = box(doorW, doorH, 0.04, mat(0xCBD5E1), doorW / 2, 0.06 + doorH / 2, 0.02);
+    const glass = new THREE.Mesh(new THREE.CylinderGeometry(Math.min(doorW, doorH) * 0.28, Math.min(doorW, doorH) * 0.28, 0.02, 24), mat(0x334155, { transparent: true, opacity: 0.7 }));
+    glass.rotation.x = Math.PI / 2;
+    glass.position.set(doorW / 2, 0.06 + doorH * 0.55, 0.05);
+    const handle = box(0.04, doorH * 0.3, 0.04, darkMat, doorW - 0.08, 0.06 + doorH / 2, 0.06);
+    item.door.add(panel, glass, handle);
+    holder.add(item.door);
+    item.group.add(holder);
   }
 
   function buildFence(e, item) {
@@ -505,6 +536,7 @@ export function createViewer(opts = {}) {
       case 'dock': place(item.group, e, elevation); buildDock(e, item); break;
       case 'workstation': place(item.group, e, elevation); buildWorkstation(e, item); break;
       case 'fenceGate': place(item.group, e, elevation); buildFenceGate(e, item); break;
+      case 'eq': place(item.group, e, elevation); buildEq(e, item); break;
       case 'fence': buildFence(e, item); break;
       case 'rm': place(item.group, e, elevation); buildRm(e, item); break;
       case 'fireDoor': place(item.group, e, elevation); buildFireDoor(e, item); break;

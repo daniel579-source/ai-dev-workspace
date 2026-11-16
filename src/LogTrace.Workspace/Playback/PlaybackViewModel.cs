@@ -104,7 +104,7 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     public bool IsRail => Type == LayoutElementType.Rail;
     public bool HasGeometry => !IsConveyor && !LayoutElement.HasPath(Type);
     public bool IsAuxiliary => Type is LayoutElementType.Conveyor or LayoutElementType.Area or LayoutElementType.Label or LayoutElementType.Rail
-        or LayoutElementType.Fence or LayoutElementType.FenceGate; // 圍欄與圍欄門不推導狀態（ADR-0020）
+        or LayoutElementType.Fence or LayoutElementType.FenceGate or LayoutElementType.Eq; // 圍欄、圍欄門、EQ 不推導狀態（ADR-0020）
 
     public double X { get; }
     public double Y { get; }
@@ -157,6 +157,10 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     /// <summary>不一致的說明（滑鼠停留時顯示）。</summary>
     [ObservableProperty]
     public partial string? InconsistentText { get; set; }
+
+    /// <summary>EQ 的門開著（推估，ADR-0020 補充）：緊鄰的 Conv 上有棧板等待完成回報時；其他元素為 false。</summary>
+    [ObservableProperty]
+    public partial bool IsDoorOpen { get; set; }
 
     /// <summary>電梯：抵達後朝目的地的那一側閘門畫成開（推估，ADR-0020 第 3 點）；其他時間或其他元素為 null。</summary>
     [ObservableProperty]
@@ -283,6 +287,8 @@ public sealed partial class PlaybackViewModel : ObservableObject
         _gates = layout.Elements.Where(e => e.Type == LayoutElementType.Elevator)
             .ToDictionary(e => e.Id, e => ElevatorGates.SidesOf(e, layout), StringComparer.Ordinal);
         _effectAt = model.Effects.GroupBy(x => x.Sequence).ToDictionary(g => g.Key, g => g.ToList());
+        _eqDocks = layout.Elements.Where(e => e.Type == LayoutElementType.Eq)
+            .ToDictionary(e => e.Id, e => EqDoors.Of(e, layout).DockId, StringComparer.Ordinal);
         _events = events.ToDictionary(e => e.Sequence);
         _motion = new VehicleMotion(model.Effects, layout, seq => _events.TryGetValue(seq, out var ev) ? ev.Timestamp : null);
         var byId = layout.Elements.GroupBy(e => e.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
@@ -387,6 +393,11 @@ public sealed partial class PlaybackViewModel : ObservableObject
                     : delivered > 0 ? ElementLook.Empty : ElementLook.Unknown;
                 break;
             }
+            case LayoutElementType.Eq:
+                // 門的開關（推估）：緊鄰的 Conv 上有棧板等待完成回報時開（ADR-0020 補充）
+                el.IsDoorOpen = _eqDocks.GetValueOrDefault(el.Id) is { } dock && w.PalletsAt(LocationKind.AtDock, dock).Any();
+                el.IsEstimated = el.IsDoorOpen;
+                break;
             case LayoutElementType.FireDoor:
             {
                 var (state, _, estimated) = DoorStateOf(el);
@@ -425,6 +436,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
 
     Dictionary<string, string> _stationModeNames = [];
     Dictionary<string, IReadOnlyList<string>> _gates = new(StringComparer.Ordinal);
+    Dictionary<string, string?> _eqDocks = new(StringComparer.Ordinal);
     Dictionary<long, List<Engine.Parsing.EventEffect>> _effectAt = [];
 
     /// <summary>
@@ -589,6 +601,15 @@ public sealed partial class PlaybackViewModel : ObservableObject
             case LayoutElementType.Rack:
                 Detail.Add(Line("料架", $"排 {el.Model.Row}，列 {el.Model.ColFrom}～{el.Model.ColTo}，{el.Model.Levels} 層；點一列看側視圖", null));
                 break;
+            case LayoutElementType.Eq:
+            {
+                var dock = _eqDocks.GetValueOrDefault(el.Id);
+                Detail.Add(Line("EQ", "其他公司的對接設備；只是外觀，不推導狀態", null));
+                Detail.Add(Line("門", dock is null ? "旁邊沒有 Conv，畫成關著"
+                    : el.IsDoorOpen ? $"開著（推估：{NameOf(dock)} 上有棧板等待完成回報；LOG 沒有記錄門）"
+                    : $"關著（推估：{NameOf(dock)} 上沒有等待完成回報的棧板）", null));
+                break;
+            }
             default:
                 Detail.Add(Line(el.TypeLabel, "輔助元素，不推導狀態", null));
                 break;

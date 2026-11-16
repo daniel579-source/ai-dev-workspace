@@ -107,11 +107,13 @@ public sealed partial class LayoutEditorViewModel
     {
         var id = NextId(type);
         var top = SnapTo(Elements.Where(e => !e.IsConveyor && SameFloor(FloorOf(e), CurrentFloor)).Select(e => BoundsOf(e).Bottom).DefaultIfEmpty(0).Max() + 1);
+        // 放在目前畫面的正中央（2026-11-16）：直線 20 公尺以中心對齊；跑道形寬 26、深 6 公尺（含兩端半圓）
+        var (sx, sy) = ViewCenter is { } c ? (SnapTo(c.X - 10), SnapTo(loop ? c.Y - 3 : c.Y)) : (loop ? 4 : 1, top);
         var model = new LayoutElement
         {
             Id = id, Type = type, Name = $"{LayoutElementTypes.Label(type)} {id[(id.IndexOf('-') + 1)..]}", Floor = CurrentFloor,
             // 跑道形的半圓往外鼓 3 公尺：起點右移 3 公尺，左邊的半圓才不會超出畫布
-            Points = loop ? RailPath.LoopTemplate(4, top) : RailPath.StraightTemplate(1, top), Closed = loop ? true : null,
+            Points = loop ? RailPath.LoopTemplate(sx, sy) : RailPath.StraightTemplate(sx, sy), Closed = loop ? true : null,
         };
         var vm = new LayoutElementViewModel(model);
         Attach(vm);

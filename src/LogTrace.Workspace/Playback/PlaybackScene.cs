@@ -21,7 +21,7 @@ public sealed record SceneElement(
     double X, double Y, double W, double H, int Rotation, double Height,
     int? Levels = null, double? LevelHeight = null, int? ColFrom = null, int? ColTo = null,
     IReadOnlyList<double[]>? Path = null, bool Closed = false, bool Bidirectional = false,
-    IReadOnlyList<string>? ServedFloors = null, IReadOnlyList<string>? Gates = null);
+    IReadOnlyList<string>? ServedFloors = null, IReadOnlyList<string>? Gates = null, string? Door = null);
 
 /// <summary>場景的靜態部分；載入案件時傳一次。</summary>
 public sealed record SceneLayout(IReadOnlyList<SceneFloor> Floors, IReadOnlyList<SceneElement> Elements)
@@ -43,7 +43,7 @@ public sealed record SceneElementState(
     string? Summary = null, double? X = null, double? Y = null,
     string? ElevatorFloor = null, string? MovingFrom = null, string? MovingTo = null,
     IReadOnlyList<int[]>? RackSlots = null, int? SelectedColumn = null, double? Lift = null, string? CargoLabel = null,
-    bool Stalled = false, string? OpenGate = null);
+    bool Stalled = false, string? OpenGate = null, bool DoorOpen = false);
 
 /// <summary>場景的目前時刻狀態；目前時刻或選取改變時傳。</summary>
 public sealed record SceneState(long Sequence, IReadOnlyList<SceneElementState> Elements)
@@ -66,6 +66,7 @@ public static class PlaybackScene
         LayoutElementType.Rm => 10, // 立柱的高度；載貨台依儲位的層移動（ADR-0019）
         LayoutElementType.Dock => 0.8,
         LayoutElementType.Fence or LayoutElementType.FenceGate => 2.5, // 黃色網狀圍欄（ADR-0020）
+        LayoutElementType.Eq => 1.8, // EQ（ADR-0020 補充）
         LayoutElementType.FireDoor => 3,
         LayoutElementType.Conveyor => 0.8,
         LayoutElementType.Rack => 1,
@@ -133,7 +134,8 @@ public static class PlaybackScene
                 }
                 default:
                     list.Add(new SceneElement(e.Id, type, e.Name, e.Floor, e.X, e.Y, e.W, e.H, e.Rotation, m.Height is > 0 ? m.Height.Value : DefaultHeight(m.Type),
-                        ServedFloors: e.IsElevator ? e.ServedFloors : null, Gates: e.IsElevator ? ElevatorGates.SidesOf(m, layout) : null));
+                        ServedFloors: e.IsElevator ? e.ServedFloors : null, Gates: e.IsElevator ? ElevatorGates.SidesOf(m, layout) : null,
+                        Door: m.Type == LayoutElementType.Eq ? EqDoors.Of(m, layout).Side : null));
                     break;
             }
         }
@@ -186,7 +188,7 @@ public static class PlaybackScene
                     break;
                 default:
                     list.Add(new SceneElementState(e.Id, look, isSelected, Inconsistent: e.IsInconsistent, Estimated: e.IsEstimated,
-                        Blocked: e.IsBlocked, BlockedEstimated: e.IsBlockedEstimated, Summary: e.Summary));
+                        Blocked: e.IsBlocked, BlockedEstimated: e.IsBlockedEstimated, Summary: e.Summary, DoorOpen: e.IsDoorOpen));
                     break;
             }
         }

@@ -7,6 +7,9 @@ namespace LogTrace.Workspace.Tests;
 // Layout 編輯器（ADR-0006）。內容全部是虛構的。
 public sealed class LayoutEditorViewModelTests : IDisposable
 {
+    /// <summary>比程式支援的格式版本新一版（測試「較新的格式版本」用）。</summary>
+    static readonly int Newer = Engine.Plants.PlantConfigDocument.CurrentFormatVersion + 1;
+
     readonly TempFolder _tmp = new();
     readonly FakeUserInteraction _ui = new();
     readonly PlantConfigLibrary _library;
@@ -40,9 +43,20 @@ public sealed class LayoutEditorViewModelTests : IDisposable
 
         Assert.Equal(LayoutElementType.Conveyor, conveyor.Type);
         Assert.Equal(["st-1", "ws-1"], new[] { conveyor.From!, conveyor.To! }); // 依加入的順序：站點、工站點（ADR-0020）
-        Assert.Equal(14, _vm.Elements.Count);
-        Assert.Equal(14, _vm.Elements.Select(e => e.Id).Distinct().Count());
+        Assert.Equal(15, _vm.Elements.Count);
+        Assert.Equal(15, _vm.Elements.Select(e => e.Id).Distinct().Count());
         Assert.True(_vm.IsDirty);
+    }
+
+    [Fact]
+    public void 畫面回報中心後_新增的元件放在畫面正中央_導軌以中心對齊()
+    {
+        _vm.ViewCenter = (30, 20);
+
+        var station = Add(LayoutElementType.Station); // 預設 2 × 2
+        Assert.Equal((29d, 19d), (station.X, station.Y));
+        var rail = Add(LayoutElementType.Rail); // 直線 20 公尺
+        Assert.Equal([(20d, 20d), (40d, 20d)], rail.RailPoints.Select(p => (p.X, p.Y)));
     }
 
     [Fact]
@@ -467,14 +481,14 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     public void 開啟較新格式版本的檔案時_明確提示_編輯中的內容不變()
     {
         var path = Path.Combine(_tmp.Path, "新版.json");
-        File.WriteAllText(path, """{ "formatVersion": 9, "plant": "虛構" }""");
+        File.WriteAllText(path, $$"""{ "formatVersion": {{Newer}}, "plant": "虛構" }""");
         Add(LayoutElementType.Station);
         _ui.ConfirmResult = true;
         _ui.PlantConfigFileResult = path;
 
         _vm.OpenFileCommand.Execute(null);
 
-        Assert.Contains("格式版本是 9", _vm.Status);
+        Assert.Contains($"格式版本是 {Newer}", _vm.Status);
         Assert.Single(_vm.Elements);
     }
 

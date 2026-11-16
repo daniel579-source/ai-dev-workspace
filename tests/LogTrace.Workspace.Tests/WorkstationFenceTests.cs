@@ -108,4 +108,39 @@ public sealed class WorkstationFenceTests : IDisposable
         vm.SelectedElement = vm.Elements.Single(e => e.Id == "vh-1");
         Assert.Equal(["rl-1"], vm.RailChoices.Select(r => r.Id)); // 只有導軌，不含圍欄
     }
+
+    [Fact]
+    public void EQ_門朝緊鄰的Conv_Conv上有棧板等待完成回報時門開_推估()
+    {
+        var layout = new LayoutSection
+        {
+            Elements =
+            [
+                new() { Id = "eq-1", Type = LayoutElementType.Dock, Name = "Conv", Aliases = ["EQ901"], X = 0, Y = 0, W = 2, H = 2, Rotation = 0 },
+                new() { Id = "eqp-1", Type = LayoutElementType.Eq, Name = "EQ", X = 2.1, Y = 0, W = 1.5, H = 1.5, Rotation = 0 },
+                new() { Id = "st-1", Type = LayoutElementType.Station, Name = "站", Aliases = ["A-01"], X = 0, Y = 5, W = 2, H = 2, Rotation = 0 },
+            ],
+        };
+        var effects = new List<EventEffect>
+        {
+            E(1, EffectKinds.CommandCreated, (FieldKinds.Command, "C-1"), (FieldKinds.Pallet, "P-1")),
+            E(2, EffectKinds.PalletRead, (FieldKinds.Station, "A-01"), (FieldKinds.Pallet, "P-1")),
+            E(3, EffectKinds.SegmentArrived, (FieldKinds.Command, "C-1"), (FieldKinds.Destination, "EQ901")),
+            E(4, EffectKinds.CommandCompleted, (FieldKinds.Command, "C-1")),
+        };
+        var p = new PlaybackViewModel();
+        p.Load(new WorldModel(effects, layout, "在席"), layout, Enumerable.Range(1, 4).Select(i => Event(i)).ToList(), hasStateRules: true);
+
+        Assert.Equal(ElevatorGates.XMin, p.Scene.Elements.Single(e => e.Id == "eqp-1").Door);
+        Assert.Equal(1.8, PlaybackScene.DefaultHeight(LayoutElementType.Eq));
+        p.SetMoment(2);
+        Assert.False(p.SceneNow.Elements.Single(e => e.Id == "eqp-1").DoorOpen);
+        p.SetMoment(3); // 抵達 Conv，等待完成回報
+        Assert.True(p.SceneNow.Elements.Single(e => e.Id == "eqp-1").DoorOpen);
+        p.SelectElementCommand.Execute(p.Elements.Single(e => e.Id == "eqp-1"));
+        Assert.Contains("開著（推估", p.Detail.Single(d => d.Label == "門").Value);
+        p.SetMoment(4); // 完成回報：已交出
+        Assert.False(p.SceneNow.Elements.Single(e => e.Id == "eqp-1").DoorOpen);
+        Assert.DoesNotContain(p.Equipment, r => r.Id == "eqp-1"); // EQ 不推導狀態
+    }
 }

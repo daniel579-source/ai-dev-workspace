@@ -29,6 +29,7 @@ ADR-0013 第 3 點把「sqlite-vec 加上小型 embedding 模型」列為向量�
    - 2026-11-17 補充（使用者決定）：知識庫條目做 embedding 的文字為「代碼 說明 處置」（含代碼；用詞不同情境集 bge-m3 的 MRR：含代碼 0.72、不含 0.70，差距很小）。
 2. **執行環境**：embedding 使用 **Ollama**（本機服務，以 HTTP API 呼叫），驗證與正式產品都使用。
    - Ollama 需要安裝；修改 ADR-0013 第 7 點「不需安裝」（見該點 2026-11-17 補充）。安裝要經 IT 同意（ADR-0001 限制：工程師電腦不能自行安裝軟體），列為待確認。
+   - 2026-11-17 補充（使用者轉述 IT）：IT **同意**安裝 Ollama 與放置模型檔（待確認 1 已確認）。
    - LogTrace 本身仍是免安裝執行檔（ADR-0001 第 2 點不變）；Ollama 是 AI 可選功能的外部元件。
    - 只連本機位址（預設 `127.0.0.1:11434`，**待確認**），不連外網、不使用 Ollama 的雲端功能。
 3. **LLM 的執行環境不變**：維持 ADR-0013 第 8 點的候選（ONNX Runtime GenAI 為主、llama.cpp 為備案），Ollama 只負責 embedding（使用者決定，2026-11-17）。
@@ -67,7 +68,7 @@ ADR-0013 第 3 點把「sqlite-vec 加上小型 embedding 模型」列為向量�
 
 | 風險 | 影響 | 緩解方式 |
 |---|---|---|
-| IT 不允許安裝 Ollama | 正式產品無法使用向量搜尋 | 可以降級（第 6 點）；改用替代方案中的 ONNX Runtime，另立補充 |
+| ~~IT 不允許安裝 Ollama~~ | 正式產品無法使用向量搜尋 | **已解除**（2026-11-17）：IT 同意安裝（待確認 1） |
 | 現場要同時部署 Ollama 與 ONNX Runtime GenAI 兩套執行環境 | 部署與維護較複雜；兩邊各自載入模型，記憶體互不知道 | 實機量測同時執行時的記憶體；必要時 LogTrace 控制載入順序，或用完卸載 embedding 模型 |
 | Ollama 本機服務的 HTTP 埠 | 其他程式可以呼叫 | 確認只監聽本機位址；不開放外部連線 |
 | 從 Hugging Face 匯入的 GGUF 是第三方轉檔 | 品質或內容可能有問題 | 記錄來源與 SHA-256；以情境集結果確認品質 |
@@ -91,7 +92,7 @@ ADR-0013 第 3 點把「sqlite-vec 加上小型 embedding 模型」列為向量�
 
 ## 待確認
 
-1. IT 是否允許在工程師電腦與現場筆電安裝 Ollama。
+1. ~~IT 是否允許在工程師電腦與現場筆電安裝 Ollama~~：**已確認**（2026-11-17，使用者轉述 IT）：允許安裝 Ollama 與放置模型檔。
 2. 兩個模型與 Ollama 的授權條款（以官方模型卡與授權檔核對）。
 3. ~~Ollama 官方模型庫是否有 multilingual-e5-small；沒有時採用哪一個 GGUF 來源~~：**不再需要**（2026-11-17，模型選 bge-m3）。紀錄：官方模型庫沒有 e5；Hugging Face 上 cstr/multilingual-e5-small-GGUF 的檔案在 Ollama 0.40.16 無法載入，可以載入的兩個來源與 SHA-256 見 `validation/results/knowledge-vector-89-dev-pc.md`。
 4. Ollama 的預設監聽位址與 NPU 支援情況（以官方文件確認）。

@@ -192,6 +192,25 @@ public sealed class KnowledgeViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task 對照表的欄位值_面板顯示電文與欄位_不依警報代碼顯示在詳細資訊()
+    {
+        var path = Path.Combine(_tmp.Path, "Knowledge", @"shared\STV\stv.csv");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "設備種類,類別,電文,欄位,代碼或名稱,意義（原文）,出處,規格書版本,狀態\r\n"
+            + "STV,結果碼,T20～T30,結果碼,E101,欄位值（虛構）,虛構 STV 通信仕樣書 p.17,v2.1,待確認", new System.Text.UTF8Encoding(true));
+        await OpenCase();
+
+        Select("警報發生 SSCA01 E101");
+        Assert.DoesNotContain("欄位值（虛構）", _vm.SelectedDetail); // 欄位值不當作警報代碼（ADR-0021 第 4 點 2026-11-18 補充）
+
+        _vm.KnowledgeQuery = "T20";
+        _vm.SearchKnowledgeCommand.Execute(null);
+        var e = Assert.Single(_vm.KnowledgeResults);
+        Assert.Equal("[STV] E101", e.Code);
+        Assert.Equal("結果碼；電文 T20～T30；欄位 結果碼；待確認", e.Action);
+    }
+
+    [Fact]
     public async Task 沒有對照表時_狀態列說明_詳細資訊不多出對照表段落()
     {
         await OpenCase();

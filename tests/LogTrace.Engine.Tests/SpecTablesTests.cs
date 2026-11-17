@@ -69,6 +69,39 @@ public sealed class SpecTablesTests
     }
 
     [Fact]
+    public void 電文與欄位_參與重複判斷_警報代碼查表不列欄位值_搜尋可以找到()
+    {
+        const string h = "設備種類,類別,電文,欄位,代碼或名稱,意義（原文）,出處,規格書版本,狀態";
+        var t = SpecTables.Parse(
+        [
+            File(@"shared\STV\stv.csv", "STV", h,
+                "STV,結果碼,T20～T30,結果碼,00,正常完成（虛構）,p.17,v1,待確認",  // 第 2 行：共用的代碼表只列一次
+                "STV,結果碼,T40,結果碼,00,搬送中止（虛構）,p.18,v1,待確認",       // 第 3 行：不同電文的同一代碼，不是重複
+                "STV,結果碼,T40,狀態,00,待機（虛構）,p.18,v1,待確認",             // 第 4 行：同電文不同欄位
+                "STV,結果碼,t40,結果碼,00,搬送中止（虛構）,p.18,v1,待確認",       // 第 5 行：完全重複（不分大小寫）
+                "STV,結果碼,T40,結果碼,00,另一個意義（虛構）,p.19,v1,待確認",     // 第 6 行：同電文同欄位意義不同
+                "STV,錯誤碼,,,00,走行異常（虛構）,p.20,v1,待確認"),               // 第 7 行：沒有電文與欄位（警報代碼）
+        ]);
+
+        Assert.Equal([(5, false), (6, true)], t.Issues.Select(i => (i.Line, i.Warning)));
+        Assert.Contains(@"和 shared\STV\stv.csv 第 3 行重複", t.Issues[0].Reason);
+        Assert.Equal(5, t.Entries.Count);
+        Assert.Equal(("T20～T30", "結果碼"), (t.Entries[0].Telegram, t.Entries[0].Field));
+        Assert.Equal("走行異常（虛構）", Assert.Single(t.Lookup("00")).Original); // 欄位值不當作警報代碼
+        Assert.Equal([2], t.Search("t20").Select(e => e.Line));
+        Assert.Equal([4], t.Search("T40 狀態").Select(e => e.Line));
+    }
+
+    [Fact]
+    public void 沒有電文與欄位的舊格式照常讀取()
+    {
+        var t = SpecTables.Parse([File(@"shared\RMm.csv", "RM", Header, "RM,錯誤碼,E01,異常（虛構）,,p.1,v1,已審核,,")]);
+        var e = Assert.Single(t.Entries);
+        Assert.Equal(("", ""), (e.Telegram, e.Field));
+        Assert.Single(t.Lookup("E01"));
+    }
+
+    [Fact]
     public void 從知識庫資料夾讀取_半形括號標題_Big5_資料夾不存在時為空()
     {
         using var tmp = new TempFolder();
@@ -104,8 +137,11 @@ public sealed class SpecTablesTests
         ]);
 
         Assert.Empty(t.Issues);
-        Assert.Equal(12, t.Entries.Count);
+        Assert.Equal(13, t.Entries.Count);
         Assert.Equal("貨叉動作異常／處置：確認貨叉位置感測器", t.Lookup("E01", ["RM"]).Single().Chinese);
+        // 共用的結果碼只列一次，電文照規格書寫法；欄位值不當作警報代碼
+        Assert.Equal(["T20、T30"], t.Search("正常完成").Select(e => e.Telegram));
+        Assert.Empty(t.Lookup("51", ["STV"]));
         Assert.All(t.Entries, e => Assert.Equal(SpecTables.Pending, e.Status)); // Copilot 輸出一律待確認
     }
 }

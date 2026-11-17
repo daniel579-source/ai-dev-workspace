@@ -75,6 +75,7 @@ ADR-0013 第 3 點把「sqlite-vec 加上小型 embedding 模型」列為向量�
 
 - 以 #89 同一份虛構情境集比較：關鍵字比對（召回 27%）、只用 e5-small 向量搜尋、只用 bge-m3 向量搜尋、規則關聯圖加向量搜尋。量測知識庫條目的召回與精確度、查詢時間、建立向量的時間、Ollama 的記憶體用量。只用虛構資料。
 - 在現場筆電量測：Ollama 與 ONNX Runtime GenAI 的 LLM 同時執行時的記憶體與速度（可以與 #47、#55 一起進行）。
+  - 2026-11-17 補充：現場筆電為 MSI Prestige 16 AI Evo B1MG（Intel Core Ultra 7 165H、32 GB、Arc 內顯，ADR-0013 第 8 點補充）。e5-small 與 bge-m3 兩個模型都在這台筆電實測後再選（Jev 判斷，信心度 0.62）；Ollama 在這台只能用內顯（Vulkan）或 CPU。
 - 確認 Ollama 只監聽本機位址、離線時能正常運作。
 
 ## 待確認

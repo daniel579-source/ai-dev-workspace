@@ -1,5 +1,6 @@
 // #89：ADR-0015「規則關聯圖」的虛構情境集驗證。不是正式產品；資料全部是虛構的（validation/knowledge-scenarios）。
 // 用法：dotnet run -c Release --project validation/src/TechValidation.KnowledgeGraph -- --data validation/knowledge-scenarios --report validation/results/knowledge-graph-89-<電腦名稱>.md
+// 向量搜尋比較（ADR-0022，需本機 Ollama）：另加 --models "模型|e5|來源;bge-m3||來源" --vector-report validation/results/knowledge-vector-89-<電腦名稱>.md
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
@@ -66,6 +67,41 @@ try
     {
         File.WriteAllText(report, text, new UTF8Encoding(false));
         Console.WriteLine($"報告：{report}");
+    }
+
+    // ---- 向量搜尋比較（#89／ADR-0022）：--models "名稱|e5|來源;名稱||來源"，第二欄為 e5 時加 query:/passage: 前綴 ----
+    var models = Arg("--models", "");
+    if (models.Length > 0)
+    {
+        var runs = new List<VectorReport.ModelRun>();
+        var memory = new Dictionary<string, long>();
+        var questions = scenarios.Select(s => s.Question).ToList();
+        foreach (var spec in models.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var p = spec.Split('|');
+            var m = new OllamaEmbedder(p[0], p.Length > 1 && p[1] == "e5");
+            var withCode = await VectorIndex.Build(m, kb, incidents, true, "含代碼");
+            var noCode = await VectorIndex.Build(m, kb, incidents, false, "不含代碼");
+            // 查詢時間：模型已載入（暖機）後，12 個問題一起送出，重複 5 次取中位數
+            var q = await m.Queries(questions);
+            var qms = new List<double>();
+            for (int i = 0; i < 5; i++)
+            {
+                var watch = Stopwatch.StartNew();
+                await m.Queries(questions);
+                qms.Add(watch.Elapsed.TotalMilliseconds);
+            }
+            runs.Add(new VectorReport.ModelRun(p[0], p.Length > 2 ? p[2] : "—", withCode, noCode, q, qms.Order().ElementAt(2)));
+            if (await OllamaEmbedder.LoadedSizeMb(p[0]) is { } mb) memory[p[0]] = mb;
+        }
+        var vtext = VectorReport.Write(scenarios, rows.Select(r => r.G).ToList(), rows.Select(r => r.B).ToList(), runs, memory);
+        Console.WriteLine(vtext);
+        var vreport = Arg("--vector-report", "");
+        if (vreport.Length > 0)
+        {
+            File.WriteAllText(vreport, vtext, new UTF8Encoding(false));
+            Console.WriteLine($"報告：{vreport}");
+        }
     }
 }
 finally

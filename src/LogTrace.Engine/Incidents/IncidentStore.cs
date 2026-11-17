@@ -46,7 +46,9 @@ public sealed class IncidentStore(string folder)
 
     public string PathOf(string id) => System.IO.Path.Combine(Folder, id + FileExtension);
 
-    public static string Serialize(IncidentRecord record) => JsonSerializer.Serialize(record, Options);
+    /// <summary>格式版本依狀態決定（已過時為 2，其他為 1，#167）。</summary>
+    public static string Serialize(IncidentRecord record) =>
+        JsonSerializer.Serialize(record with { FormatVersion = IncidentRecord.FormatVersionFor(record.Status) }, Options);
 
     /// <summary>讀取 JSON；格式版本較新、不是 JSON 或缺少編號時拋出 FormatException。</summary>
     public static IncidentRecord Deserialize(string json)

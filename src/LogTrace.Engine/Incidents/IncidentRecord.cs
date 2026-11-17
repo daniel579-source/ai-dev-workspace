@@ -17,6 +17,12 @@ public enum IncidentStatus
 
     /// <summary>停用：不刪除，可以恢復（退回草稿）。</summary>
     Disabled,
+
+    /// <summary>
+    /// 已過時（ADR-0023 第 2 點，#167）：當時正確、現在不適用（例如設備已更換、處置方式已改），與「有錯而停用」分開。
+    /// 不刪除；預設不列入查詢與相似查詢，可以勾選顯示；恢復時退回草稿。
+    /// </summary>
+    Obsolete,
 }
 
 /// <summary>
@@ -67,7 +73,14 @@ public sealed record IncidentHistoryEntry(DateTimeOffset At, string User, string
 /// </summary>
 public sealed record IncidentRecord
 {
-    public const int CurrentFormatVersion = 1;
+    /// <summary>
+    /// 這個程式能讀的最新格式版本。版本 2 加上「已過時」狀態與理由（#167）：只有標示為已過時的紀錄寫成 2，
+    /// 其他維持 1，舊版程式讀到已過時的紀錄時提示「請更新程式」（使用者，2026-11-17）。
+    /// </summary>
+    public const int CurrentFormatVersion = 2;
+
+    /// <summary>寫入時的格式版本：已過時為 2，其他為 1。</summary>
+    public static int FormatVersionFor(IncidentStatus status) => status == IncidentStatus.Obsolete ? 2 : 1;
 
     public int FormatVersion { get; init; } = CurrentFormatVersion;
     public required string Id { get; init; }
@@ -82,5 +95,7 @@ public sealed record IncidentRecord
     public DateTimeOffset? QueuedAt { get; init; }
     public IReadOnlyList<IncidentVersion> Versions { get; init; } = [];
     public string? DisabledReason { get; init; }
+    /// <summary>標示已過時的理由（可以不填，#167）；不是已過時時為 null。</summary>
+    public string? ObsoleteReason { get; init; }
     public IReadOnlyList<IncidentHistoryEntry> History { get; init; } = [];
 }

@@ -40,6 +40,27 @@ public sealed partial class MainViewModel
     [ObservableProperty]
     public partial string KnowledgeStatus { get; private set; } = "請開啟案件。";
 
+    IEmbedder? _embedder;
+
+    /// <summary>
+    /// 向量搜尋用的 embedding（ADR-0022，#171）：程式啟動時設為本機 Ollama 的 bge-m3；null 時不做向量搜尋（測試預設）。
+    /// 異常紀錄面板共用同一個。
+    /// </summary>
+    public IEmbedder? Embedder
+    {
+        get => _embedder;
+        set { _embedder = value; Incidents.Embedder = value; }
+    }
+
+    /// <summary>「意思相近（向量）」：關鍵字搜尋時另外列出的前幾名知識庫條目（只用來找候選，顯示原文與出處）。</summary>
+    public ObservableCollection<KnowledgeEntry> KnowledgeSimilar { get; } = [];
+
+    /// <summary>向量搜尋的狀態：處理中、前幾名、無法使用的原因；沒有關鍵字或沒有設定 embedding 時為空字串。</summary>
+    [ObservableProperty]
+    public partial string KnowledgeSimilarStatus { get; private set; } = "";
+
+    int _similarRun;
+
     bool HasCase() => _case is not null;
 
     /// <summary>重新讀取知識庫檔（修改檔案後使用）；詳細資訊同時更新。</summary>
@@ -51,14 +72,42 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(SelectedDetailSegments));
     }
 
+    /// <summary>關鍵字搜尋（立即顯示），接著以向量搜尋列出意思相近的前幾名（ADR-0022，#171）。</summary>
     [RelayCommand(CanExecute = nameof(HasCase))]
-    void SearchKnowledge()
+    async Task SearchKnowledge()
     {
         ShowKnowledge(_knowledge?.Search(KnowledgeQuery) ?? [], _specs.Search(KnowledgeQuery));
         var total = (_knowledge?.Entries.Count ?? 0) + _specs.Entries.Count;
         if (total > 0 && !string.IsNullOrWhiteSpace(KnowledgeQuery))
             KnowledgeStatus = $"符合 {KnowledgeResults.Count:N0} 筆（共 {total:N0} 筆）";
         else UpdateKnowledgeStatus();
+        await FindSimilarKnowledgeAsync();
+    }
+
+    /// <summary>
+    /// 向量搜尋知識庫條目（不含對照表，2026-11-17 使用者決定另開）。向量檔放在知識庫檔旁（.kb.vec），第一次搜尋時建立，
+    /// 之後只重算改過的條目。案件在搜尋中切換時，結果不顯示。
+    /// </summary>
+    async Task FindSimilarKnowledgeAsync()
+    {
+        var run = ++_similarRun;
+        KnowledgeSimilar.Clear();
+        KnowledgeSimilarStatus = "";
+        if (Embedder is not { } embedder || string.IsNullOrWhiteSpace(KnowledgeQuery)) return;
+        if (_knowledge is not { Entries.Count: > 0 } kb || _knowledgePath is null) return;
+        KnowledgeSimilarStatus = "意思相近（向量）：處理中…（第一次搜尋要建立向量，條目多時需要一段時間）";
+        var entries = kb.Entries;
+        var result = await SimilarSearch.FindAsync(embedder, KnowledgeQuery, entries.Select(SimilarSearch.KnowledgeText).ToList(),
+            SimilarSearch.KnowledgeVectorPath(_knowledgePath));
+        if (run != _similarRun || !ReferenceEquals(kb, _knowledge)) return;
+        if (result.Unavailable is { } reason)
+        {
+            KnowledgeSimilarStatus = $"意思相近（向量）無法使用：{reason}；關鍵字搜尋照常可用";
+            return;
+        }
+        foreach (var i in result.Indices) KnowledgeSimilar.Add(entries[i]);
+        KnowledgeSimilarStatus = $"意思相近（向量）前 {KnowledgeSimilar.Count} 筆：只是候選，請看原文判斷"
+            + (result.Embedded > 0 ? $"（這次建立 {result.Embedded:N0} 筆向量）" : "");
     }
 
     void LoadKnowledge()
@@ -96,6 +145,9 @@ public sealed partial class MainViewModel
         else Incidents.Close();
         ShowKnowledge(_knowledge?.Search(KnowledgeQuery) ?? [], _specs.Search(KnowledgeQuery));
         UpdateKnowledgeStatus();
+        _similarRun++;
+        KnowledgeSimilar.Clear();
+        KnowledgeSimilarStatus = "";
         ReloadKnowledgeCommand.NotifyCanExecuteChanged();
         SearchKnowledgeCommand.NotifyCanExecuteChanged();
     }

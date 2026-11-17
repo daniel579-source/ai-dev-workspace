@@ -27,6 +27,8 @@ public partial class App : Application
         var settings = new SettingsStore(System.IO.Path.Combine(settingsRoot, "settings.json"));
         _vm = new MainViewModel(settings, new WpfUserInteraction(), System.IO.Path.Combine(dataRoot, "Cases"),
             plantsRoot: System.IO.Path.Combine(dataRoot, "Plants"));
+        // #171（ADR-0022）：向量搜尋經本機 Ollama 的 bge-m3；Ollama 沒有啟動或沒有模型時，面板顯示原因，其他功能照常
+        _vm.Embedder = new LogTrace.Engine.Knowledge.OllamaEmbedder();
         // 3D 畫面（WebView2）的使用者資料：回放與 Layout 編輯器共用（ADR-0017、ADR-0018）
         Web3DView.DefaultUserDataFolder = System.IO.Path.Combine(settingsRoot, "WebView2");
         var window = new MainWindow { DataContext = _vm, LayoutFile = System.IO.Path.Combine(settingsRoot, "layout.xml") };

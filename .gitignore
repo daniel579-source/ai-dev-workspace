@@ -8,3 +8,7 @@ publish/
 *.user
 TestResults/
 third_party/webview2/
+
+# #171：向量檔由知識庫與異常紀錄計算而來，只放本機
+*.vec
+*.vec.tmp

@@ -93,7 +93,7 @@ ADR-0013 第 3 點把「sqlite-vec 加上小型 embedding 模型」列為向量�
 ## 待確認
 
 1. ~~IT 是否允許在工程師電腦與現場筆電安裝 Ollama~~：**已確認**（2026-11-17，使用者轉述 IT）：允許安裝 Ollama 與放置模型檔。
-2. 兩個模型與 Ollama 的授權條款（以官方模型卡與授權檔核對）。
+2. ~~兩個模型與 Ollama 的授權條款（以官方模型卡與授權檔核對）~~：**已確認**（2026-11-17）：bge-m3 為 MIT（BAAI 官方模型頁；Ollama 官方模型庫版也附 MIT 授權檔），Ollama 為 MIT，都可以商用；發佈時保留授權檔。e5-small 已不採用。
 3. ~~Ollama 官方模型庫是否有 multilingual-e5-small；沒有時採用哪一個 GGUF 來源~~：**不再需要**（2026-11-17，模型選 bge-m3）。紀錄：官方模型庫沒有 e5；Hugging Face 上 cstr/multilingual-e5-small-GGUF 的檔案在 Ollama 0.40.16 無法載入，可以載入的兩個來源與 SHA-256 見 `validation/results/knowledge-vector-89-dev-pc.md`。
 4. Ollama 的預設監聽位址與 NPU 支援情況（以官方文件確認）。
 5. 規則關聯圖與向量搜尋的合併方式（2026-11-17 新增，**待使用者決定**）。第一份情境集中直接合併（聯集）會降低精確度；候選做法是把向量搜尋的結果分開列為「可能相關的條目」，不混進規則關聯圖的結果。

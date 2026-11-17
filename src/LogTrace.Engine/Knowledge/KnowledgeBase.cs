@@ -93,9 +93,7 @@ public sealed class KnowledgeBase
 
     public static KnowledgeBase Parse(ReadOnlySpan<byte> bytes)
     {
-        ReadOnlySpan<byte> bom = [0xEF, 0xBB, 0xBF];
-        if (bytes.StartsWith(bom)) bytes = bytes[bom.Length..];
-        var text = LogEncoding.Get(LogEncoding.Detect(bytes)).GetString(bytes);
+        var text = Decode(bytes);
 
         var entries = new List<KnowledgeEntry>();
         var issues = new List<KnowledgeIssue>();
@@ -128,11 +126,19 @@ public sealed class KnowledgeBase
         return new(entries, issues);
     }
 
+    /// <summary>CSV 的文字：UTF-8（可有 BOM），不是有效的 UTF-8 時改用 Big5（與 LOG 相同的判斷）。</summary>
+    internal static string Decode(ReadOnlySpan<byte> bytes)
+    {
+        ReadOnlySpan<byte> bom = [0xEF, 0xBB, 0xBF];
+        if (bytes.StartsWith(bom)) bytes = bytes[bom.Length..];
+        return LogEncoding.Get(LogEncoding.Detect(bytes)).GetString(bytes);
+    }
+
     /// <summary>
     /// 依 RFC 4180 切出每一列：雙引號內可以有逗號、換行，兩個雙引號代表一個雙引號。換行接受 CRLF 與 LF。
     /// 雙引號沒有結束時，那一列不傳回，另外傳回它開始的行號。
     /// </summary>
-    static (List<(int Line, List<string> Fields)> Records, int? UnclosedAt) ReadRecords(string text)
+    internal static (List<(int Line, List<string> Fields)> Records, int? UnclosedAt) ReadRecords(string text)
     {
         var records = new List<(int, List<string>)>();
         var fields = new List<string>();

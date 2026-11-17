@@ -18,6 +18,13 @@ public sealed partial class MainViewModel
 
     KnowledgeBase? _knowledge;
     string? _knowledgePath;
+    SpecTables _specs = SpecTables.Empty;
+
+    /// <summary>
+    /// 對照表的資料夾（ADR-0021）：廠別設定資料夾的上一層加上 Knowledge（預設 D:\LogTrace\Knowledge）。
+    /// 只放在本機，不進 repo。
+    /// </summary>
+    string KnowledgeRoot => Path.Combine(Path.GetDirectoryName(_plantsRoot) ?? _plantsRoot, "Knowledge");
 
     /// <summary>知識庫面板的關鍵字（空白分隔，每個都要包含）。</summary>
     [ObservableProperty]
@@ -47,9 +54,10 @@ public sealed partial class MainViewModel
     [RelayCommand(CanExecute = nameof(HasCase))]
     void SearchKnowledge()
     {
-        ShowKnowledge(_knowledge?.Search(KnowledgeQuery) ?? []);
-        if (_knowledge is not null && !string.IsNullOrWhiteSpace(KnowledgeQuery))
-            KnowledgeStatus = $"符合 {KnowledgeResults.Count:N0} 筆（共 {_knowledge.Entries.Count:N0} 筆）";
+        ShowKnowledge(_knowledge?.Search(KnowledgeQuery) ?? [], _specs.Search(KnowledgeQuery));
+        var total = (_knowledge?.Entries.Count ?? 0) + _specs.Entries.Count;
+        if (total > 0 && !string.IsNullOrWhiteSpace(KnowledgeQuery))
+            KnowledgeStatus = $"符合 {KnowledgeResults.Count:N0} 筆（共 {total:N0} 筆）";
         else UpdateKnowledgeStatus();
     }
 
@@ -57,6 +65,7 @@ public sealed partial class MainViewModel
     {
         _knowledge = null;
         _knowledgePath = null;
+        _specs = SpecTables.Empty;
         KnowledgeIssues.Clear();
         if (_case is { } c)
         {
@@ -72,18 +81,35 @@ public sealed partial class MainViewModel
                 KnowledgeIssues.Add($"無法讀取：{ex.Message}");
             }
             foreach (var issue in _knowledge?.Issues ?? []) KnowledgeIssues.Add($"第 {issue.Line} 行：{issue.Reason}");
+            // 對照表（ADR-0021）：共用的依設備種類，各廠補充的資料夾名稱為廠別設定檔名
+            try
+            {
+                _specs = SpecTables.Load(KnowledgeRoot, plantPath is null ? null : Path.GetFileNameWithoutExtension(plantPath));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                KnowledgeIssues.Add($"對照表無法讀取：{ex.Message}");
+            }
+            foreach (var issue in _specs.Issues)
+                KnowledgeIssues.Add($"{(issue.Warning ? "注意：" : "")}{issue.File} 第 {issue.Line} 行：{issue.Reason}");
         }
         else Incidents.Close();
-        ShowKnowledge(_knowledge?.Search(KnowledgeQuery) ?? []);
+        ShowKnowledge(_knowledge?.Search(KnowledgeQuery) ?? [], _specs.Search(KnowledgeQuery));
         UpdateKnowledgeStatus();
         ReloadKnowledgeCommand.NotifyCanExecuteChanged();
         SearchKnowledgeCommand.NotifyCanExecuteChanged();
     }
 
-    void ShowKnowledge(IEnumerable<KnowledgeEntry> entries)
+    /// <summary>面板列出知識庫與對照表；對照表的列顯示成「[設備種類] 代碼」，原文、翻譯、類別與狀態、出處與版本。</summary>
+    void ShowKnowledge(IEnumerable<KnowledgeEntry> entries, IEnumerable<SpecEntry> specs)
     {
         KnowledgeResults.Clear();
         foreach (var e in entries) KnowledgeResults.Add(e);
+        foreach (var s in specs)
+            KnowledgeResults.Add(new KnowledgeEntry(s.Line, $"[{s.Device}] {s.Code}",
+                s.Original + (s.IsTranslated ? $"（翻譯：{s.Chinese}）" : ""),
+                string.Join("；", new[] { s.Category, s.Status }.Where(x => x.Length > 0)),
+                s.Source + (s.Version.Length == 0 ? "" : $"（規格書 {s.Version}）")));
     }
 
     void UpdateKnowledgeStatus() => KnowledgeStatus = (_case, _knowledge, _knowledgePath) switch
@@ -93,25 +119,47 @@ public sealed partial class MainViewModel
         (_, null, var path) => $"{NoKnowledge}：可以在 {path} 建立（欄位：代碼,說明,處置,出處）",
         (_, var kb, var path) => $"知識庫 {kb.Entries.Count:N0} 筆（{path}）"
             + (kb.Issues.Count == 0 ? "" : $"；{kb.Issues.Count:N0} 列格式有誤，沒有使用"),
-    };
+    } + (_case is null ? "" : _specs.Files.Count == 0 ? "；沒有對照表" : $"\n{_specs.Summary}"); // 沒有對照表時不多佔一行（ADR-0021）
 
     /// <summary>詳細資訊中的知識庫段落：事件每個警報代碼對到的說明、處置與出處；沒有警報代碼時為空字串。</summary>
     string KnowledgeDetail()
     {
         var codes = _selectedFields.Where(f => f.Kind == FieldKinds.AlarmCode).Select(f => f.Value).Distinct().ToList();
         if (codes.Count == 0) return "";
-        if (_knowledge is null) return $"\n知識庫：{NoKnowledge}";
-        var text = "";
+        var text = _knowledge is null ? $"\n知識庫：{NoKnowledge}" : "";
+        var devices = EventDevices();
         foreach (var code in codes)
         {
-            var entries = _knowledge.Lookup(code);
-            text += $"\n知識庫（警報代碼 {code}）：" + (entries.Count == 0 ? "知識庫中沒有這個代碼" : "");
-            foreach (var e in entries)
-                text += $"\n  說明：{e.Description}"
-                    + (e.Action.Length == 0 ? "" : $"\n  處置：{e.Action}")
-                    + (e.Source.Length == 0 ? "" : $"\n  出處：{e.Source}");
+            if (_knowledge is not null)
+            {
+                var entries = _knowledge.Lookup(code);
+                text += $"\n知識庫（警報代碼 {code}）：" + (entries.Count == 0 ? "知識庫中沒有這個代碼" : "");
+                foreach (var e in entries)
+                    text += $"\n  說明：{e.Description}"
+                        + (e.Action.Length == 0 ? "" : $"\n  處置：{e.Action}")
+                        + (e.Source.Length == 0 ? "" : $"\n  出處：{e.Source}");
+            }
+            // 對照表（ADR-0021 第 5 點）：依事件對應到的設備種類；對應不到時列出所有種類
+            if (_specs.Files.Count == 0) continue;
+            var specs = _specs.Lookup(code, devices);
+            if (specs.Count == 0) text += $"\n對照表（代碼 {code}）：對照表中沒有這個代碼" + (devices.Count > 0 ? $"（{string.Join("、", devices)}）" : "");
+            foreach (var s in specs)
+                text += $"\n對照表（{s.Device}{(s.Category.Length > 0 ? " " + s.Category : "")} {s.Code}）：{s.Original}"
+                    + (s.IsTranslated ? $"\n  中文（翻譯）：{s.Chinese}" : "")
+                    + $"\n  出處：{s.Source}" + (s.Version.Length == 0 ? "" : $"（規格書 {s.Version}）")
+                    + (s.IsReviewed ? "" : "\n  狀態：待確認（尚未審核，不當作確定的說明）");
         }
         return text;
+    }
+
+    /// <summary>事件對應到的設備種類（ADR-0021 第 5 點）：RM 元素為 RM，搬送機為 STV；對應不到時為空（不限）。</summary>
+    IReadOnlyList<string> EventDevices()
+    {
+        var model = Playback.Model;
+        if (model is null) return [];
+        return _selectedFields.Where(f => FieldKinds.Identifiers.Contains(f.Kind))
+            .Select(f => model.Resolve(f.Value)?.Type switch { LayoutElementType.Rm => "RM", LayoutElementType.Vehicle => "STV", _ => null })
+            .OfType<string>().Distinct().ToList();
     }
 
     void ClearKnowledge()

@@ -1,0 +1,422 @@
+[
+ {
+  "id": "W01",
+  "question": "搬送車的輪子馬達負荷太大跳掉了",
+  "answer": "F001",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W02",
+  "question": "台車跑一跑就停了，馬達摸起來很燙",
+  "answer": "F002",
+  "kind": "現象",
+  "crossLingual": false
+ },
+ {
+  "id": "W03",
+  "question": "輸送線的皮帶卡住拉不動，馬達跳脫",
+  "answer": "F003",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W04",
+  "question": "輸送帶的馬達燙到不能摸",
+  "answer": "F004",
+  "kind": "口語",
+  "crossLingual": false
+ },
+ {
+  "id": "W05",
+  "question": "光電一直被擋住，擋太久報警",
+  "answer": "F005",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W06",
+  "question": "那個感應器完全沒反應，燈也不亮",
+  "answer": "F006",
+  "kind": "現象",
+  "crossLingual": false
+ },
+ {
+  "id": "W07",
+  "question": "掃不到棧板上的條碼",
+  "answer": "F007",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W08",
+  "question": "兩個棧板貼了一樣的標籤",
+  "answer": "F008",
+  "kind": "現象",
+  "crossLingual": false
+ },
+ {
+  "id": "W09",
+  "question": "貨物太寬，左右兩邊凸出來",
+  "answer": "F009",
+  "kind": "現象",
+  "crossLingual": false
+ },
+ {
+  "id": "W10",
+  "question": "貨疊太高了進不去",
+  "answer": "F010",
+  "kind": "口語",
+  "crossLingual": false
+ },
+ {
+  "id": "W11",
+  "question": "東西太重，系統不讓入庫",
+  "answer": "F011",
+  "kind": "現象",
+  "crossLingual": false
+ },
+ {
+  "id": "W12",
+  "question": "後面的站都滿了，貨卡在前面等",
+  "answer": "F012",
+  "kind": "現象",
+  "crossLingual": false
+ },
+ {
+  "id": "W13",
+  "question": "升降機停的位置對不準",
+  "answer": "F013",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W14",
+  "question": "站點一直找不到定位點，等很久",
+  "answer": "F014",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W15",
+  "question": "防火捲門的感應器跳了",
+  "answer": "F015",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W16",
+  "question": "有人拍了紅色的急停",
+  "answer": "F016",
+  "kind": "口語",
+  "crossLingual": false
+ },
+ {
+  "id": "W17",
+  "question": "圍籬的門沒關好，設備不會動",
+  "answer": "F017",
+  "kind": "現象",
+  "crossLingual": false
+ },
+ {
+  "id": "W18",
+  "question": "台車跟電腦連不上線",
+  "answer": "F018",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W19",
+  "question": "輸送機的控制器沒有回應",
+  "answer": "F019",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W20",
+  "question": "要放貨的格子裡面已經有東西了",
+  "answer": "F020",
+  "kind": "現象",
+  "crossLingual": false
+ },
+ {
+  "id": "W21",
+  "question": "去拿貨結果格子是空的",
+  "answer": "F021",
+  "kind": "現象",
+  "crossLingual": false
+ },
+ {
+  "id": "W22",
+  "question": "叉子伸不出去",
+  "answer": "F022",
+  "kind": "口語",
+  "crossLingual": false
+ },
+ {
+  "id": "W23",
+  "question": "叉子上面還留著一箱貨",
+  "answer": "F023",
+  "kind": "現象",
+  "crossLingual": false
+ },
+ {
+  "id": "W24",
+  "question": "台車沒電了",
+  "answer": "F024",
+  "kind": "口語",
+  "crossLingual": false
+ },
+ {
+  "id": "W25",
+  "question": "空壓不夠，氣缸推不動",
+  "answer": "F025",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W26",
+  "question": "皮帶一直往旁邊跑",
+  "answer": "F026",
+  "kind": "現象",
+  "crossLingual": false
+ },
+ {
+  "id": "W27",
+  "question": "頂起來的機構沒有升到頂",
+  "answer": "F027",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W28",
+  "question": "擋貨的那片板子沒有放下來",
+  "answer": "F028",
+  "kind": "現象",
+  "crossLingual": false
+ },
+ {
+  "id": "W29",
+  "question": "有聞到煙味，偵煙器響了",
+  "answer": "F029",
+  "kind": "現象",
+  "crossLingual": false
+ },
+ {
+  "id": "W30",
+  "question": "變頻器面板顯示錯誤",
+  "answer": "F030",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W31",
+  "question": "台車實際位置跟系統差很多",
+  "answer": "F031",
+  "kind": "現象",
+  "crossLingual": false
+ },
+ {
+  "id": "W32",
+  "question": "開機後還沒回原點就不能動",
+  "answer": "F032",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W33",
+  "question": "走行的雷射測距數值亂跳",
+  "answer": "F033",
+  "kind": "同義",
+  "crossLingual": true
+ },
+ {
+  "id": "W34",
+  "question": "吊升的鋼索鬆掉了",
+  "answer": "F034",
+  "kind": "同義",
+  "crossLingual": true
+ },
+ {
+  "id": "W35",
+  "question": "貨物堆得歪七扭八，塌下來了",
+  "answer": "F035",
+  "kind": "現象",
+  "crossLingual": true
+ },
+ {
+  "id": "W36",
+  "question": "台車從軌道上脫出來了",
+  "answer": "F036",
+  "kind": "同義",
+  "crossLingual": true
+ },
+ {
+  "id": "W37",
+  "question": "剎車放不開，車子動不了",
+  "answer": "F037",
+  "kind": "現象",
+  "crossLingual": true
+ },
+ {
+  "id": "W38",
+  "question": "變頻器電流太大跳掉",
+  "answer": "F038",
+  "kind": "同義",
+  "crossLingual": true
+ },
+ {
+  "id": "W39",
+  "question": "有一箱貨掉到地上了",
+  "answer": "F039",
+  "kind": "現象",
+  "crossLingual": true
+ },
+ {
+  "id": "W40",
+  "question": "控制箱裡面很熱",
+  "answer": "F040",
+  "kind": "口語",
+  "crossLingual": true
+ },
+ {
+  "id": "W41",
+  "question": "搬送機輪子卡住，馬達過附載",
+  "answer": "F001",
+  "kind": "口語",
+  "crossLingual": false
+ },
+ {
+  "id": "W42",
+  "question": "光電被當住太久",
+  "answer": "F005",
+  "kind": "口語",
+  "crossLingual": false
+ },
+ {
+  "id": "W43",
+  "question": "條瑪讀不到",
+  "answer": "F007",
+  "kind": "口語",
+  "crossLingual": false
+ },
+ {
+  "id": "W44",
+  "question": "緊急停指按鈕被壓下去",
+  "answer": "F016",
+  "kind": "口語",
+  "crossLingual": false
+ },
+ {
+  "id": "W45",
+  "question": "電池快沒電，車子跑不動",
+  "answer": "F024",
+  "kind": "現象",
+  "crossLingual": false
+ },
+ {
+  "id": "W46",
+  "question": "皮帶馬達一直跳過載",
+  "answer": "F003",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W47",
+  "question": "光電沒有訊號，好像壞了",
+  "answer": "F006",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W48",
+  "question": "系統說那格本來就有貨，放不進去",
+  "answer": "F020",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W49",
+  "question": "走行用的距離感測器讀值怪怪的",
+  "answer": "F033",
+  "kind": "口語",
+  "crossLingual": true
+ },
+ {
+  "id": "W50",
+  "question": "鋼絲繩鬆弛",
+  "answer": "F034",
+  "kind": "同義",
+  "crossLingual": true
+ },
+ {
+  "id": "W51",
+  "question": "煞車沒有打開",
+  "answer": "F037",
+  "kind": "同義",
+  "crossLingual": true
+ },
+ {
+  "id": "W52",
+  "question": "盤箱溫度太高",
+  "answer": "F040",
+  "kind": "同義",
+  "crossLingual": true
+ },
+ {
+  "id": "W53",
+  "question": "貨塌了",
+  "answer": "F035",
+  "kind": "口語",
+  "crossLingual": true
+ },
+ {
+  "id": "W54",
+  "question": "車子從軌道掉出來",
+  "answer": "F036",
+  "kind": "口語",
+  "crossLingual": true
+ },
+ {
+  "id": "W55",
+  "question": "位置算錯了，跟實際差好幾公分",
+  "answer": "F031",
+  "kind": "現象",
+  "crossLingual": false
+ },
+ {
+  "id": "W56",
+  "question": "剛送電，還沒做歸零動作",
+  "answer": "F032",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W57",
+  "question": "擋停器卡住不動",
+  "answer": "F028",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W58",
+  "question": "頂升沒到位",
+  "answer": "F027",
+  "kind": "口語",
+  "crossLingual": false
+ },
+ {
+  "id": "W59",
+  "question": "這個站的定位等太久逾時",
+  "answer": "F014",
+  "kind": "同義",
+  "crossLingual": false
+ },
+ {
+  "id": "W60",
+  "question": "後段塞車，前面的貨出不去",
+  "answer": "F012",
+  "kind": "口語",
+  "crossLingual": false
+ }
+]

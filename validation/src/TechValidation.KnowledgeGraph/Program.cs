@@ -19,6 +19,23 @@ var windowMinutes = int.Parse(Arg("--window", "5"));
 var hops = int.Parse(Arg("--hops", "1"));
 const int Repeat = 20;
 
+// ---- 「用詞不同」情境集（#89／ADR-0022）：--wording validation/knowledge-wording --models "..." --vector-report <報告> ----
+var wording = Arg("--wording", "");
+if (wording.Length > 0)
+{
+    var specs = Arg("--models", "").Split(';', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Split('|'))
+        .Select(p => (p[0], p.Length > 1 && p[1] == "e5", p.Length > 2 ? p[2] : "—")).ToList();
+    var wtext = await Wording.Run(Path.GetFullPath(wording), specs);
+    Console.WriteLine(wtext);
+    var wreport = Arg("--vector-report", "");
+    if (wreport.Length > 0)
+    {
+        File.WriteAllText(wreport, wtext, new UTF8Encoding(false));
+        Console.WriteLine($"報告：{wreport}");
+    }
+    return;
+}
+
 // ---- 載入虛構資料：建立暫時案件並匯入 ----
 var doc = PlantConfigFile.Load(Path.Combine(data, "plant.json"));
 var work = Path.Combine(Path.GetTempPath(), "kg89-" + Guid.NewGuid().ToString("N")[..8]);

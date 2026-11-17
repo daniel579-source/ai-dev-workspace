@@ -40,6 +40,8 @@ dotnet run -c Release --project src/TechValidation.Bench -- --logs D:\tv-data\lo
 dotnet run -c Release --project src/TechValidation.KnowledgeGraph -- --data knowledge-scenarios --report results\knowledge-graph-89-<電腦名稱>.md
 # 向量搜尋比較（#89，ADR-0022）：需要本機 Ollama 與模型（只送虛構資料到 127.0.0.1）；模型以「名稱|e5|來源」列出，第二欄為 e5 時加 query:/passage: 前綴
 dotnet run -c Release --project src/TechValidation.KnowledgeGraph -- --data knowledge-scenarios --models "e5test-c3f16|e5|來源;bge-m3||來源" --vector-report results\knowledge-vector-89-<電腦名稱>.md
+# 「用詞不同」情境集（#89，ADR-0022）：虛構資料在 knowledge-wording\（kb.csv 40 條、questions.json 60 題，只有問題文字、不看 LOG）
+dotnet run -c Release --project src/TechValidation.KnowledgeGraph -- --wording knowledge-wording --models "e5test-c3f16|e5|來源;bge-m3||來源" --vector-report results\knowledge-wording-89-<電腦名稱>.md
 
 # 4. UI 驗證：發佈 self-contained 單一資料夾
 dotnet publish src/TechValidation.UiSpike -c Release -o publish\UiSpike

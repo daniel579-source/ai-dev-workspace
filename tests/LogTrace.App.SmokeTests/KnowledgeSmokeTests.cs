@@ -48,7 +48,7 @@ public sealed class KnowledgeSmokeTests : IDisposable
             In("KnowledgeQuery").AsTextBox().Text = "SOP";
             In("SearchKnowledge").AsButton().Invoke();
             Assert.True(Retry.WhileFalse(() => Items("KnowledgeResults").Length == 1, TimeSpan.FromSeconds(10)).Result);
-            Assert.Contains("符合 1 筆", In("KnowledgeStatus").Name);
+            Assert.Contains("符合 1 筆", In("KnowledgeStatus").AsTextBox().Text); // 唯讀文字框，可以選取、複製
 
             // 搜尋警報事件，選第一筆：詳細資訊顯示知識庫的說明
             ImportSmokeTests.OpenTab(main, "搜尋");

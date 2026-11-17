@@ -132,6 +132,7 @@ public sealed class KnowledgeViewModelTests : IDisposable
 
         Assert.Equal(["E205"], _vm.KnowledgeResults.Select(e => e.Code));
         Assert.Equal(["第 3 行：沒有填說明"], _vm.KnowledgeIssues);
+        Assert.Equal("第 3 行：沒有填說明", _vm.KnowledgeIssuesText); // 畫面上可以選取、複製
         Assert.Contains("1 列格式有誤", _vm.KnowledgeStatus);
         Select("警報發生 A-02 E205");
         Assert.Contains("說明：站點輸送逾時（虛構）", _vm.SelectedDetail);

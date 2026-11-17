@@ -36,6 +36,9 @@ public sealed partial class MainViewModel
     /// <summary>格式有誤、沒有使用的列：「第 N 行：原因」。</summary>
     public ObservableCollection<string> KnowledgeIssues { get; } = [];
 
+    /// <summary>KnowledgeIssues 一行一項，給畫面上可以選取、複製的文字框（回報行號與原因用）。</summary>
+    public string KnowledgeIssuesText => string.Join(Environment.NewLine, KnowledgeIssues);
+
     /// <summary>知識庫的狀態：檔案位置與筆數、沒有知識庫、搜尋結果的筆數。</summary>
     [ObservableProperty]
     public partial string KnowledgeStatus { get; private set; } = "請開啟案件。";
@@ -143,6 +146,7 @@ public sealed partial class MainViewModel
                 KnowledgeIssues.Add($"{(issue.Warning ? "注意：" : "")}{issue.File} 第 {issue.Line} 行：{issue.Reason}");
         }
         else Incidents.Close();
+        OnPropertyChanged(nameof(KnowledgeIssuesText));
         ShowKnowledge(_knowledge?.Search(KnowledgeQuery) ?? [], _specs.Search(KnowledgeQuery));
         UpdateKnowledgeStatus();
         _similarRun++;

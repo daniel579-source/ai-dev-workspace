@@ -12,3 +12,11 @@ third_party/webview2/
 # #171：向量檔由知識庫與異常紀錄計算而來，只放本機
 *.vec
 *.vec.tmp
+
+# ADR-0021：規格書整理出的對照表（CSV）是機密，只放本機知識庫資料夾，不進 repo。
+# 預設忽略所有 CSV，只放行虛構資料的資料夾；新增虛構 CSV 資料夾時在這裡加例外。
+*.csv
+!tests/fixtures/**/*.csv
+!tools/spec-extract/examples/**/*.csv
+!validation/knowledge-scenarios/**/*.csv
+!validation/knowledge-wording/**/*.csv

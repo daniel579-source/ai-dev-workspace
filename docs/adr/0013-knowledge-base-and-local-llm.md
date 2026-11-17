@@ -48,6 +48,7 @@ ADR-0001 把離線 LLM 與向量資料庫排除在第一階段之外。系統規
    - 2026-11-17 補充（使用者轉述 IT）：IT **同意**在工程師電腦安裝 Ollama 與放置模型檔（待確認 3 已確認；ADR-0022 待確認 1 已確認）。
 8. **候選技術**（實測後再定案）：
    - 模型：3～8B、INT4 量化。候選例如 Qwen 系列（中文較強）、Phi-4-mini（較小，中文較弱）。
+   - 2026-11-17 補充（授權條款查核，以 Hugging Face 官方模型頁與 GitHub 授權檔為準）：Phi-4-mini-instruct（含 Microsoft 官方 ONNX 版）為 MIT；Qwen3-4B、Qwen3-8B、Qwen2.5-7B-Instruct 為 Apache-2.0，都可以商用。**Qwen2.5-3B-Instruct 為 Qwen Research License（只限研究或評估，不能商用），排除在正式產品之外**；3～4B 的 Qwen 改測 Qwen3-4B。執行環境 ONNX Runtime、ONNX Runtime GenAI、llama.cpp 都是 MIT。發佈時保留各自的授權檔；第三方轉檔版本的授權沿用原模型，但來源與品質另外確認。以上為條款整理，不是法律意見。
    - 執行環境：ONNX Runtime GenAI（可使用各廠牌 NPU，與 .NET 整合容易）為主，llama.cpp（模型最多，主要用 CPU／GPU）為備案。
    - 硬體：AI 筆電，建議 32 GB 記憶體（7～8B 量化模型約 4～6 GB，加上 LogTrace 與索引）。
    - 2026-11-17 補充（使用者提供規格）：執行 LogTrace 的現場筆電為 **MSI Prestige 16 AI Evo B1MG**：Intel Core Ultra 7 165H（Meteor Lake，16 核心 22 執行緒，x64）、**32 GB LPDDR5-6400**（板載、不能升級）、Intel Arc 內顯（沒有獨立 GPU；Windows 顯示的 128 MB 是專用顯示記憶體，跑模型時與系統共用 32 GB 記憶體，可用量待實機確認）、Intel AI Boost NPU（算力約 11 TOPS，**待確認**）、1 TB NVMe PCIe 4.0、Windows 11 Pro 25H2、電池 99.9 Wh。符合本點「建議 32 GB」。依公開資料（待實機確認）：不是 Copilot+ PC（NPU 未達 40 TOPS），替代方案中的 Phi Silica 不能使用；Ollama 官方只能用內顯（Vulkan）或 CPU，不能用 NPU（ADR-0022 的 embedding 不受影響）。
@@ -81,7 +82,7 @@ ADR-0001 把離線 LLM 與向量資料庫排除在第一階段之外。系統規
 | LLM 產生錯誤內容 | 誤導排查方向 | 只做轉換與摘要；附出處；搜尋條件可以修改 |
 | 中文品質不足 | 說明不準確 | 以虛構資料評估候選模型 |
 | ~~現場筆電為 ARM64（Snapdragon）~~ | 要另外發佈 ARM64 版並重新驗證（ADR-0007） | **已解除**（2026-11-17）：現場筆電為 Intel x64（第 8 點補充） |
-| 模型授權 | 不能在公司內部使用 | 選型時確認授權條款 |
+| 模型授權 | 不能在公司內部使用 | 選型時確認授權條款；2026-11-17 已查核（第 8 點補充），Qwen2.5-3B 為研究授權、排除 |
 | NPU 驅動差異、一次可處理的內容長度有限 | 可處理的事件數受限 | 先以引擎篩選，再交給 LLM |
 | 現場筆電的 NPU 算力不高（Meteor Lake 世代，約 11 TOPS，待確認）、沒有獨立 GPU（2026-11-17） | LLM 可能太慢 | 內顯、CPU、NPU 都量測；先用 3～4B 模型 |
 | 知識庫文件屬於公司機密 | 外流風險 | 存放在本機，不進 repo；依 ADR-0009 處理 |
@@ -102,4 +103,4 @@ ADR-0001 把離線 LLM 與向量資料庫排除在第一階段之外。系統規
 1. ~~現場筆電的型號與規格（處理器廠牌、NPU、記憶體）~~：**已回答**（2026-11-17，使用者）：MSI Prestige 16 AI Evo B1MG，Intel Core Ultra 7 165H、32 GB、Intel Arc 內顯、Intel AI Boost NPU（第 8 點補充）。NPU 的實際算力與內顯可用的記憶體量待實機確認。
 2. 知識庫文件的格式、機密等級與去識別化樣本。
 3. ~~IT 是否允許把模型檔放在工程師電腦~~：**已確認**（2026-11-17，使用者轉述 IT）：允許；安裝 Ollama 也允許（第 7 點補充）。
-4. 候選模型的授權條款。
+4. ~~候選模型的授權條款~~：**已確認**（2026-11-17，查核官方授權檔，使用者確認寫入）：Phi-4-mini 為 MIT，Qwen3-4B／8B、Qwen2.5-7B 為 Apache-2.0；Qwen2.5-3B 為研究授權，排除（第 8 點補充）。

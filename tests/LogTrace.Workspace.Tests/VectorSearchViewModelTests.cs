@@ -173,4 +173,28 @@ public sealed class VectorSearchViewModelTests : IDisposable
         Assert.Empty(Inc.SimilarResults);
         Assert.Contains("無法使用", Inc.SimilarStatus);
     }
+
+    [Fact]
+    public async Task 異常紀錄_勾選顯示已過時時意思相近也包含已過時_切換時清除()
+    {
+        _vm.Embedder = _embedder;
+        await OpenCase();
+        NewRecord("條碼讀不到，貨物停在入庫口（虛構）", approve: true);
+        Inc.ObsoleteReason = "讀取器已更換（虛構）";
+        Inc.MarkObsoleteCommand.Execute(null);
+        NewRecord("搬送機行走馬達過熱停止（虛構）", approve: true);
+
+        Inc.Query = "條碼掃不到";
+        await Inc.SearchCommand.ExecuteAsync(null);
+        Assert.Equal(["搬送機行走馬達過熱停止（虛構）"], Inc.SimilarResults.Select(r => r.Symptom)); // 預設不含已過時
+
+        Inc.ShowObsolete = true;
+        Assert.Empty(Inc.SimilarResults);
+        Assert.Equal("", Inc.SimilarStatus);
+
+        await Inc.SearchCommand.ExecuteAsync(null);
+        Assert.Equal(2, Inc.SimilarResults.Count);
+        Assert.Equal("條碼讀不到，貨物停在入庫口（虛構）", Inc.SimilarResults[0].Symptom);
+        Assert.Equal("已過時", Inc.SimilarResults[0].Status);
+    }
 }

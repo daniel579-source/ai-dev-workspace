@@ -224,12 +224,12 @@ public sealed partial class IncidentsViewModel : ObservableObject
         SimilarResults.Clear();
         SimilarStatus = "";
         if (Embedder is not { } embedder || string.IsNullOrWhiteSpace(Query) || _store is not { } store) return;
-        // 只比對目前有效的版本（草稿、停用不列，ADR-0016 第 6 點補充）
-        var effective = _records.Select(r => r.Record).Where(r => IncidentWorkflow.Effective(r) is not null).ToList();
+        // 只比對目前有效的版本（草稿、停用不列，ADR-0016 第 6 點補充）；勾選「顯示已過時」時也比對已過時的最後一版（#167，使用者決定）
+        var effective = _records.Select(r => r.Record).Where(r => IncidentWorkflow.Searchable(r, ShowObsolete) is not null).ToList();
         if (effective.Count == 0) return;
         SimilarStatus = "意思相近（向量）：處理中…（第一次搜尋要建立向量，紀錄多時需要一段時間）";
         var result = await SimilarSearch.FindAsync(embedder, Query,
-            effective.Select(r => IncidentWorkflow.Effective(r)!.Content.Symptom).ToList(), Path.Combine(store.Folder, VectorFileName));
+            effective.Select(r => IncidentWorkflow.Searchable(r, ShowObsolete)!.Content.Symptom).ToList(), Path.Combine(store.Folder, VectorFileName));
         if (run != _similarRun || !ReferenceEquals(store, _store)) return;
         if (result.Unavailable is { } reason)
         {
@@ -609,7 +609,12 @@ public sealed partial class IncidentsViewModel : ObservableObject
     [ObservableProperty]
     public partial bool ShowObsolete { get; set; }
 
-    partial void OnShowObsoleteChanged(bool value) => RefreshLists();
+    /// <summary>切換時重新列出查詢結果；意思相近（向量）的清單清除，再按「搜尋」時依新的勾選重新比對。</summary>
+    partial void OnShowObsoleteChanged(bool value)
+    {
+        RefreshLists();
+        ClearSimilar();
+    }
 
     /// <summary>恢復：退回草稿，重新審核通過後成為新的一版。</summary>
     [RelayCommand(CanExecute = nameof(CanRestore))]

@@ -3,15 +3,21 @@ using LogTrace.Engine.Search;
 
 namespace LogTrace.Engine.Knowledge;
 
-/// <summary>對照表的一列（ADR-0021 第 4 點，候選格式）。File、Line 為來源檔名與行號。</summary>
+/// <summary>
+/// 對照表的一列（ADR-0021 第 4 點，候選格式）。File、Line 為來源檔名與行號。
+/// Telegram、Field：代碼所屬的電文與欄位（2026-11-18 補充，選填）；有填時是電文欄位的值，不是警報代碼。
+/// </summary>
 public sealed record SpecEntry(
     string File, int Line, string Device, string Category, string Code, string Original, string Chinese,
-    string Source, string Version, string Status, string Reviewer, string ReviewedAt)
+    string Source, string Version, string Status, string Reviewer, string ReviewedAt, string Telegram = "", string Field = "")
 {
     public bool IsReviewed => Status == SpecTables.Reviewed;
 
     /// <summary>有中文翻譯（原文為日文時由 Copilot 翻譯，顯示時標示「翻譯」）。</summary>
     public bool IsTranslated => Chinese.Length > 0;
+
+    /// <summary>屬於某個電文或欄位的值（以警報代碼查表時不列出）。</summary>
+    public bool IsFieldValue => Telegram.Length > 0 || Field.Length > 0;
 }
 
 /// <summary>對照表中沒有使用的列（或整個檔案），或可以使用但需要注意的列（Warning）。</summary>
@@ -30,7 +36,7 @@ public sealed class SpecTables
 
     const string DeviceHeader = "設備種類", CategoryHeader = "類別", CodeHeader = "代碼或名稱", OriginalHeader = "意義（原文）",
         ChineseHeader = "意義（中文）", SourceHeader = "出處", VersionHeader = "規格書版本", StatusHeader = "狀態",
-        ReviewerHeader = "審核者", ReviewedAtHeader = "審核日期";
+        ReviewerHeader = "審核者", ReviewedAtHeader = "審核日期", TelegramHeader = "電文", FieldHeader = "欄位";
 
     readonly List<(SpecEntry Entry, string Code, string Text)> _normalized;
 
@@ -40,7 +46,7 @@ public sealed class SpecTables
         Issues = issues;
         Files = files;
         _normalized = entries.Select(e => (e, Key(e.Code),
-            TextNormalizer.Normalize(string.Join("\n", e.Device, e.Category, e.Code, e.Original, e.Chinese, e.Source)))).ToList();
+            TextNormalizer.Normalize(string.Join("\n", e.Device, e.Category, e.Telegram, e.Field, e.Code, e.Original, e.Chinese, e.Source)))).ToList();
     }
 
     public static SpecTables Empty { get; } = new([], [], []);
@@ -67,13 +73,14 @@ public sealed class SpecTables
     static string Key(string code) => TextNormalizer.Normalize(code.Trim());
 
     /// <summary>
-    /// 代碼完全比對（不分大小寫、全形與半形相同）。devices 為事件對應到的設備種類；null 或空表示不限（對應不到元素時）。
+    /// 以事件的警報代碼查表：代碼完全比對（不分大小寫、全形與半形相同）。devices 為事件對應到的設備種類；null 或空表示不限（對應不到元素時）。
+    /// 有填電文或欄位的列是欄位值，不列出（ADR-0021 第 4 點 2026-11-18 補充；解析規則確定後改依電文＋欄位＋值查表）。
     /// </summary>
     public IReadOnlyList<SpecEntry> Lookup(string code, IReadOnlyCollection<string>? devices = null)
     {
         var key = Key(code);
         if (key.Length == 0) return [];
-        return _normalized.Where(n => n.Code == key && (devices is not { Count: > 0 } || devices.Contains(n.Entry.Device)))
+        return _normalized.Where(n => n.Code == key && !n.Entry.IsFieldValue && (devices is not { Count: > 0 } || devices.Contains(n.Entry.Device)))
             .Select(n => n.Entry).ToList();
     }
 
@@ -117,7 +124,7 @@ public sealed class SpecTables
         var entries = new List<SpecEntry>();
         var issues = new List<SpecIssue>();
         var names = new List<string>();
-        var seen = new Dictionary<(string, string, string), SpecEntry>();
+        var seen = new Dictionary<(string, string, string, string, string), SpecEntry>();
         foreach (var (name, bytes, folderDevice) in files)
         {
             names.Add(name);
@@ -138,7 +145,7 @@ public sealed class SpecTables
             }
             int device = Column(DeviceHeader), category = Column(CategoryHeader), code = Column(CodeHeader), original = Column(OriginalHeader),
                 chinese = Column(ChineseHeader), source = Column(SourceHeader), version = Column(VersionHeader), status = Column(StatusHeader),
-                reviewer = Column(ReviewerHeader), reviewedAt = Column(ReviewedAtHeader);
+                reviewer = Column(ReviewerHeader), reviewedAt = Column(ReviewedAtHeader), telegram = Column(TelegramHeader), field = Column(FieldHeader);
             foreach (var (line, fields) in records.Skip(1))
             {
                 if (fields.All(string.IsNullOrWhiteSpace)) continue;
@@ -146,7 +153,7 @@ public sealed class SpecTables
                 var dev = Get(device).ToUpperInvariant();
                 if (dev.Length == 0 && folderDevice is not null) dev = folderDevice;
                 var e = new SpecEntry(name, line, dev, Get(category), Get(code), Get(original), Get(chinese), Get(source), Get(version),
-                    Get(status), Get(reviewer), Get(reviewedAt));
+                    Get(status), Get(reviewer), Get(reviewedAt), Get(telegram), Get(field));
                 string? problem =
                     e.Code.Length == 0 ? "沒有填代碼或名稱"
                     : e.Original.Length == 0 ? "沒有填意義（原文）"
@@ -160,7 +167,8 @@ public sealed class SpecTables
                     issues.Add(new(name, line, problem));
                     continue;
                 }
-                var key = (e.Device, TextNormalizer.Normalize(e.Category), Key(e.Code));
+                // 重複判斷：設備＋類別＋電文＋欄位＋代碼（不同電文的同一代碼不是重複）
+                var key = (e.Device, TextNormalizer.Normalize(e.Category), Key(e.Telegram), Key(e.Field), Key(e.Code));
                 if (seen.TryGetValue(key, out var first))
                 {
                     if (TextNormalizer.Normalize(first.Original) == TextNormalizer.Normalize(e.Original))

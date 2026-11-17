@@ -156,7 +156,7 @@ public sealed partial class MainViewModel
         SearchKnowledgeCommand.NotifyCanExecuteChanged();
     }
 
-    /// <summary>面板列出知識庫與對照表；對照表的列顯示成「[設備種類] 代碼」，原文、翻譯、類別與狀態、出處與版本。</summary>
+    /// <summary>面板列出知識庫與對照表；對照表的列顯示成「[設備種類] 代碼」，原文、翻譯、類別、電文與欄位、狀態、出處與版本。</summary>
     void ShowKnowledge(IEnumerable<KnowledgeEntry> entries, IEnumerable<SpecEntry> specs)
     {
         KnowledgeResults.Clear();
@@ -164,7 +164,8 @@ public sealed partial class MainViewModel
         foreach (var s in specs)
             KnowledgeResults.Add(new KnowledgeEntry(s.Line, $"[{s.Device}] {s.Code}",
                 s.Original + (s.IsTranslated ? $"（翻譯：{s.Chinese}）" : ""),
-                string.Join("；", new[] { s.Category, s.Status }.Where(x => x.Length > 0)),
+                string.Join("；", new[] { s.Category, s.Telegram.Length > 0 ? $"電文 {s.Telegram}" : "", s.Field.Length > 0 ? $"欄位 {s.Field}" : "", s.Status }
+                    .Where(x => x.Length > 0)),
                 s.Source + (s.Version.Length == 0 ? "" : $"（規格書 {s.Version}）")));
     }
 

@@ -756,6 +756,9 @@
                                         <TabControl Grid.Column="0" AutomationProperties.AutomationId="IncidentTabs">
                                             <TabItem Header="查詢" AutomationProperties.AutomationId="IncidentSearchTab">
                                                 <DockPanel>
+                                                    <CheckBox DockPanel.Dock="Top" Content="顯示已過時" IsChecked="{Binding ShowObsolete}" Margin="2,2,0,0"
+                                                              AutomationProperties.AutomationId="IncidentShowObsolete"
+                                                              ToolTip="勾選時查詢結果也列出已過時的紀錄（狀態標示已過時）" />
                                                     <DockPanel DockPanel.Dock="Top" Margin="0,2">
                                                         <Button DockPanel.Dock="Right" Content="搜尋" Padding="6,0" Margin="4,0,0,0" Command="{Binding SearchCommand}"
                                                                 AutomationProperties.AutomationId="IncidentSearch" />
@@ -965,12 +968,20 @@
                                                             ToolTip="修改已審核的紀錄；審核通過前查詢仍顯示目前的版本" />
                                                     <Button Content="放棄修改" Padding="6,0" Margin="0,0,4,2" Command="{Binding CancelReviseCommand}" AutomationProperties.AutomationId="IncidentCancelRevise" />
                                                     <Button Content="恢復" Padding="6,0" Margin="0,0,4,2" Command="{Binding RestoreCommand}" AutomationProperties.AutomationId="IncidentRestore"
-                                                            ToolTip="退回草稿，重新審核通過後成為新的一版" />
+                                                            ToolTip="停用或已過時的紀錄：退回草稿，重新審核通過後成為新的一版" />
                                                 </WrapPanel>
                                                 <DockPanel Margin="0,2">
                                                     <Button DockPanel.Dock="Right" Content="停用" Padding="6,0" Margin="4,0,0,0" Command="{Binding DisableCommand}" AutomationProperties.AutomationId="IncidentDisable" />
                                                     <TextBlock Text="停用理由：" VerticalAlignment="Center" />
                                                     <TextBox Text="{Binding DisableReason, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="IncidentDisableReason" />
+                                                </DockPanel>
+                                                <!-- #167（ADR-0023 第 2 點）：已過時＝當時正確、現在不適用；理由可以不填 -->
+                                                <DockPanel Margin="0,2">
+                                                    <Button DockPanel.Dock="Right" Content="標示已過時" Padding="6,0" Margin="4,0,0,0" Command="{Binding MarkObsoleteCommand}"
+                                                            AutomationProperties.AutomationId="IncidentMarkObsolete"
+                                                            ToolTip="設備已更換、處置方式已改等「當時正確、現在不適用」的紀錄；內容有錯請改用停用" />
+                                                    <TextBlock Text="已過時理由（可不填）：" VerticalAlignment="Center" />
+                                                    <TextBox Text="{Binding ObsoleteReason, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="IncidentObsoleteReason" />
                                                 </DockPanel>
                                                 <Expander Header="修訂經過" Margin="0,6,0,0" AutomationProperties.AutomationId="IncidentHistory">
                                                     <TextBox Text="{Binding HistoryText, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0"

@@ -86,7 +86,7 @@ public sealed partial class IncidentsViewModel : ObservableObject
     /// <summary>目前選取的紀錄編號。</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(ApproveCommand), nameof(ReviseCommand), nameof(CancelReviseCommand))]
-    [NotifyCanExecuteChangedFor(nameof(DisableCommand), nameof(RestoreCommand), nameof(AddSelectedEventCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DisableCommand), nameof(RestoreCommand), nameof(MarkObsoleteCommand), nameof(AddSelectedEventCommand))]
     [NotifyPropertyChangedFor(nameof(IsEditing))]
     public partial string? SelectedId { get; private set; }
 
@@ -189,7 +189,8 @@ public sealed partial class IncidentsViewModel : ObservableObject
         Select(_records.Any(r => r.Record.Id == keep) ? keep : null);
         Status = _store is null
             ? _caseName is null ? "請開啟案件。" : $"找不到廠別「{_plant}」的設定檔，無法使用異常紀錄。"
-            : $"有效 {Results.Count:N0} 筆、待審核 {Queue.Count:N0} 筆、停用 {Disabled.Count:N0} 筆（{_store.Folder}）"
+            : $"有效 {_records.Count(r => IncidentWorkflow.Effective(r.Record) is not null):N0} 筆、待審核 {Queue.Count:N0} 筆、停用 {Disabled.Count:N0} 筆"
+              + $"、已過時 {_records.Count(r => r.Record.Status == IncidentStatus.Obsolete):N0} 筆（{_store.Folder}）"
               + (Issues.Count == 0 ? "" : $"；{Issues.Count:N0} 個檔案讀不了，沒有使用");
         NotifyCommands();
     }
@@ -251,7 +252,7 @@ public sealed partial class IncidentsViewModel : ObservableObject
     {
         var all = _records.Select(r => r.Record).ToList();
         Results.Clear();
-        foreach (var r in IncidentWorkflow.Search(all, Query)) Results.Add(Row(r));
+        foreach (var r in IncidentWorkflow.Search(all, Query, ShowObsolete)) Results.Add(Row(r));
         RefreshQueue();
         Disabled.Clear();
         foreach (var r in all.Where(r => r.Status == IncidentStatus.Disabled)) Disabled.Add(Row(r));
@@ -276,6 +277,7 @@ public sealed partial class IncidentsViewModel : ObservableObject
         IncidentStatus.Draft => "草稿",
         IncidentStatus.Reviewed => "已審核",
         IncidentStatus.Revising => "修訂中（舊版仍有效）",
+        IncidentStatus.Obsolete => "已過時",
         _ => "停用",
     };
 
@@ -296,6 +298,7 @@ public sealed partial class IncidentsViewModel : ObservableObject
         SelectedId = id;
         var r = Current?.Record;
         DisableReason = "";
+        ObsoleteReason = "";
         LoadEditor(r is not null && IncidentWorkflow.IsEditable(r) ? r.Work! : null);
         RecordEvents.Clear();
         foreach (var e in (r is null ? null : r.Work is { } w && IncidentWorkflow.IsEditable(r) ? w : IncidentWorkflow.Effective(r)?.Content ?? r.Work ?? r.Versions.LastOrDefault()?.Content)?.Events ?? [])
@@ -323,6 +326,13 @@ public sealed partial class IncidentsViewModel : ObservableObject
     {
         var lines = new List<string> { $"{r.Id}　{StatusLabel(r.Status)}　來源：{(r.Source == IncidentSource.Case ? "案件" : "維修紀錄")}　撰寫者：{r.Author}" };
         if (r.Status == IncidentStatus.Disabled) lines.Add($"停用理由：{r.DisabledReason}");
+        if (r.Status == IncidentStatus.Obsolete)
+        {
+            lines.Add("已過時（當時正確、現在不適用）" + (r.ObsoleteReason is { } why ? $"：{why}" : ""));
+            var last = r.Versions[^1];
+            lines.Add($"最後一版：第 {last.Rev} 版（審核：{last.Reviewer}，{last.ReviewedAt:yyyy-MM-dd HH:mm}）");
+            lines.AddRange(Fields(last.Content, []));
+        }
         if (IncidentWorkflow.Effective(r) is { } v)
         {
             var changed = v.Changes.Select(c => c.Field).ToHashSet();
@@ -577,7 +587,29 @@ public sealed partial class IncidentsViewModel : ObservableObject
         if (Write(IncidentWorkflow.Disable(r.Record, DisableReason, UserName, Clock()), r.Stamp)) Status = $"已停用 {r.Record.Id}。";
     }
 
-    bool CanRestore() => Current?.Record.Status == IncidentStatus.Disabled;
+    bool CanRestore() => Current?.Record.Status is IncidentStatus.Disabled or IncidentStatus.Obsolete;
+
+    /// <summary>已過時的理由（可以不填，#167）。</summary>
+    [ObservableProperty]
+    public partial string ObsoleteReason { get; set; } = "";
+
+    bool CanMarkObsolete() => Current?.Record.Status is IncidentStatus.Reviewed or IncidentStatus.Revising;
+
+    /// <summary>標示已過時（ADR-0023 第 2 點）：查詢與相似查詢預設不列出，勾選「顯示已過時」時列出；可以恢復（退回草稿）。</summary>
+    [RelayCommand(CanExecute = nameof(CanMarkObsolete))]
+    void MarkObsolete()
+    {
+        var r = Current!;
+        if (!_confirm("標示已過時", $"把 {r.Record.Id} 標示為已過時（當時正確、現在不適用）？查詢預設不再列出，勾選「顯示已過時」時可以看到，之後可以恢復（退回草稿重新審核）。"
+                + (r.Record.Status == IncidentStatus.Revising ? "\n尚未審核的修改不會保留。" : ""))) return;
+        if (Write(IncidentWorkflow.MarkObsolete(r.Record, ObsoleteReason, UserName, Clock()), r.Stamp)) Status = $"已把 {r.Record.Id} 標示為已過時。";
+    }
+
+    /// <summary>查詢分頁的「顯示已過時」：勾選時查詢結果也列出已過時的紀錄（以最後一版比對，狀態標示已過時）。</summary>
+    [ObservableProperty]
+    public partial bool ShowObsolete { get; set; }
+
+    partial void OnShowObsoleteChanged(bool value) => RefreshLists();
 
     /// <summary>恢復：退回草稿，重新審核通過後成為新的一版。</summary>
     [RelayCommand(CanExecute = nameof(CanRestore))]
@@ -622,6 +654,7 @@ public sealed partial class IncidentsViewModel : ObservableObject
         CancelReviseCommand.NotifyCanExecuteChanged();
         DisableCommand.NotifyCanExecuteChanged();
         RestoreCommand.NotifyCanExecuteChanged();
+        MarkObsoleteCommand.NotifyCanExecuteChanged();
         AddSelectedEventCommand.NotifyCanExecuteChanged();
         RemoveEventCommand.NotifyCanExecuteChanged();
         GoToEventCommand.NotifyCanExecuteChanged();

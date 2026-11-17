@@ -183,20 +183,41 @@ public static class IncidentWorkflow
             Work = r.Versions.Count == 0 ? r.Work : null,
             QueuedAt = null,
             DisabledReason = reason.Trim(),
+            ObsoleteReason = null,
             History = [.. r.History, new(now, user.Trim(), "停用", reason.Trim())],
         };
     }
 
-    /// <summary>恢復：退回草稿重新審核；審核通過前查詢中仍然沒有這筆（ADR-0016 第 3 點補充 5）。</summary>
+    /// <summary>
+    /// 標示已過時（ADR-0023 第 2 點，#167）：已審核與修訂中可以標示；理由可以不填；不限制誰標示（記錄使用者）。
+    /// 修訂中標示時，尚未審核的修改不保留（同停用）。查詢與相似查詢預設不列出，離開待審核清單。
+    /// </summary>
+    public static IncidentRecord MarkObsolete(IncidentRecord r, string? reason, string user, DateTimeOffset now)
+    {
+        if (r.Status is not (IncidentStatus.Reviewed or IncidentStatus.Revising) || r.Versions.Count == 0)
+            throw new InvalidOperationException("只有已審核或修訂中的紀錄可以標示已過時");
+        var why = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        return r with
+        {
+            Status = IncidentStatus.Obsolete,
+            Work = null,
+            QueuedAt = null,
+            ObsoleteReason = why,
+            History = [.. r.History, new(now, user.Trim(), "標示已過時", why ?? "")],
+        };
+    }
+
+    /// <summary>恢復（停用或已過時）：退回草稿重新審核；審核通過前查詢中仍然沒有這筆（ADR-0016 第 3 點補充 5、ADR-0023 第 2 點）。</summary>
     public static IncidentRecord Restore(IncidentRecord r, string user, DateTimeOffset now)
     {
-        if (r.Status != IncidentStatus.Disabled) throw new InvalidOperationException("只有停用的紀錄可以恢復");
+        if (r.Status is not (IncidentStatus.Disabled or IncidentStatus.Obsolete)) throw new InvalidOperationException("只有停用或已過時的紀錄可以恢復");
         return r with
         {
             Status = IncidentStatus.Draft,
             Work = r.Work ?? r.Versions[^1].Content,
             QueuedAt = now,
             DisabledReason = null,
+            ObsoleteReason = null,
             History = [.. r.History, new(now, user.Trim(), "恢復（退回草稿）", "")],
         };
     }
@@ -205,11 +226,17 @@ public static class IncidentWorkflow
     /// 以空白分隔的關鍵字搜尋目前有效的版本（所有欄位，部分比對、每個關鍵字都要包含，ADR-0010 的正規化）。
     /// 草稿與停用不列出（ADR-0016 第 6 點補充）。沒有關鍵字時傳回全部有效的紀錄。
     /// </summary>
-    public static IReadOnlyList<IncidentRecord> Search(IEnumerable<IncidentRecord> records, string keywords)
+    public static IReadOnlyList<IncidentRecord> Search(IEnumerable<IncidentRecord> records, string keywords, bool includeObsolete = false)
     {
         var terms = keywords.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Select(TextNormalizer.Normalize).ToList();
-        return records.Where(r => Effective(r) is { } v && Matches(v.Content, terms)).ToList();
+        return records.Where(r => Searchable(r, includeObsolete) is { } v && Matches(v.Content, terms)).ToList();
     }
+
+    /// <summary>
+    /// 查詢與相似查詢比對的一版：目前有效的版本；勾選「顯示已過時」時，已過時的紀錄以最後一版比對（ADR-0023 第 2 點）。
+    /// </summary>
+    public static IncidentVersion? Searchable(IncidentRecord r, bool includeObsolete) =>
+        Effective(r) ?? (includeObsolete && r.Status == IncidentStatus.Obsolete && r.Versions.Count > 0 ? r.Versions[^1] : null);
 
     static bool Matches(IncidentContent c, List<string> terms)
     {

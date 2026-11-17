@@ -869,6 +869,56 @@
                                                     </ListView.View>
                                                 </ListView>
                                             </TabItem>
+                                            <!-- #168（ADR-0023 第 1 點）：每廠總結，程式統計＋工程師的說明，審核後才使用，只給工程師看 -->
+                                            <TabItem Header="總結" AutomationProperties.AutomationId="IncidentSummaryTab">
+                                                <DockPanel>
+                                                    <TextBlock DockPanel.Dock="Top" Text="{Binding SummaryStatus}" TextWrapping="Wrap" Foreground="#555" Padding="2,2"
+                                                               AutomationProperties.AutomationId="IncidentSummaryStatus" />
+                                                    <WrapPanel DockPanel.Dock="Top" Margin="0,2">
+                                                        <Button Content="產生總結" Padding="6,0" Margin="0,0,4,2" Command="{Binding GenerateSummaryCommand}"
+                                                                AutomationProperties.AutomationId="IncidentSummaryGenerate"
+                                                                ToolTip="依目前有效的異常紀錄統計，產生新的草稿；審核通過前目前的總結繼續有效" />
+                                                        <CheckBox Content="顯示草稿" IsChecked="{Binding SummaryShowDraft}" IsEnabled="{Binding HasSummaryDraft}" VerticalAlignment="Center"
+                                                                  Margin="4,0,8,2" AutomationProperties.AutomationId="IncidentSummaryShowDraft" />
+                                                        <Button Content="儲存說明" Padding="6,0" Margin="0,0,4,2" Command="{Binding SaveSummaryNoteCommand}"
+                                                                AutomationProperties.AutomationId="IncidentSummarySaveNote" />
+                                                        <Button Content="審核通過" Padding="6,0" Margin="0,0,4,2" Command="{Binding ApproveSummaryCommand}"
+                                                                AutomationProperties.AutomationId="IncidentSummaryApprove" />
+                                                        <Button Content="捨棄草稿" Padding="6,0" Margin="0,0,4,2" Command="{Binding DiscardSummaryDraftCommand}"
+                                                                AutomationProperties.AutomationId="IncidentSummaryDiscard" />
+                                                    </WrapPanel>
+                                                    <TextBlock DockPanel.Dock="Top" Text="{Binding SummaryInfo}" TextWrapping="Wrap" Foreground="#555" Padding="2,0"
+                                                               AutomationProperties.AutomationId="IncidentSummaryInfo" />
+                                                    <DockPanel DockPanel.Dock="Top" Margin="0,2">
+                                                        <TextBlock DockPanel.Dock="Top" Text="說明（工程師撰寫）：" />
+                                                        <TextBox Text="{Binding SummaryNote, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" AcceptsReturn="True"
+                                                                 MinHeight="40" MaxHeight="120" VerticalScrollBarVisibility="Auto" IsReadOnly="{Binding SummaryShowDraft, Converter={StaticResource Not}}"
+                                                                 AutomationProperties.AutomationId="IncidentSummaryNote" />
+                                                    </DockPanel>
+                                                    <DockPanel DockPanel.Dock="Bottom" MaxHeight="120">
+                                                        <TextBlock DockPanel.Dock="Top" Text="引用的紀錄（點選看原文）：" Padding="2,2,0,0" />
+                                                        <ListBox ItemsSource="{Binding SummaryRecordIds}" SelectedItem="{Binding SelectedSummaryRecordId}"
+                                                                 AutomationProperties.AutomationId="IncidentSummaryRecords" />
+                                                    </DockPanel>
+                                                    <ListView ItemsSource="{Binding SummaryRows}" SelectedItem="{Binding SelectedSummaryRow}" BorderThickness="0"
+                                                              AutomationProperties.AutomationId="IncidentSummaryRows">
+                                                        <ListView.View>
+                                                            <GridView>
+                                                                <GridViewColumn Header="區分" DisplayMemberBinding="{Binding Section}" Width="100" />
+                                                                <GridViewColumn Header="項目" DisplayMemberBinding="{Binding Key}" Width="110" />
+                                                                <GridViewColumn Header="筆數" DisplayMemberBinding="{Binding Count}" Width="45" />
+                                                                <GridViewColumn Header="處置" Width="240">
+                                                                    <GridViewColumn.CellTemplate>
+                                                                        <DataTemplate>
+                                                                            <TextBlock Text="{Binding Disposals}" TextWrapping="Wrap" />
+                                                                        </DataTemplate>
+                                                                    </GridViewColumn.CellTemplate>
+                                                                </GridViewColumn>
+                                                            </GridView>
+                                                        </ListView.View>
+                                                    </ListView>
+                                                </DockPanel>
+                                            </TabItem>
                                         </TabControl>
                                         <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" />
                                         <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" AutomationProperties.AutomationId="IncidentDetailArea">

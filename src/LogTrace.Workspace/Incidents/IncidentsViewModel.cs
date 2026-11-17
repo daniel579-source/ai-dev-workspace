@@ -148,6 +148,7 @@ public sealed partial class IncidentsViewModel : ObservableObject
     public void Open(string? plantConfigPath, string plant, string caseName)
     {
         _store = plantConfigPath is null ? null : new IncidentStore(IncidentStore.FolderBeside(plantConfigPath));
+        OpenSummary(plantConfigPath);
         _plant = plant;
         _caseName = caseName;
         Reload();
@@ -158,6 +159,7 @@ public sealed partial class IncidentsViewModel : ObservableObject
     {
         _store = null;
         _caseName = null;
+        OpenSummary(null);
         Query = "";
         Reload();
     }
@@ -192,6 +194,7 @@ public sealed partial class IncidentsViewModel : ObservableObject
             : $"有效 {_records.Count(r => IncidentWorkflow.Effective(r.Record) is not null):N0} 筆、待審核 {Queue.Count:N0} 筆、停用 {Disabled.Count:N0} 筆"
               + $"、已過時 {_records.Count(r => r.Record.Status == IncidentStatus.Obsolete):N0} 筆（{_store.Folder}）"
               + (Issues.Count == 0 ? "" : $"；{Issues.Count:N0} 個檔案讀不了，沒有使用");
+        LoadSummary();
         NotifyCommands();
     }
 
@@ -636,6 +639,7 @@ public sealed partial class IncidentsViewModel : ObservableObject
             else _records.Add(saved);
             RefreshLists();
             Select(record.Id);
+            ShowSummary(statusOnly: true); // 新增筆數依目前的紀錄重新計算
             return true;
         }
         catch (IncidentConflictException ex)

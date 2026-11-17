@@ -24,4 +24,9 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- #171：測試用的 embedding（需要參考 LogTrace.Engine，所以不放在所有測試專案共用的 TestSupport 根目錄） -->
+    <Compile Include="..\TestSupport\Knowledge\*.cs" LinkBase="TestSupport\Knowledge" />
+  </ItemGroup>
+
 </Project>

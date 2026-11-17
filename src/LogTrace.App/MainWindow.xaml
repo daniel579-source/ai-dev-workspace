@@ -669,6 +669,42 @@
                                                AutomationProperties.AutomationId="KnowledgeStatus" />
                                     <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding KnowledgeIssues}" Foreground="#B00020" Margin="6,0"
                                                   AutomationProperties.AutomationId="KnowledgeIssues" />
+                                    <!-- #171（ADR-0022）：意思相近（向量）的前幾名，只是候選；沒有設定 embedding 或沒有關鍵字時不顯示 -->
+                                    <DockPanel DockPanel.Dock="Bottom" MaxHeight="220">
+                                        <DockPanel.Style>
+                                            <Style TargetType="DockPanel">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding KnowledgeSimilarStatus}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </DockPanel.Style>
+                                        <TextBlock DockPanel.Dock="Top" Text="{Binding KnowledgeSimilarStatus}" TextWrapping="Wrap" Foreground="#555" Padding="6,3"
+                                                   Background="#F3F3F3" AutomationProperties.AutomationId="KnowledgeSimilarStatus" />
+                                        <ListView ItemsSource="{Binding KnowledgeSimilar}" BorderThickness="0" AutomationProperties.AutomationId="KnowledgeSimilar">
+                                            <ListView.View>
+                                                <GridView>
+                                                    <GridViewColumn Header="代碼" DisplayMemberBinding="{Binding Code}" Width="70" />
+                                                    <GridViewColumn Header="說明" Width="240">
+                                                        <GridViewColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding Description}" TextWrapping="Wrap" />
+                                                            </DataTemplate>
+                                                        </GridViewColumn.CellTemplate>
+                                                    </GridViewColumn>
+                                                    <GridViewColumn Header="處置" Width="200">
+                                                        <GridViewColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding Action}" TextWrapping="Wrap" />
+                                                            </DataTemplate>
+                                                        </GridViewColumn.CellTemplate>
+                                                    </GridViewColumn>
+                                                    <GridViewColumn Header="出處" DisplayMemberBinding="{Binding Source}" Width="160" />
+                                                </GridView>
+                                            </ListView.View>
+                                        </ListView>
+                                    </DockPanel>
                                     <ListView ItemsSource="{Binding KnowledgeResults}" BorderThickness="0" AutomationProperties.AutomationId="KnowledgeResults">
                                         <ListView.View>
                                             <GridView>
@@ -732,6 +768,35 @@
                                                                 <KeyBinding Key="Enter" Command="{Binding SearchCommand}" />
                                                             </TextBox.InputBindings>
                                                         </TextBox>
+                                                    </DockPanel>
+                                                    <!-- #171（ADR-0022）：依現象描述的意思相近（向量）前幾筆，稱為「過去相似的異常」 -->
+                                                    <DockPanel DockPanel.Dock="Bottom" MaxHeight="220">
+                                                        <DockPanel.Style>
+                                                            <Style TargetType="DockPanel">
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding SimilarStatus}" Value="">
+                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </DockPanel.Style>
+                                                        <TextBlock DockPanel.Dock="Top" Text="{Binding SimilarStatus}" TextWrapping="Wrap" Foreground="#555" Padding="6,3"
+                                                                   Background="#F3F3F3" AutomationProperties.AutomationId="IncidentSimilarStatus" />
+                                                        <ListView ItemsSource="{Binding SimilarResults}" SelectedItem="{Binding SelectedSimilar}" BorderThickness="0" AutomationProperties.AutomationId="IncidentSimilar">
+                                                            <ListView.View>
+                                                                <GridView>
+                                                                    <GridViewColumn Header="現象" Width="200">
+                                                                        <GridViewColumn.CellTemplate>
+                                                                            <DataTemplate>
+                                                                                <TextBlock Text="{Binding Symptom}" TextWrapping="Wrap" />
+                                                                            </DataTemplate>
+                                                                        </GridViewColumn.CellTemplate>
+                                                                    </GridViewColumn>
+                                                                    <GridViewColumn Header="版" DisplayMemberBinding="{Binding Rev}" Width="30" />
+                                                                    <GridViewColumn Header="編號" DisplayMemberBinding="{Binding Id}" Width="170" />
+                                                                </GridView>
+                                                            </ListView.View>
+                                                        </ListView>
                                                     </DockPanel>
                                                     <ListView ItemsSource="{Binding Results}" SelectedItem="{Binding SelectedResult}" BorderThickness="0"
                                                               AutomationProperties.AutomationId="IncidentResults">

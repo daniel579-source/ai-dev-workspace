@@ -665,10 +665,23 @@
                                             </TextBox.InputBindings>
                                         </TextBox>
                                     </DockPanel>
-                                    <TextBlock DockPanel.Dock="Top" Text="{Binding KnowledgeStatus}" TextWrapping="Wrap" Foreground="#555" Padding="6,1"
-                                               AutomationProperties.AutomationId="KnowledgeStatus" />
-                                    <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding KnowledgeIssues}" Foreground="#B00020" Margin="6,0"
-                                                  AutomationProperties.AutomationId="KnowledgeIssues" />
+                                    <!-- 狀態與問題用唯讀文字框，可以用滑鼠選取、複製（回報統計與行號、原因用） -->
+                                    <TextBox DockPanel.Dock="Top" Text="{Binding KnowledgeStatus, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"
+                                             BorderThickness="0" Background="Transparent" Foreground="#555" Padding="4,1"
+                                             AutomationProperties.AutomationId="KnowledgeStatus" />
+                                    <TextBox DockPanel.Dock="Top" Text="{Binding KnowledgeIssuesText, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"
+                                             BorderThickness="0" Background="Transparent" Foreground="#B00020" Margin="4,0" MaxHeight="160"
+                                             VerticalScrollBarVisibility="Auto" AutomationProperties.AutomationId="KnowledgeIssues">
+                                        <TextBox.Style>
+                                            <Style TargetType="TextBox">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding KnowledgeIssuesText}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBox.Style>
+                                    </TextBox>
                                     <!-- #171（ADR-0022）：意思相近（向量）的前幾名，只是候選；沒有設定 embedding 或沒有關鍵字時不顯示 -->
                                     <DockPanel DockPanel.Dock="Bottom" MaxHeight="220">
                                         <DockPanel.Style>

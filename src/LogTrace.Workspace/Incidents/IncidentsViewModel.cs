@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LogTrace.Engine.Incidents;
+using LogTrace.Engine.Knowledge;
 
 namespace LogTrace.Workspace.Incidents;
 
@@ -72,6 +73,11 @@ public sealed partial class IncidentsViewModel : ObservableObject
 
     [ObservableProperty]
     public partial IncidentRowViewModel? SelectedDisabled { get; set; }
+
+    [ObservableProperty]
+    public partial IncidentRowViewModel? SelectedSimilar { get; set; }
+
+    partial void OnSelectedSimilarChanged(IncidentRowViewModel? value) { if (value is not null) Select(value.Id); }
 
     partial void OnSelectedResultChanged(IncidentRowViewModel? value) { if (value is not null) Select(value.Id); }
     partial void OnSelectedQueueItemChanged(IncidentQueueRowViewModel? value) { if (value is not null) Select(value.Id); }
@@ -164,6 +170,7 @@ public sealed partial class IncidentsViewModel : ObservableObject
     {
         var keep = SelectedId;
         Issues.Clear();
+        ClearSimilar();
         _records = [];
         if (_store is not null)
         {
@@ -187,8 +194,58 @@ public sealed partial class IncidentsViewModel : ObservableObject
         NotifyCommands();
     }
 
+    /// <summary>向量搜尋用的 embedding（ADR-0022，#171）；null 時不做向量搜尋。由主畫面設定。</summary>
+    public IEmbedder? Embedder { get; set; }
+
+    /// <summary>「意思相近（向量）」：依現象描述找出的前幾筆有效紀錄（ADR-0016 第 6 點；只用來找候選）。</summary>
+    public ObservableCollection<IncidentRowViewModel> SimilarResults { get; } = [];
+
+    /// <summary>向量搜尋的狀態；沒有關鍵字或沒有設定 embedding 時為空字串。</summary>
+    [ObservableProperty]
+    public partial string SimilarStatus { get; private set; } = "";
+
+    int _similarRun;
+
+    /// <summary>向量檔：異常紀錄資料夾中的 symptoms.vec（讀取紀錄只看 .json，不受影響）。</summary>
+    public const string VectorFileName = "symptoms.vec";
+
+    /// <summary>關鍵字搜尋（立即顯示），接著以現象描述的向量搜尋列出意思相近的前幾筆（#171）。</summary>
     [RelayCommand]
-    void Search() => RefreshLists();
+    async Task Search()
+    {
+        RefreshLists();
+        await FindSimilarAsync();
+    }
+
+    async Task FindSimilarAsync()
+    {
+        var run = ++_similarRun;
+        SimilarResults.Clear();
+        SimilarStatus = "";
+        if (Embedder is not { } embedder || string.IsNullOrWhiteSpace(Query) || _store is not { } store) return;
+        // 只比對目前有效的版本（草稿、停用不列，ADR-0016 第 6 點補充）
+        var effective = _records.Select(r => r.Record).Where(r => IncidentWorkflow.Effective(r) is not null).ToList();
+        if (effective.Count == 0) return;
+        SimilarStatus = "意思相近（向量）：處理中…（第一次搜尋要建立向量，紀錄多時需要一段時間）";
+        var result = await SimilarSearch.FindAsync(embedder, Query,
+            effective.Select(r => IncidentWorkflow.Effective(r)!.Content.Symptom).ToList(), Path.Combine(store.Folder, VectorFileName));
+        if (run != _similarRun || !ReferenceEquals(store, _store)) return;
+        if (result.Unavailable is { } reason)
+        {
+            SimilarStatus = $"意思相近（向量）無法使用：{reason}；關鍵字搜尋照常可用";
+            return;
+        }
+        foreach (var i in result.Indices) SimilarResults.Add(Row(effective[i]));
+        SimilarStatus = $"意思相近（向量）前 {SimilarResults.Count} 筆：只是候選，稱為「過去相似的異常」，不表示同一個原因"
+            + (result.Embedded > 0 ? $"（這次建立 {result.Embedded:N0} 筆向量）" : "");
+    }
+
+    void ClearSimilar()
+    {
+        _similarRun++;
+        SimilarResults.Clear();
+        SimilarStatus = "";
+    }
 
     void RefreshLists()
     {

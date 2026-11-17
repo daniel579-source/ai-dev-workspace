@@ -2,7 +2,7 @@
 
 | 項目 | 內容 |
 |---|---|
-| 文件狀態 | 草稿 v1.75（**架構評估中**；已定案的決策見第 10 章，其餘仍為候選） |
+| 文件狀態 | 草稿 v1.76（**架構評估中**；已定案的決策見第 10 章，其餘仍為候選） |
 | 最後更新 | 2026-11-17 |
 | 相關文件 | `docs/requirements.md`、`docs/log-format-notes.md` |
 
@@ -268,7 +268,7 @@
 | ADR-0019 | RM 與雙深料架 | 已接受（2026-11-15） | RM 另成元素種類 rm，STV 維持搬送機；儲位編號 RRCCCLL（7 碼，2026-11-15 更正），深淺以排號判斷，記在選填的排配置表（所屬 RM、深淺、配對；沒填＝單深）；LOG 沒寫明深淺時以「入庫先深、出庫先淺」推估（啟用條件待確認，確認前不啟用）；RM 指定導軌、位置與載貨台高度推估；3D 為堆高起重機樣式；側視圖分深淺兩格；有 RM 或配置表時格式版本 7；字首依使用者規則判定（搬到儲位＝RM、兩端都是 Conv＝STV，第三種先歸為 STV，2026-11-15）；實作確認：配置表在 RM 屬性面板編輯、RM 用新欄位種類 rm、RM 不能當輸送線端點、預設高 12.5 公尺（2026-11-15 #123 補充） | [docs/adr/0019-rm-and-double-deep-racks.md](adr/0019-rm-and-double-deep-racks.md) |
 | ADR-0020 | 工站點、圍欄、圍欄門與設備外觀修正 | 已接受（2026-11-16） | 新增工站點（狀態推導比照站點、5 色燈柱裝飾）、圍欄（黃色網狀折線 2.5 公尺）、圍欄門（獨立元件、門高 1.8 公尺、畫成關著），格式版本 8；STV 滾筒轉 90 度、Conv 拿掉護欄、電梯台車在緊鄰設備的側面畫閘門（抵達時朝目的地的閘門開為推估）、其餘側面畫圍欄；站點、STV、Conv、輸送線預設高度 0.8 公尺；新增 EQ（其他公司的對接設備外觀，不推導狀態；門朝緊鄰的 Conv，Conv 上有棧板等待完成回報時開為推估），格式版本 9；RM 滾筒轉 90 度（2026-11-16 補充） | [docs/adr/0020-workstation-fence-and-looks.md](adr/0020-workstation-fence-and-looks.md) |
 | ADR-0021 | 機密規格書的知識庫整理流程與電文／代碼對照表 | 已接受（2026-11-17） | 機密的通信仕樣書由已授權的 M365 Copilot 依指令包抽取成對照表，工程師審核後只放本機；Claude 不讀機密內容（本機權限規則＋hook 阻擋），只寫指令包、格式、虛構範例與檢查程式並只看統計；現場離線只查表、不需要 LLM；知識庫分成依設備種類共用的對照表與各廠補充；日文保留原文加註翻譯、每列記錄規格書版本；各廠專屬機密先不放、AGC 等有 LOG 再加；實作：LogTrace 讀取對照表並在知識庫面板顯示統計與有誤的列、詳細資訊依警報代碼與設備種類查表，Copilot 指令包在 tools/spec-extract（2026-11-17，#156） | [docs/adr/0021-confidential-spec-knowledge.md](adr/0021-confidential-spec-knowledge.md) |
-| ADR-0022 | 向量搜尋的 embedding 模型、執行環境與儲存方式 | 提議中（2026-11-17） | multilingual-e5-small 與 bge-m3 一起比較（候選）；embedding 以 Ollama 執行，驗證與正式產品都用，需安裝、待 IT 同意（修改 ADR-0013 第 7 點）；LLM 維持 ONNX Runtime GenAI，不用 Ollama；向量儲存不加套件、逐條比對，取代 sqlite-vec；官方庫沒有 e5 時從 Hugging Face GGUF 匯入；偵測不到 Ollama 時降級；以 #89 情境集比較後再定 | [docs/adr/0022-vector-search-ollama.md](adr/0022-vector-search-ollama.md) |
+| ADR-0022 | 向量搜尋的 embedding 模型、執行環境與儲存方式 | 提議中（2026-11-17） | multilingual-e5-small 與 bge-m3 一起比較（候選）；embedding 以 Ollama 執行，驗證與正式產品都用，需安裝、待 IT 同意（修改 ADR-0013 第 7 點）；LLM 維持 ONNX Runtime GenAI，不用 Ollama；向量儲存不加套件、逐條比對，取代 sqlite-vec；官方庫沒有 e5 時從 Hugging Face GGUF 匯入；偵測不到 Ollama 時降級；以 #89 情境集比較後再定；2026-11-17 比較完成，模型選 bge-m3（候選，現場筆電實測後再接受），條目文字含代碼；合併方式與知識庫別名欄位待使用者決定 | [docs/adr/0022-vector-search-ollama.md](adr/0022-vector-search-ollama.md) |
 
 狀態：提議中／已接受／已取代（註明被哪一項取代）／已廢止。
 
@@ -390,3 +390,4 @@
 | 2026-11-17 | v1.73 | 新增 ADR-0022（向量搜尋的 embedding 模型、執行環境與儲存方式，提議中）；補充 ADR-0013 第 3、7 點、ADR-0015 第 5 點（#89） |
 | 2026-11-17 | v1.74 | ADR-0013 待確認 1 已回答：現場筆電為 MSI Prestige 16 AI Evo B1MG（32 GB）；解除 ARM64 風險；LLM 實測順序；ADR-0022 後續驗證補充（#55） |
 | 2026-11-17 | v1.75 | ADR-0011 T-14：工程師電腦規格已確認（MSI Prestige 16 AI Evo B1MG，32 GB、1 TB NVMe），效能待在該機實測（#47） |
+| 2026-11-17 | v1.76 | ADR-0022：#89 兩份虛構情境集的比較結果；模型選 bge-m3、條目文字含代碼；新增待確認 5、6（合併方式、別名欄位）；ADR-0015 後續驗證補註 |

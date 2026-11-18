@@ -34,6 +34,12 @@ public partial class MainWindow : Window
     /// <summary>使用者保存的版面檔（依使用者保存，不依案件，ADR-0008 第 7 點）；null 時不保存。</summary>
     public string? LayoutFile { get; init; }
 
+    /// <summary>
+    /// 舊版程式的版面檔。預設版面改變時（0.13.0：知識庫移到主要區域）換一個版面檔名稱，
+    /// 新版第一次開啟時改用新的預設版面一次，並刪除舊檔。
+    /// </summary>
+    public string? OldLayoutFile { get; init; }
+
     readonly System.Windows.Threading.DispatcherTimer _playTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     DateTime _lastTick;
 
@@ -183,10 +189,28 @@ public partial class MainWindow : Window
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
         }
-        if (saved is null) _layouts.ApplyPreset(DockLayouts.Playback);
+        if (saved is null)
+        {
+            _layouts.ApplyPreset(DockLayouts.Playback);
+            if (DeleteOldLayout()) _vm?.ShowStatus("版面已更新為新版的預設版面（知識庫移到主要區域）。可以從「版面」選單切換。");
+        }
         else if (!_layouts.TryRestore(saved)) _vm?.ShowStatus("保存的版面無法使用（檔案損壞或來自其他版本的程式），已改用預設版面。");
         _watchdog = new BusyWatchdog(this);
         UpdateBusy();
+    }
+
+    /// <summary>刪除舊版程式的版面檔；有舊檔時回傳 true。刪除失敗不影響啟動（下次仍會改用新的預設版面）。</summary>
+    bool DeleteOldLayout()
+    {
+        if (OldLayoutFile is null || !File.Exists(OldLayoutFile)) return false;
+        try
+        {
+            File.Delete(OldLayoutFile);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+        return true;
     }
 
     void Window_Closed(object? sender, EventArgs e)

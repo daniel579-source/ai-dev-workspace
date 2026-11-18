@@ -31,7 +31,7 @@ public partial class App : Application
         _vm.Embedder = new LogTrace.Engine.Knowledge.OllamaEmbedder();
         // 3D 畫面（WebView2）的使用者資料：回放與 Layout 編輯器共用（ADR-0017、ADR-0018）
         Web3DView.DefaultUserDataFolder = System.IO.Path.Combine(settingsRoot, "WebView2");
-        var window = new MainWindow { DataContext = _vm, LayoutFile = System.IO.Path.Combine(settingsRoot, "layout.xml") };
+        var window = new MainWindow { DataContext = _vm, LayoutFile = System.IO.Path.Combine(settingsRoot, "layout-2.xml"), OldLayoutFile = System.IO.Path.Combine(settingsRoot, "layout.xml") };
         window.Show();
         // #57 之前的預設位置還有資料時，詢問是否搬到 D 槽
         if (testRoot is null)

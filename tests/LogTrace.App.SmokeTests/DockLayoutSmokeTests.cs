@@ -20,7 +20,7 @@ public sealed class DockLayoutSmokeTests : IDisposable
 
     public void Dispose() => _tmp.Dispose();
 
-    string LayoutFile => Path.Combine(_dataRoot, "layout.xml");
+    string LayoutFile => Path.Combine(_dataRoot, "layout-2.xml");
 
     /// <summary>版面的結構（面板的排列與順序），不含大小。</summary>
     string Structure()
@@ -79,6 +79,7 @@ public sealed class DockLayoutSmokeTests : IDisposable
     {
         Run((_, _) => { });
         var initial = Structure(); // 初次啟動：回放
+        Assert.Contains("| playback knowledge |", initial); // 知識庫在主要區域，是 Layout 回放同一區的分頁
 
         Run((main, @in) =>
         {
@@ -88,6 +89,7 @@ public sealed class DockLayoutSmokeTests : IDisposable
         var search = Structure();
         Assert.NotEqual(initial, search);
         Assert.StartsWith("| search cases P:Vertical", search); // 搜尋面板在前
+        Assert.Contains("| detail knowledge |", search); // 知識庫是詳細資訊同一區的分頁
 
         Run((_, _) => { }); // 重新開啟：維持搜尋版面
         Assert.Equal(search, Structure());
@@ -112,5 +114,52 @@ public sealed class DockLayoutSmokeTests : IDisposable
         old.Save(LayoutFile);
         Run((_, @in) => Assert.Contains("預設版面", @in("Status").Name));
         Assert.Equal(initial, Structure());
+    }
+
+    [Fact]
+    public void 舊版程式的版面檔_新版第一次開啟改用新的預設版面一次_並刪除舊檔()
+    {
+        Run((_, _) => { });
+        var initial = Structure();
+
+        var old = Path.Combine(_dataRoot, "layout.xml");
+        File.Move(LayoutFile, old); // 舊版程式只有 layout.xml
+        Run((_, @in) => Assert.Contains("版面已更新", @in("Status").Name));
+        Assert.False(File.Exists(old));
+        Assert.Equal(initial, Structure());
+
+        Run((_, @in) => Assert.DoesNotContain("版面已更新", @in("Status").Name)); // 只有一次
+    }
+
+    /// <summary>版面檔中各面板所在區域的寬度比例（DockWidth，例如「1.4*」）。</summary>
+    double Width(string contentId)
+    {
+        var pane = XDocument.Load(LayoutFile).Descendants("LayoutAnchorable").First(e => (string?)e.Attribute("ContentId") == contentId).Parent!;
+        var w = ((string?)pane.Attribute("DockWidth") ?? "1*").TrimEnd('*');
+        return w.Length == 0 ? 1 : double.Parse(w, System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    [Fact]
+    public void 拖動分隔線_同一排的其他面板依比例一起縮放()
+    {
+        Run((main, _) =>
+        {
+            // 下方一排：詳細資訊｜元素狀態等分頁｜原始 LOG｜異常紀錄。把詳細資訊右邊的分隔線往右拖 120 像素
+            var title = main.FindFirstDescendant(main.ConditionFactory.ByName("詳細資訊"))!.BoundingRectangle;
+            var splitter = main.FindAllDescendants(main.ConditionFactory.ByControlType(FlaUI.Core.Definitions.ControlType.Thumb))
+                .Select(t => t.BoundingRectangle)
+                .Where(r => r.Height > r.Width && r.Left > title.Left && r.Top <= title.Bottom && r.Bottom >= title.Top)
+                .OrderBy(r => r.Left).First();
+            var from = splitter.Center();
+            FlaUI.Core.Input.Mouse.Drag(from, new System.Drawing.Point(from.X + 120, from.Y));
+            FlaUI.Core.Input.Wait.UntilInputIsProcessed(TimeSpan.FromMilliseconds(500));
+            Thread.Sleep(300);
+        });
+
+        double states = Width("elementstate"), raw = Width("rawlog"), incidents = Width("incidents"), detail = Width("detail");
+        Assert.True(detail > states, $"詳細資訊 {detail}、元素狀態 {states}");
+        // 分隔線右邊的面板依同一比例縮小：彼此的比例不變（預設 1：1：1.4）
+        Assert.Equal(1.0, states / raw, 2);
+        Assert.Equal(1.4, incidents / raw, 2);
     }
 }

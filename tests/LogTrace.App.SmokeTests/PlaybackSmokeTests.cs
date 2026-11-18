@@ -58,7 +58,10 @@ public sealed class PlaybackSmokeTests : IDisposable
             // 點 3D 上的「輸送站2」（元素名稱的標籤）：警報 E205 沒有復歸
             var station = Retry.WhileNull(() => In("Playback3D").FindFirstDescendant(cf.ByName("輸送站2")), TimeSpan.FromSeconds(20)).Result
                 ?? throw new InvalidOperationException("3D 畫面中找不到「輸送站2」");
-            station.Click();
+            // 以無障礙介面按下標籤，不依賴滑鼠位置：3D 畫面較小時，站點的標籤可能被搬送機的標籤蓋住
+            if (station.Patterns.Invoke.PatternOrDefault is { } invoke) invoke.Invoke();
+            else if (station.Patterns.LegacyIAccessible.PatternOrDefault is { } legacy) legacy.DoDefaultAction();
+            else station.Click();
             Assert.True(Retry.WhileFalse(() => In("ElementStateTitle").Name == "輸送站2", TimeSpan.FromSeconds(10)).Result);
             // 搬送中貨物的標示（#125）：從頭逐筆前進，找到搬送機上的貨物；預設命令編號，切換後為棧板編號
             In("PlaybackCargoLabel").AsComboBox().Select("命令編號");

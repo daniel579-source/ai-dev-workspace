@@ -1,10 +1,14 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using AvalonDock;
 using AvalonDock.Layout;
+using AvalonDock.Controls;
 using AvalonDock.Core;
 using AvalonDock.Serializer.Xml;
+using LogTrace.Workspace;
 
 namespace LogTrace.App;
 
@@ -24,6 +28,78 @@ public sealed class DockLayouts
     {
         _dock = dock;
         _panels = dock.Layout.Descendents().OfType<LayoutAnchorable>().ToDictionary(a => a.ContentId, a => (a.Title, a.Content));
+        // AvalonDock 自己的處理（只改變分隔線兩側的面板）在分隔線上先執行；這裡在之後依比例調整同一排的其他面板
+        dock.AddHandler(Thumb.DragStartedEvent, new DragStartedEventHandler(OnSplitterDragStarted), handledEventsToo: true);
+        dock.AddHandler(Thumb.DragCompletedEvent, new DragCompletedEventHandler(OnSplitterDragCompleted), handledEventsToo: true);
+    }
+
+    /// <summary>開始拖動時同一排面板的大小：面板、拖動前的比例、像素大小、最小大小。</summary>
+    sealed record Drag(LayoutGridResizerControl Splitter, Orientation Orientation, List<(Sizing Model, double Star, double Size, double Min)> Items, int Split);
+
+    Drag? _drag;
+
+    /// <summary>面板或面板群組的寬高比例（AvalonDock 的共同介面不公開，依實際類別存取）。</summary>
+    sealed record Sizing(Func<bool, GridLength> Get, Action<bool, GridLength> Set, Func<bool, double> Min)
+    {
+        public static Sizing? Of(object? model) => model switch
+        {
+            LayoutPanel g => From(g),
+            LayoutAnchorablePane g => From(g),
+            LayoutAnchorablePaneGroup g => From(g),
+            LayoutDocumentPane g => From(g),
+            LayoutDocumentPaneGroup g => From(g),
+            _ => null,
+        };
+
+        static Sizing From<T>(LayoutPositionableGroup<T> g) where T : class, ILayoutElement => new(
+            h => h ? g.DockWidth : g.DockHeight,
+            (h, v) => { if (h) g.DockWidth = v; else g.DockHeight = v; },
+            h => h ? g.DockMinWidth : g.DockMinHeight);
+    }
+
+    void OnSplitterDragStarted(object sender, DragStartedEventArgs e)
+    {
+        _drag = null;
+        if (e.OriginalSource is not LayoutGridResizerControl splitter || VisualTreeHelper.GetParent(splitter) is not Grid grid
+            || grid is not ILayoutControl { Model: LayoutPanel panel }) return;
+        var horizontal = panel.Orientation == Orientation.Horizontal;
+        var items = new List<(Sizing, double, double, double)>();
+        int split = -1;
+        foreach (UIElement child in grid.Children)
+        {
+            if (child == splitter) split = items.Count;
+            if (child is LayoutGridResizerControl || child.Visibility != Visibility.Visible || child is not FrameworkElement fe) continue;
+            var m = Sizing.Of((child as ILayoutControl)?.Model);
+            var length = m?.Get(horizontal) ?? GridLength.Auto;
+            if (m is null || !length.IsStar) return; // 認不得的面板或固定大小的面板：只用 AvalonDock 原本的方式
+            items.Add((m, length.Value, horizontal ? fe.ActualWidth : fe.ActualHeight, m.Min(horizontal)));
+        }
+        if (split >= 1 && split < items.Count) _drag = new Drag(splitter, panel.Orientation, items, split);
+    }
+
+    /// <summary>
+    /// 拖動分隔線後，同一排的面板依比例一起縮放（分隔線前面的全部放大或縮小，後面的也一樣）。
+    /// 分隔線移動的距離由 AvalonDock 改過的前一個面板比例推算。
+    /// </summary>
+    void OnSplitterDragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        var drag = _drag;
+        _drag = null;
+        if (drag is null || e.OriginalSource != drag.Splitter || e.Canceled) return;
+        bool horizontal = drag.Orientation == Orientation.Horizontal;
+        var prev = drag.Items[drag.Split - 1];
+        var now = prev.Model.Get(horizontal);
+        if (!now.IsStar || prev.Star <= 0 || prev.Size <= 0) return;
+        double delta = prev.Size * (now.Value / prev.Star - 1);
+        if (Math.Abs(delta) < 0.5) return;
+
+        var sizes = PaneSizes.Resize(drag.Items.Select(i => i.Size).ToList(), drag.Split, delta, drag.Items.Select(i => i.Min).ToList());
+        double total = drag.Items.Sum(i => i.Size), stars = drag.Items.Sum(i => i.Star);
+        if (total <= 0) return;
+        for (int i = 0; i < sizes.Length; i++)
+        {
+            drag.Items[i].Model.Set(horizontal, Star(sizes[i] * stars / total)); // 維持原本比例數值的大小範圍
+        }
     }
 
     /// <summary>所有面板的 ContentId。</summary>
@@ -81,6 +157,7 @@ public sealed class DockLayouts
         var pane = new LayoutAnchorablePane();
         foreach (var id in ids)
             pane.Children.Add(new LayoutAnchorable { ContentId = id, Title = _panels[id].Title, Content = _panels[id].Content, CanClose = false, CanHide = false });
+        pane.SelectedContentIndex = 0; // 同一區的第一個分頁預設顯示
         SetSize(pane, size, along);
         return pane;
     }
@@ -109,24 +186,25 @@ public sealed class DockLayouts
     const Orientation H = Orientation.Horizontal, V = Orientation.Vertical;
 
     /// <summary>
-    /// 回放：Layout 為主，事件清單在旁；下方為詳細資訊、元素狀態等分頁（含知識庫）、原始 LOG、異常紀錄。
-    /// 搜尋：事件清單為主，搜尋面板在前；下方為原始 LOG、Layout、元素狀態等分頁（含知識庫）、異常紀錄。
+    /// 回放：Layout 為主（知識庫是同一區的分頁），事件清單在旁；下方為詳細資訊、元素狀態等分頁、原始 LOG、異常紀錄。
+    /// 搜尋：事件清單為主，搜尋面板在前，詳細資訊在旁（知識庫是同一區的分頁）；下方為原始 LOG、Layout、元素狀態等分頁、異常紀錄。
+    /// 知識庫放在主要區域，查看時有足夠的空間；同一區的第一個分頁（Layout、詳細資訊）預設顯示。
     /// </summary>
     LayoutRoot Build(string name)
     {
-        var states = new[] { "elementstate", "commands", "equipment", "unmapped", "knowledge" };
+        var states = new[] { "elementstate", "commands", "equipment", "unmapped" };
         LayoutPanel main = name switch
         {
             Search => Panel(1, H, H,
                 Pane(1, H, "search", "cases"),
                 Panel(4, H, V,
-                    Panel(5, V, H, Pane(1.6, H, "events"), Pane(1, H, "detail")),
+                    Panel(5, V, H, Pane(1.6, H, "events"), Pane(1, H, "detail", "knowledge")),
                     Pane(1.4, V, "timeline"),
                     Panel(3, V, H, Pane(1.4, H, "rawlog"), Pane(1, H, "playback"), Pane(1, H, states), Pane(1.4, H, "incidents")))),
             _ => Panel(1, H, H,
                 Pane(1, H, "cases", "search"),
                 Panel(4, H, V,
-                    Panel(5, V, H, Pane(1, H, "events"), Pane(1.2, H, "playback")),
+                    Panel(5, V, H, Pane(1, H, "events"), Pane(1.2, H, "playback", "knowledge")),
                     Pane(1.4, V, "timeline"),
                     Panel(3, V, H, Pane(1, H, "detail"), Pane(1, H, states), Pane(1, H, "rawlog"), Pane(1.4, H, "incidents")))),
         };

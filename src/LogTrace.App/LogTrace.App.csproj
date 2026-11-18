@@ -10,7 +10,7 @@
     <RootNamespace>LogTrace.App</RootNamespace>
     <PublishSingleFile>false</PublishSingleFile>
     <SatelliteResourceLanguages>zh-Hant;en</SatelliteResourceLanguages>
-    <Version>0.12.2</Version>
+    <Version>0.13.0</Version>
     <!-- 執行檔與視窗的圖示（2026-11-16 使用者選定方案 B：放大鏡、LOG 線與時間刻度；自行設計，未使用外部素材） -->
     <ApplicationIcon>LogTrace.ico</ApplicationIcon>
   </PropertyGroup>

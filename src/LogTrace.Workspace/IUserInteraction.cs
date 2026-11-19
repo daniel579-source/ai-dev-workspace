@@ -29,6 +29,12 @@ public interface IUserInteraction
     /// <summary>選擇廠別設定檔的存檔位置；取消時傳回 null。</summary>
     string? PickPlantConfigSavePath(string initialFolder, string suggestedFileName);
 
+    /// <summary>選擇要匯入的正常流程樣板檔（ADR-0024 第 11 點）；取消時傳回 null。</summary>
+    string? PickFlowFile(string initialFolder);
+
+    /// <summary>選擇正常流程樣板的匯出位置；取消時傳回 null。</summary>
+    string? PickFlowSavePath(string initialFolder, string suggestedFileName);
+
     /// <summary>開啟 Layout 編輯器視窗。</summary>
     void ShowLayoutEditor(Layout.LayoutEditorViewModel editor);
 

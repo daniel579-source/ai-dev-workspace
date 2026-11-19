@@ -38,6 +38,11 @@ sealed class FakeUserInteraction : IUserInteraction
 
     public string? PickPlantConfigFile(string initialFolder) => PlantConfigFileResult;
     public string? PickPlantConfigSavePath(string initialFolder, string suggestedFileName) => PlantConfigSavePathResult;
+    public string? FlowFileResult { get; set; }
+    public string? FlowSavePathResult { get; set; }
+    public string? PickFlowFile(string initialFolder) => FlowFileResult;
+    public string? PickFlowSavePath(string initialFolder, string suggestedFileName) => FlowSavePathResult;
+
     public void ShowLayoutEditor(LogTrace.Workspace.Layout.LayoutEditorViewModel editor) => ShownEditor = editor;
 
     /// <summary>填寫時間偏移量對話框；回傳 false 表示取消。預設取消。</summary>

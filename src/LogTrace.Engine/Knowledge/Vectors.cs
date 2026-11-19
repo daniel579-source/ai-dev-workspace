@@ -241,8 +241,8 @@ public static class SimilarSearch
         return (keys.Select(k => items[k]).ToArray(), missing.Count);
     }
 
-    /// <summary>知識庫條目做 embedding 的文字：「代碼 說明 處置」（ADR-0022 第 1 點 2026-11-17 補充）。</summary>
-    public static string KnowledgeText(KnowledgeEntry e) => string.Join(" ", new[] { e.Code, e.Description, e.Action }.Where(s => s.Length > 0));
+    /// <summary>知識庫條目做 embedding 的文字：「代碼 說明 處置」（ADR-0022 第 1 點 2026-11-17 補充），後面接別名或俗稱（#190）；文字改變時向量依雜湊重算。</summary>
+    public static string KnowledgeText(KnowledgeEntry e) => string.Join(" ", new[] { e.Code, e.Description, e.Action }.Concat(e.AliasList).Where(s => s.Length > 0));
 
     /// <summary>知識庫的向量檔：知識庫檔旁，副檔名 .kb.vec（例如 F18-ALine.kb.csv → F18-ALine.kb.vec）。</summary>
     public static string KnowledgeVectorPath(string knowledgePath) =>

@@ -5,22 +5,29 @@ using LogTrace.Engine.Search;
 
 namespace LogTrace.Engine.Knowledge;
 
-/// <summary>知識庫的一列：代碼、說明（必填），處置、出處（可以空白）；Line 為該列在檔案中開始的行號。</summary>
-public sealed record KnowledgeEntry(int Line, string Code, string Description, string Action, string Source);
+/// <summary>
+/// 知識庫的一列：代碼、說明（必填），處置、出處（可以空白）；Line 為該列在檔案中開始的行號。
+/// Aliases 為選填的「別名或俗稱」原文（多個以頓號「、」分隔），只用於搜尋，不顯示（ADR-0022 第 5 點 2026-11-18 補充，#190）。
+/// </summary>
+public sealed record KnowledgeEntry(int Line, string Code, string Description, string Action, string Source, string Aliases = "")
+{
+    /// <summary>別名或俗稱，以頓號分隔、去除空白與空項。</summary>
+    public IReadOnlyList<string> AliasList => Aliases.Split('、', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+}
 
 /// <summary>沒有使用的列（或整個檔案）：行號與原因。</summary>
 public sealed record KnowledgeIssue(int Line, string Reason);
 
 /// <summary>
 /// 知識庫第一版（ADR-0013 第 2 點）：每個廠別一個 CSV 檔（<c>&lt;廠別設定檔名&gt;.kb.csv</c>），放在廠別設定旁邊，不進 repo。
-/// 第一列為標題，欄位 代碼、說明、處置、出處（順序不拘，多出的欄位不使用）。UTF-8（可有 BOM），不是有效的 UTF-8 時改用 Big5。
+/// 第一列為標題，欄位 代碼、說明、處置、出處，選填 別名或俗稱（順序不拘，依標題名稱讀取，多出的欄位不使用）。UTF-8（可有 BOM），不是有效的 UTF-8 時改用 Big5。
 /// 只讀取，不存入案件快照，也不記入稽核。
 /// </summary>
 public sealed class KnowledgeBase
 {
     public const string Extension = ".kb.csv";
 
-    const string CodeHeader = "代碼", DescriptionHeader = "說明", ActionHeader = "處置", SourceHeader = "出處";
+    const string CodeHeader = "代碼", DescriptionHeader = "說明", ActionHeader = "處置", SourceHeader = "出處", AliasHeader = "別名或俗稱";
 
     readonly List<(KnowledgeEntry Entry, string Code, string Text)> _normalized;
 
@@ -29,7 +36,7 @@ public sealed class KnowledgeBase
         Entries = entries;
         Issues = issues;
         _normalized = entries.Select(e => (e, Key(e.Code),
-            TextNormalizer.Normalize(string.Join("\n", e.Code, e.Description, e.Action, e.Source)))).ToList();
+            TextNormalizer.Normalize(string.Join("\n", e.Code, e.Description, e.Action, e.Source, string.Join("\n", e.AliasList))))).ToList();
     }
 
     /// <summary>可以使用的列，依檔案順序。</summary>
@@ -45,7 +52,7 @@ public sealed class KnowledgeBase
         return key.Length == 0 ? [] : _normalized.Where(n => n.Code == key).Select(n => n.Entry).ToList();
     }
 
-    /// <summary>以空白分隔的關鍵字搜尋四個欄位：部分比對、每個關鍵字都要包含；沒有關鍵字時傳回全部。</summary>
+    /// <summary>以空白分隔的關鍵字搜尋四個欄位與別名或俗稱：部分比對、每個關鍵字都要包含；沒有關鍵字時傳回全部。</summary>
     public IReadOnlyList<KnowledgeEntry> Search(string keywords)
     {
         var terms = keywords.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Select(TextNormalizer.Normalize).ToList();
@@ -106,7 +113,7 @@ public sealed class KnowledgeBase
 
         var header = records[0].Fields.Select(f => f.Trim()).ToList();
         int Column(string name) => header.IndexOf(name);
-        int code = Column(CodeHeader), description = Column(DescriptionHeader), action = Column(ActionHeader), source = Column(SourceHeader);
+        int code = Column(CodeHeader), description = Column(DescriptionHeader), action = Column(ActionHeader), source = Column(SourceHeader), alias = Column(AliasHeader);
         if (code < 0 || description < 0)
         {
             issues.Add(new(records[0].Line, $"標題列缺少「{(code < 0 ? CodeHeader : DescriptionHeader)}」欄"));
@@ -117,7 +124,7 @@ public sealed class KnowledgeBase
         {
             if (fields.All(string.IsNullOrWhiteSpace)) continue; // 空白列
             string Get(int i) => i >= 0 && i < fields.Count ? fields[i].Trim() : "";
-            var entry = new KnowledgeEntry(line, Get(code), Get(description), Get(action), Get(source));
+            var entry = new KnowledgeEntry(line, Get(code), Get(description), Get(action), Get(source), string.Join("、", Get(alias).Split('、', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)));
             if (entry.Code.Length == 0) issues.Add(new(line, "沒有填代碼"));
             else if (entry.Description.Length == 0) issues.Add(new(line, "沒有填說明"));
             else entries.Add(entry);

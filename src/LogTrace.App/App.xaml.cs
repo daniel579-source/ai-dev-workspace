@@ -94,6 +94,23 @@ sealed class WpfUserInteraction : IUserInteraction
         return dlg.ShowDialog(Owner) == true ? dlg.FileName : null;
     }
 
+    const string FlowFilter = "正常流程樣板 (*.flows.json)|*.flows.json|JSON (*.json)|*.json";
+
+    public string? PickFlowFile(string initialFolder)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog { Title = "匯入正常流程樣板", Filter = FlowFilter, InitialDirectory = initialFolder };
+        return dlg.ShowDialog(Owner) == true ? dlg.FileName : null;
+    }
+
+    public string? PickFlowSavePath(string initialFolder, string suggestedFileName)
+    {
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "匯出正常流程樣板", Filter = FlowFilter, InitialDirectory = initialFolder, FileName = suggestedFileName,
+        };
+        return dlg.ShowDialog(Owner) == true ? dlg.FileName : null;
+    }
+
     public void ShowLayoutEditor(LogTrace.Workspace.Layout.LayoutEditorViewModel editor) =>
         new LayoutEditorWindow(editor) { Owner = Owner }.Show();
 

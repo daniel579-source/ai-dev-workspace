@@ -177,6 +177,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(ApplyNewerPlantCommand), nameof(DismissNewerPlantCommand))]
     [NotifyCanExecuteChangedFor(nameof(EditTimeCorrectionCommand))]
     [NotifyCanExecuteChangedFor(nameof(RebuildIndexCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExportFlowsCommand), nameof(ImportFlowsCommand))]
     public partial bool IsBusy { get; private set; }
 
     // ---- 事件清單與原始 LOG ----
@@ -218,6 +219,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
           + (_selectedFields.Count == 0 ? "" : "\n解析欄位：" + string.Join("、", _selectedFields.Select(f => $"{FieldKinds.Label(f.Kind)} {f.Value}")))
           + (GapNotice is { } gap ? "\n" + gap : "")
           + KnowledgeDetail()
+          + FlowDetail()
           + (row.MatchNote is { } note ? $"\n搜尋：{note}" : "")
           + $"\n\n{Display(e.Message)}";
 
@@ -639,6 +641,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         CurrentCaseFolder = null;
         _newerPlant = null;
         NewerPlantNotice = null;
+        _flowCase = null;
+        _stalls = [];
         ClearKnowledge();
         UpdateTimeTexts();
     }
@@ -676,6 +680,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             var result = await Task.Run(() => c.ApplyImport(p, useNew));
             await LoadEventsAsync(c);
             Status = Summarize(result);
+            if (await CollectFlowsAsync() is { Length: > 0 } flows) Status += flows; // ADR-0024：匯入後自動計入正常流程樣本
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException
                                        or PlatformNotSupportedException or SevenZip.SevenZipException)
@@ -722,6 +727,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>建立世界模型（開啟案件時在記憶體中建立快照）並載入 Layout 回放。</summary>
     async Task LoadPlaybackAsync(Case c, PlantConfigDocument? doc, List<EventRowViewModel> rows)
     {
+        _flowCase = null;
+        _stalls = [];
+        _findings.Clear();
         var effects = await Task.Run(() => c.GetEffects());
         var changes = effects.Select(e => e.Sequence).ToList();
         var gaps = await Task.Run(() => LogGaps.Find(rows.Select(r => r.Event), doc?.GapThresholds)); // FR-037（#84）
@@ -740,6 +748,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             var times = rows.ToDictionary(r => r.Sequence, r => r.Event.Timestamp);
             return Stalls.Find(model, s => times.TryGetValue(s, out var t) ? t : null, rows[^1].Event.Timestamp, doc.EffectiveStallThresholdSeconds, gaps);
+        });
+        // 正常流程比對（ADR-0024）：事件的時間、模組與來源檔雜湊（派送事件所在檔案的 sha256，#192）
+        _stalls = stalls;
+        _flowCase = await Task.Run(() =>
+        {
+            var hashes = c.GetFiles().Where(f => f.Active).GroupBy(f => f.RelativePath, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.Last().Sha256, StringComparer.Ordinal);
+            var events = rows.ToDictionary(r => r.Sequence, r => r.Event);
+            return new LogTrace.Engine.Flows.FlowCase(model,
+                s => events.TryGetValue(s, out var e) ? e.Timestamp : null,
+                s => events.TryGetValue(s, out var e) ? e.Module : null,
+                s => events.TryGetValue(s, out var e) && hashes.TryGetValue(e.Source.RelativePath, out var h) ? h : null,
+                stalls, gaps);
         });
         var hasStateRules = c.Info.Plant.ParseRules.Any(r => r.Effect is { } e && e != EffectKinds.Signal);
         Playback.Load(model, doc.Layout, rows.Select(r => r.Event).ToList(), hasStateRules, doc.StationModeNames, stalls);

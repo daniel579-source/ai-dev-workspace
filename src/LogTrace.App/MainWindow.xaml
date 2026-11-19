@@ -652,6 +652,8 @@
                             </ad:LayoutAnchorable>
                             <ad:LayoutAnchorable ContentId="knowledge" Title="知識庫" CanClose="False">
                                 <!-- ADR-0013 第 2 點：廠別的知識庫（<廠別設定檔名>.kb.csv），以關鍵字搜尋；警報代碼對到的說明另外顯示在詳細資訊 -->
+                                <TabControl AutomationProperties.AutomationId="KnowledgeTabs">
+                                <TabItem Header="查詢" AutomationProperties.AutomationId="KnowledgeSearchTab">
                                 <DockPanel>
                                     <DockPanel DockPanel.Dock="Top" Margin="4,2">
                                         <Button DockPanel.Dock="Right" Content="重新載入" Padding="6,0" Margin="4,0,0,0" Command="{Binding ReloadKnowledgeCommand}"
@@ -741,6 +743,43 @@
                                         </ListView.View>
                                     </ListView>
                                 </DockPanel>
+                                </TabItem>
+                                <!-- ADR-0024（#192）：正常流程樣板的收集進度；匯入 LOG 後自動計入，可以匯出、匯入（合併）樣板 -->
+                                <TabItem Header="收集進度" AutomationProperties.AutomationId="FlowProgressTab">
+                                    <DockPanel>
+                                        <WrapPanel DockPanel.Dock="Top" Margin="4,2">
+                                            <Button Content="匯出樣板" Padding="6,0" Command="{Binding ExportFlowsCommand}" AutomationProperties.AutomationId="ExportFlows"
+                                                    ToolTip="匯出成一個檔案，給另一台經授權的工程師電腦匯入（廠別專屬資料，不上傳外部服務）" />
+                                            <Button Content="匯入樣板" Padding="6,0" Margin="4,0,0,0" Command="{Binding ImportFlowsCommand}" AutomationProperties.AutomationId="ImportFlows"
+                                                    ToolTip="合併另一台電腦匯出的樣板；匯入前顯示新增、重複與狀態變化" />
+                                        </WrapPanel>
+                                        <TextBox DockPanel.Dock="Top" Text="{Binding FlowStatus, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"
+                                                 BorderThickness="0" Background="Transparent" Foreground="#555" Padding="4,1"
+                                                 AutomationProperties.AutomationId="FlowStatus" />
+                                        <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Foreground="#555" Padding="6,1"
+                                                   Text="可以判斷的條件：樣本 ≥ 5、來源 LOG ≥ 2、有訊號在 90% 以上樣本出現、自我檢驗誤報 ≤ 10%。比對結果是差異，不是真因。" />
+                                        <ListView ItemsSource="{Binding FlowProgress}" BorderThickness="0" AutomationProperties.AutomationId="FlowProgress">
+                                            <ListView.View>
+                                                <GridView>
+                                                    <GridViewColumn Header="段落" DisplayMemberBinding="{Binding Kind}" Width="150" />
+                                                    <GridViewColumn Header="狀態" DisplayMemberBinding="{Binding StatusText}" Width="110" />
+                                                    <GridViewColumn Header="樣本" DisplayMemberBinding="{Binding Samples}" Width="50" />
+                                                    <GridViewColumn Header="來源" DisplayMemberBinding="{Binding Sources}" Width="50" />
+                                                    <GridViewColumn Header="訊號" DisplayMemberBinding="{Binding ExpectedSignals}" Width="50" />
+                                                    <GridViewColumn Header="誤報" DisplayMemberBinding="{Binding FalsePositiveRate, StringFormat={}{0:P0}}" Width="55" />
+                                                    <GridViewColumn Header="說明" Width="260">
+                                                        <GridViewColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding Note}" TextWrapping="Wrap" />
+                                                            </DataTemplate>
+                                                        </GridViewColumn.CellTemplate>
+                                                    </GridViewColumn>
+                                                </GridView>
+                                            </ListView.View>
+                                        </ListView>
+                                    </DockPanel>
+                                </TabItem>
+                                </TabControl>
                             </ad:LayoutAnchorable>
                             <ad:LayoutAnchorable ContentId="incidents" Title="異常紀錄" CanClose="False">
                                 <!-- ADR-0016（#110）：異常紀錄（<廠別設定檔名>.incidents\）。查詢只列目前有效的版本；待審核清單含還不能審核的；停用後可以恢復 -->

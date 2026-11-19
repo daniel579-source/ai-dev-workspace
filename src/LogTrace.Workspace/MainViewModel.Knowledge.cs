@@ -146,6 +146,7 @@ public sealed partial class MainViewModel
                 KnowledgeIssues.Add($"{(issue.Warning ? "注意：" : "")}{issue.File} 第 {issue.Line} 行：{issue.Reason}");
         }
         else Incidents.Close();
+        LoadFlows(); // 正常流程樣板也放在廠別設定檔旁（ADR-0024）
         OnPropertyChanged(nameof(KnowledgeIssuesText));
         ShowKnowledge(_knowledge?.Search(KnowledgeQuery) ?? [], _specs.Search(KnowledgeQuery));
         UpdateKnowledgeStatus();

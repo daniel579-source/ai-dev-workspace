@@ -361,10 +361,15 @@ public sealed class PlantConfigLibrary(string root)
 {
     public string Root { get; } = Path.GetFullPath(root);
 
+    /// <summary>放在設定檔旁、同樣是 .json 但不是廠別設定的檔案：每廠總結（ADR-0023）、正常流程樣板（ADR-0024）。</summary>
+    static readonly string[] SideFileExtensions = [".summary.json", ".flows.json"];
+
     /// <summary>存放位置下的設定檔路徑，依檔名排序。</summary>
     public IReadOnlyList<string> List() =>
         Directory.Exists(Root)
-            ? Directory.GetFiles(Root, "*" + PlantConfigFile.Extension).Order(StringComparer.CurrentCultureIgnoreCase).ToList()
+            ? Directory.GetFiles(Root, "*" + PlantConfigFile.Extension)
+                .Where(p => !SideFileExtensions.Any(x => p.EndsWith(x, StringComparison.OrdinalIgnoreCase)))
+                .Order(StringComparer.CurrentCultureIgnoreCase).ToList()
             : [];
 
     /// <summary>新設定檔的預設路徑：以廠別名稱當檔名；已存在時加上序號。</summary>

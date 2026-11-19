@@ -34,6 +34,25 @@ public sealed class KnowledgeBaseTests : IDisposable
     }
 
     [Fact]
+    public void 別名或俗稱_選填_頓號分隔_只用於搜尋_舊檔沒有這一欄照常讀取()
+    {
+        // #190（ADR-0022 待確認 6）
+        var kb = Parse("代碼,說明,處置,出處,別名或俗稱\nE201,輸送帶馬達過熱,停機冷卻,虛構手冊, 馬達燙 、、 皮帶熱 \nE202,虛構說明,,,\n");
+
+        Assert.Empty(kb.Issues);
+        Assert.Equal(["馬達燙", "皮帶熱"], kb.Entries[0].AliasList);
+        Assert.Equal("馬達燙、皮帶熱", kb.Entries[0].Aliases);
+        Assert.Empty(kb.Entries[1].AliasList);
+        Assert.Equal(["E201"], kb.Search("皮帶熱").Select(e => e.Code));
+        Assert.Equal(["E201"], kb.Search("馬達燙 停機").Select(e => e.Code)); // 別名與其他欄位一起比對
+        Assert.Equal("E201 輸送帶馬達過熱 停機冷卻 馬達燙 皮帶熱", SimilarSearch.KnowledgeText(kb.Entries[0]));
+
+        var old = Parse("代碼,說明\nE201,輸送帶馬達過熱\n");
+        Assert.Equal("", Assert.Single(old.Entries).Aliases);
+        Assert.Empty(old.Search("馬達燙"));
+    }
+
+    [Fact]
     public void 雙引號內可以有逗號_雙引號與換行_行號為該列開始的行()
     {
         var kb = Parse("代碼,說明,處置,出處\n\"E101\",\"說明, 含逗號\",\"第一步\n第二步\",\"手冊 \"\"甲\"\"\"\nE102,虛構說明,,\n");

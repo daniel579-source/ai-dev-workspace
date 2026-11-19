@@ -123,6 +123,24 @@ public sealed class KnowledgeViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task 別名或俗稱_可以搜尋到_詳細資訊不顯示()
+    {
+        // #190：別名只用於搜尋（ADR-0022 第 5 點 2026-11-18 補充）
+        await OpenCase();
+        File.WriteAllText(KbPath, "代碼,說明,處置,出處,別名或俗稱\nE205,站點輸送逾時（虛構）,,,輸送卡卡、跑不動\n");
+        _vm.ReloadKnowledgeCommand.Execute(null);
+
+        _vm.KnowledgeQuery = "跑不動";
+        _vm.SearchKnowledgeCommand.Execute(null);
+        Assert.Equal(["E205"], _vm.KnowledgeResults.Select(e => e.Code));
+
+        Select("警報發生 A-02 E205");
+        Assert.Contains("說明：站點輸送逾時（虛構）", _vm.SelectedDetail);
+        Assert.DoesNotContain("跑不動", _vm.SelectedDetail);
+        Assert.DoesNotContain("輸送卡卡", _vm.SelectedDetail);
+    }
+
+    [Fact]
     public async Task 重新載入_讀到修改後的內容_格式有誤的列列出行號與原因()
     {
         await OpenCase();

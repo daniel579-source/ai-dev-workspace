@@ -79,6 +79,7 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
         ServedFloors = LayoutFloors.FloorsOf(e, floors ?? [LayoutFloors.Default], Find);
         Floor = e.Type == LayoutElementType.Elevator ? ServedFloors.FirstOrDefault() ?? (floors ?? [LayoutFloors.Default])[0]
             : LayoutFloors.FloorOf(e, floors ?? [LayoutFloors.Default], Find);
+        Deck = LayoutFloors.DeckOf(e, Find);
         if (e.Type == LayoutElementType.Conveyor && e.From is { } f && e.To is { } t && byId.TryGetValue(f, out var a) && byId.TryGetValue(t, out var b))
             ConveyorEnds = (End(a, e.FromPoint), End(b, e.ToPoint));
         if (e.Type == LayoutElementType.Rack && e.ColFrom is { } from && e.ColTo is { } to && to >= from)
@@ -114,6 +115,9 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
 
     /// <summary>所在的樓層（輸送線取起點的樓層；電梯取第一個服務的樓層）。</summary>
     public string Floor { get; }
+
+    /// <summary>同一樓層中的層段（輸送線取起點的層段；電梯為下層）。</summary>
+    public LayoutDeck Deck { get; }
 
     /// <summary>畫在哪些樓層：電梯為服務的樓層，其他元素只有 Floor（ADR-0006 第 15 點）。</summary>
     public IReadOnlyList<string> ServedFloors { get; }

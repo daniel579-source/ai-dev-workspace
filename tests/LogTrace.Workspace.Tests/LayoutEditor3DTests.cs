@@ -147,4 +147,105 @@ public sealed class LayoutEditor3DTests : IDisposable
         Assert.Equal(6, _vm.BuildScene().Floors[1].Height);
         Assert.Equal(("2F", true), (_vm.BuildSceneState().CurrentFloor, _vm.BuildSceneState().OnlyCurrentFloor));
     }
+
+    // ---- 同一樓層的上層與下層（層段） ----
+
+    [Fact]
+    public void 切到上層後新增的元素在上層_場景帶上層高度_狀態帶目前層段()
+    {
+        var lower = Station(1, 1);
+        _vm.CurrentDeckName = "上層";
+        var upper = Station(1, 1);
+
+        Assert.Equal(LayoutDeck.Upper, _vm.CurrentDeck);
+        Assert.False(lower.IsUpperDeck);
+        Assert.True(upper.IsUpperDeck);
+        Assert.Equal("upper", _vm.BuildSceneState().CurrentDeck);
+        var scene = _vm.BuildScene();
+        var u = scene.Elements.Single(e => e.Id == upper.Id);
+        Assert.Equal(("upper", LayoutFloors.DefaultUpperHeight(LayoutFloors.DefaultHeight)), (u.Deck, u.Base));
+        Assert.Null(scene.Elements.Single(e => e.Id == lower.Id).Deck);
+    }
+
+    [Fact]
+    public void 框選只選目前層段_切換層段時另一個層段的選取取消()
+    {
+        var lower = Station(1, 1);
+        _vm.CurrentDeckName = "上層";
+        var upper = Station(1, 1);
+
+        _vm.SelectInRect(0, 0, 10, 10, add: false);
+        Assert.Equal([upper], _vm.Selection);
+
+        _vm.CurrentDeckName = "下層";
+        Assert.Empty(_vm.Selection);
+        _vm.SelectInRect(0, 0, 10, 10, add: false);
+        Assert.Equal([lower], _vm.Selection);
+    }
+
+    [Fact]
+    public void 從元素清單選了另一個層段的元素_切到那個層段()
+    {
+        _vm.CurrentDeckName = "上層";
+        var upper = Station(1, 1);
+        _vm.CurrentDeckName = "下層";
+
+        _vm.SelectedElement = upper;
+
+        Assert.Equal(LayoutDeck.Upper, _vm.CurrentDeck);
+    }
+
+    [Fact]
+    public void 上層高度_可以設定與恢復預設_不合理時不套用_可以復原()
+    {
+        _vm.UpperHeightText = "2.4";
+        _vm.SetUpperHeightCommand.Execute(null);
+        Assert.Equal(2.4, _vm.BuildScene().Floors[0].Upper);
+
+        _vm.UpperHeightText = "5"; // 不小於樓板高度 5 公尺
+        _vm.SetUpperHeightCommand.Execute(null);
+        Assert.Equal(2.4, _vm.UpperHeightOf("1F"));
+
+        _vm.UndoCommand.Execute(null);
+        Assert.Null(_vm.UpperHeightOf("1F"));
+        Assert.Equal(LayoutFloors.DefaultUpperHeight(LayoutFloors.DefaultHeight), _vm.BuildScene().Floors[0].Upper);
+    }
+
+    [Fact]
+    public void 樓層改名時上層高度跟著改名()
+    {
+        _vm.UpperHeightText = "2";
+        _vm.SetUpperHeightCommand.Execute(null);
+        _vm.FloorNameText = "B1";
+        _vm.RenameFloorCommand.Execute(null);
+
+        Assert.Equal(2, _vm.UpperHeightOf("B1"));
+    }
+
+    [Fact]
+    public void 輸送線跟著起點的層段畫在上層()
+    {
+        _vm.CurrentDeckName = "上層";
+        Station(1, 1);
+        Station(5, 1);
+        _vm.AddElementCommand.Execute(LayoutElementType.Conveyor);
+        var conveyor = _vm.SelectedElement!;
+
+        Assert.Equal(LayoutDeck.Upper, _vm.DeckOf(conveyor));
+        Assert.Equal("upper", _vm.BuildScene().Elements.Single(e => e.Id == conveyor.Id).Deck);
+        Assert.Null(_vm.BuildScene().Elements.Single(e => e.Id == conveyor.Id).ToBase); // 兩端同一層段：不傾斜
+    }
+
+    [Fact]
+    public void 輸送線兩端在不同層段_畫成斜線_終點帶層段高度()
+    {
+        Station(1, 1);
+        _vm.CurrentDeckName = "上層";
+        Station(5, 1);
+        _vm.AddElementCommand.Execute(LayoutElementType.Conveyor); // 起點下層、終點上層
+        var conveyor = _vm.BuildScene().Elements.Single(e => e.Type == "conveyor");
+
+        Assert.Null(conveyor.Deck);
+        Assert.Equal(LayoutFloors.DefaultUpperHeight(LayoutFloors.DefaultHeight), conveyor.ToBase);
+    }
 }

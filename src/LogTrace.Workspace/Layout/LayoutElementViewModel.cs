@@ -29,6 +29,7 @@ public sealed partial class LayoutElementViewModel : ObservableObject
         Type = e.Type;
         Name = e.Name ?? "";
         Floor = e.Floor ?? "";
+        IsUpperDeck = e.Deck == LayoutDeck.Upper;
         X = e.X ?? 0;
         Y = e.Y ?? 0;
         W = e.W ?? 0;
@@ -140,6 +141,24 @@ public sealed partial class LayoutElementViewModel : ObservableObject
     /// <summary>所屬樓層的名稱（ADR-0006 第 13 點）；輸送線不使用（畫在兩端的樓層）。</summary>
     [ObservableProperty]
     public partial string Floor { get; set; }
+
+    /// <summary>是否在同一樓層的上層（false＝下層）；輸送線取起點的層段，電梯不使用。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DeckName), nameof(DeckText))]
+    public partial bool IsUpperDeck { get; set; }
+
+    /// <summary>屬性面板的層段（「下層」或「上層」）。</summary>
+    public string DeckName
+    {
+        get => LayoutFloors.DeckLabel(IsUpperDeck ? LayoutDeck.Upper : LayoutDeck.Lower);
+        set => IsUpperDeck = value == LayoutFloors.DeckLabel(LayoutDeck.Upper);
+    }
+
+    /// <summary>元素清單顯示的層段：上層顯示「上層」，下層不顯示。</summary>
+    public string DeckText => IsUpperDeck ? LayoutFloors.DeckLabel(LayoutDeck.Upper) : "";
+
+    /// <summary>可以設定層段的元素：輸送線（取起點的層段）與電梯（以服務的樓層表示）以外。</summary>
+    public bool CanHaveDeck => !IsConveyor && !IsElevator;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CenterX), nameof(ViewX))]
@@ -265,6 +284,7 @@ public sealed partial class LayoutElementViewModel : ObservableObject
             return new LayoutElement
             {
                 Id = Id, Type = Type, Name = Name, Floor = string.IsNullOrWhiteSpace(Floor) ? null : Floor,
+                Deck = IsUpperDeck ? LayoutDeck.Upper : null,
                 Points = [.. RailPoints], Closed = Closed ? true : null, Props = PropsModel(), Extra = _extra,
             };
         if (IsConveyor)
@@ -279,6 +299,7 @@ public sealed partial class LayoutElementViewModel : ObservableObject
             Type = Type,
             Name = Name,
             Floor = IsElevator || string.IsNullOrWhiteSpace(Floor) ? null : Floor,
+            Deck = IsUpperDeck && !IsElevator ? LayoutDeck.Upper : null,
             ServedFloors = IsElevator ? [.. ServedFloors] : null,
             Aliases = CanHaveAliases ? [.. Aliases] : null,
             X = X,

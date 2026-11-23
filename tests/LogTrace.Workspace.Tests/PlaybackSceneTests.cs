@@ -43,7 +43,7 @@ public sealed class PlaybackSceneTests
     {
         var p = Load();
 
-        Assert.Equal([new SceneFloor("1F", 0, 6), new SceneFloor("2F", 6, 5)], p.Scene.Floors);
+        Assert.Equal([new SceneFloor("1F", 0, 6, 3), new SceneFloor("2F", 6, 5, 2.5)], p.Scene.Floors);
     }
 
     [Fact]

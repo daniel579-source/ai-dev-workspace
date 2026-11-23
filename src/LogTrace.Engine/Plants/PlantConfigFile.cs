@@ -223,6 +223,9 @@ public static class PlantConfigFile
         foreach (var f in doc.Layout.Floors ?? [])
             if (f.Height is { } h && !(h > 0 && h <= MaxFloorHeight))
                 issues.Add(new($"樓層「{f.Name}」的樓板高度 {h} 公尺不合理（要大於 0、不超過 {MaxFloorHeight} 公尺）。", []));
+        foreach (var f in doc.Layout.Floors ?? [])
+            if (f.UpperHeight is { } u && !(u > 0 && u < (f.Height ?? LayoutFloors.DefaultHeight)))
+                issues.Add(new($"樓層「{f.Name}」的上層高度 {u} 公尺不合理（要大於 0、小於樓板高度 {f.Height ?? LayoutFloors.DefaultHeight} 公尺）。", []));
         foreach (var e in elements.Where(e => e.Type is not (LayoutElementType.Conveyor or LayoutElementType.Elevator) && e.Floor is not null && LayoutFloors.Canonical(e.Floor, floors) is null))
             issues.Add(new($"「{Label(e)}」的樓層「{e.Floor}」不在樓層清單中。", [e.Id]));
 
@@ -282,6 +285,8 @@ public static class PlantConfigFile
                     issues.Add(new($"「{Label(e)}」指定的導軌「{railId}」不存在。", [e.Id]));
                 else if (!LayoutFloors.NameComparer.Equals(LayoutFloors.FloorOf(e, floors, _ => null), LayoutFloors.FloorOf(rail, floors, _ => null)))
                     issues.Add(new($"「{Label(e)}」和它的導軌「{Label(rail)}」不在同一層。", [e.Id, rail.Id]));
+                else if (LayoutFloors.DeckOf(e, _ => null) != LayoutFloors.DeckOf(rail, _ => null))
+                    issues.Add(new($"「{Label(e)}」和它的導軌「{Label(rail)}」不在同一個層段（上層／下層）。", [e.Id, rail.Id]));
             }
             if (e.Rail is not null && e.Type is not (LayoutElementType.Vehicle or LayoutElementType.Rm))
                 issues.Add(new($"「{Label(e)}」不能指定導軌；只有搬送機與 RM 可以。", [e.Id]));

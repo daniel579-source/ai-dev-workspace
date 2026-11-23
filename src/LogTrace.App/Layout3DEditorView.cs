@@ -187,6 +187,8 @@ public sealed class Layout3DEditorView : Web3DView
         var element = target.ValueKind == JsonValueKind.Object ? Find(Str(target, "id")) : null;
         // 在目前樓層的平面上編輯：點了別層時先切到那一層
         if (floor is not null && vm.Floors.Contains(floor) && floor != vm.CurrentFloor) vm.CurrentFloor = floor;
+        // 同一樓層的上層與下層：點了另一個層段的元素（例如別層的上層）時切到那個層段
+        if (Str(m, "deck") is { } deck) vm.CurrentDeck = deck == "upper" ? LogTrace.Engine.Plants.LayoutDeck.Upper : LogTrace.Engine.Plants.LayoutDeck.Lower;
         switch (kind)
         {
             case "element" when element is not null:

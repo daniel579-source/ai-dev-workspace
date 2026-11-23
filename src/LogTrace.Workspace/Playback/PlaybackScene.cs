@@ -9,19 +9,22 @@ namespace LogTrace.Workspace.Playback;
 // 3D 回放的場景資料（ADR-0017 第 4 點）：C# 把 Layout 元素與目前時刻的狀態以 JSON 傳給網頁，
 // 網頁（three.js）只負責畫出來與回報點選，不推導狀態。座標單位為公尺：x、y 為 Layout 平面（y 向下），z 為高度。
 
-/// <summary>一個樓層：名稱、地板高度（下面各層樓板高度的和）與樓板高度。</summary>
-public sealed record SceneFloor(string Name, double Elevation, double Height);
+/// <summary>一個樓層：名稱、地板高度（下面各層樓板高度的和）、樓板高度與上層高度（上層地板離樓層地板的距離）。</summary>
+public sealed record SceneFloor(string Name, double Elevation, double Height, double Upper = 0);
 
 /// <summary>
 /// 場景中的一個元素（靜態部分）。X、Y、W、H、Rotation 與 Layout 相同（左上角、寬、深、順時針角度）；Height 為元素高度，
 /// 沒有填時依種類使用預設值（<see cref="PlaybackScene.DefaultHeight"/>）。Path 為導軌的折線或輸送線的兩端（公尺）。
+/// Deck 為 "upper" 時元素在上層，Base 為上層地板離樓層地板的高度（公尺）；下層兩者皆為 null。
+/// ToBase：輸送線兩端在不同層段時，終點那一端的層段高度（公尺；畫成斜線）；兩端同一層段時為 null。
 /// </summary>
 public sealed record SceneElement(
     string Id, string Type, string Name, string Floor,
     double X, double Y, double W, double H, int Rotation, double Height,
     int? Levels = null, double? LevelHeight = null, int? ColFrom = null, int? ColTo = null,
     IReadOnlyList<double[]>? Path = null, bool Closed = false, bool Bidirectional = false,
-    IReadOnlyList<string>? ServedFloors = null, IReadOnlyList<string>? Gates = null, string? Door = null);
+    IReadOnlyList<string>? ServedFloors = null, IReadOnlyList<string>? Gates = null, string? Door = null,
+    string? Deck = null, double? Base = null, double? ToBase = null);
 
 /// <summary>場景的靜態部分；載入案件時傳一次。</summary>
 public sealed record SceneLayout(IReadOnlyList<SceneFloor> Floors, IReadOnlyList<SceneElement> Elements)
@@ -102,9 +105,20 @@ public static class PlaybackScene
 
     public static SceneLayout LayoutOf(LayoutSection layout, IEnumerable<PlaybackElementViewModel> elements)
     {
-        var floors = LayoutFloors.Stack(layout).Select(f => new SceneFloor(f.Floor, f.Elevation, f.Height)).ToList();
+        var floors = LayoutFloors.Stack(layout).Select(f => new SceneFloor(f.Floor, f.Elevation, f.Height, LayoutFloors.UpperHeightOf(layout, f.Floor))).ToList();
         var list = new List<SceneElement>();
         foreach (var e in elements)
+        {
+            int before = list.Count;
+            AddElement(layout, e, list);
+            if (e.Deck == LayoutDeck.Upper && list.Count > before)
+                list[^1] = list[^1] with { Deck = "upper", Base = LayoutFloors.DeckBase(layout, e.Floor, LayoutDeck.Upper) };
+        }
+        return new SceneLayout(floors, list);
+    }
+
+    static void AddElement(LayoutSection layout, PlaybackElementViewModel e, List<SceneElement> list)
+    {
         {
             var m = e.Model;
             var type = JsonNamingPolicy.CamelCase.ConvertName(m.Type.ToString());
@@ -120,8 +134,12 @@ public static class PlaybackScene
                 case LayoutElementType.Conveyor:
                 {
                     if (e.ConveyorEnds is not { } ends) break; // 兩端找不到時不畫（存檔時已檢查）
+                    // 兩端在不同層段（上層與下層）：畫成從起點高度到終點高度的斜線
+                    var toEnd = layout.Elements.FirstOrDefault(x => x.Id == m.To);
+                    var toDeck = toEnd is null ? e.Deck : LayoutFloors.DeckOf(toEnd, _ => null);
+                    double? toBase = toDeck != e.Deck ? LayoutFloors.DeckBase(layout, e.Floor, toDeck) : null;
                     list.Add(new SceneElement(e.Id, type, e.Name, e.Floor, 0, 0, 0, 0, 0, m.Height ?? DefaultHeight(m.Type),
-                        Path: [[ends.From.X, ends.From.Y], [ends.To.X, ends.To.Y]], Bidirectional: m.Bidirectional == true));
+                        Path: [[ends.From.X, ends.From.Y], [ends.To.X, ends.To.Y]], Bidirectional: m.Bidirectional == true, ToBase: toBase));
                     break;
                 }
                 case LayoutElementType.Rack:
@@ -139,7 +157,6 @@ public static class PlaybackScene
                     break;
             }
         }
-        return new SceneLayout(floors, list);
     }
 
     /// <summary>目前時刻的狀態：沿用 Layout 回放面板已推導的元素狀態（<see cref="PlaybackViewModel"/>），不另外推導。</summary>

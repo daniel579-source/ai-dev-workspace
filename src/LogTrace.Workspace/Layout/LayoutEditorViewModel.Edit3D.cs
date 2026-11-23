@@ -78,10 +78,10 @@ public sealed partial class LayoutEditorViewModel
 public sealed record EditorHandle(string Kind, string Id, double X, double Y, int Index = 0, bool Selected = false);
 
 /// <summary>
-/// 3D 編輯器的狀態（ADR-0018）：目前樓層、是否只顯示目前樓層、選取的元素、單選時可以用的把手、存檔前檢查有問題的元素。
+/// 3D 編輯器的狀態（ADR-0018）：目前樓層與層段（"upper"／"lower"）、是否只顯示目前樓層、選取的元素、單選時可以用的把手、存檔前檢查有問題的元素。
 /// </summary>
 public sealed record EditorSceneState(
-    string CurrentFloor, bool OnlyCurrentFloor, IReadOnlyList<string> Selected, string? Primary,
+    string CurrentFloor, string CurrentDeck, bool OnlyCurrentFloor, IReadOnlyList<string> Selected, string? Primary,
     bool CanResize, bool CanHeight, bool CanRotate, IReadOnlyList<string> Issues, IReadOnlyList<EditorHandle> Handles);
 
 public sealed partial class LayoutEditorViewModel
@@ -89,7 +89,7 @@ public sealed partial class LayoutEditorViewModel
     /// <summary>目前的 Layout（含樓板高度），給 3D 畫布繪製；與存檔的內容相同。</summary>
     public Playback.SceneLayout BuildScene() => Playback.PlaybackScene.LayoutOf(new LayoutSection
     {
-        Floors = FloorList.Select(f => new LayoutFloor(f, HeightOf(f))).ToList(),
+        Floors = FloorModels(),
         Elements = Elements.Select(e => e.ToModel()).ToList(),
     });
 
@@ -105,7 +105,7 @@ public sealed partial class LayoutEditorViewModel
             if (primary.FromPoint is { } f) handles.Add(new EditorHandle("from", primary.Id, f.X, f.Y));
             if (primary.ToPoint is { } t) handles.Add(new EditorHandle("to", primary.Id, t.X, t.Y));
         }
-        return new EditorSceneState(CurrentFloor, OnlyCurrentFloor, Elements.Where(e => e.IsSelected).Select(e => e.Id).ToList(), primary?.Id,
+        return new EditorSceneState(CurrentFloor, CurrentDeck == LayoutDeck.Upper ? "upper" : "lower", OnlyCurrentFloor, Elements.Where(e => e.IsSelected).Select(e => e.Id).ToList(), primary?.Id,
             CanResize: primary is { HasGeometry: true }, CanHeight: primary is not null && CanDragHeight(primary),
             CanRotate: primary is not null && (primary.HasGeometry || primary.IsPath),
             Elements.Where(e => e.HasIssue).Select(e => e.Id).ToList(), handles);

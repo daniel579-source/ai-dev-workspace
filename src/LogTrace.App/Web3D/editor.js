@@ -19,7 +19,49 @@ let rotateButton = null;
 const HANDLE_PX = 10;
 
 const elevation = (floor) => v.elevationOf(floor);
-const currentElevation = () => elevation(state ? state.currentFloor : null);
+/** 目前編輯的平面：目前樓層的目前層段（上層＝樓層地板＋上層高度）。 */
+const currentElevation = () => (state ? v.deckElevation(state.currentFloor, state.currentDeck) : 0);
+const deckOf = (e) => (e.deck === 'upper' ? 'upper' : 'lower');
+
+/** 目前樓層中、另一個層段的元素：淡化、點不到（電梯不分層段）。 */
+function isOtherDeck(e) {
+  return !!state && e.type !== 'elevator' && e.floor === state.currentFloor && deckOf(e) !== state.currentDeck;
+}
+
+/** 淡化或恢復元素：材質換成半透明的複本，恢復時換回原本的材質（材質可能和其他元素共用，不直接修改）。 */
+function setDimmed(item, on) {
+  if (!!item.dimmed === on) return;
+  item.dimmed = on;
+  item.group.traverse((o) => {
+    if (o.isCSS2DObject) { o.element.classList.toggle('dimmed', on); return; }
+    if (!o.material) return;
+    if (on) {
+      o.userData.normalMaterial = o.material;
+      const dim = (m) => { const c = m.clone(); c.transparent = true; c.opacity = Math.min(c.opacity ?? 1, 0.15); c.depthWrite = false; return c; };
+      o.material = Array.isArray(o.material) ? o.material.map(dim) : dim(o.material);
+    } else if (o.userData.normalMaterial) {
+      o.material = o.userData.normalMaterial;
+      delete o.userData.normalMaterial;
+    }
+  });
+}
+
+// 目前層段是上層時，在上層高度畫一片半透明的地板，看得出編輯的平面
+let deckPlane = null;
+function buildDeckPlane() {
+  if (deckPlane) { deckPlane.removeFromParent(); deckPlane.geometry.dispose(); deckPlane = null; }
+  if (!state || state.currentDeck !== 'upper' || !v.bounds) return;
+  const b = v.bounds;
+  const margin = 4;
+  const minX = Math.min(b.min.x, 0) - margin, minZ = Math.min(b.min.z, 0) - margin;
+  const w = b.max.x - minX + margin, d = b.max.z - minZ + margin;
+  deckPlane = new THREE.Mesh(new THREE.PlaneGeometry(w, d),
+    new THREE.MeshBasicMaterial({ color: 0x38BDF8, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide }));
+  deckPlane.rotation.x = -Math.PI / 2;
+  deckPlane.position.set(minX + w / 2, currentElevation() - 0.02, minZ + d / 2);
+  deckPlane.raycast = () => {}; // 不擋點選
+  v.scene.add(deckPlane);
+}
 
 // ---- 狀態：選取、有問題的元素、只顯示目前樓層、把手 ----
 
@@ -27,6 +69,7 @@ function applyState() {
   if (!state) return;
   const selected = new Set(state.selected);
   const issues = new Set(state.issues);
+  for (const item of v.items.values()) setDimmed(item, false); // 先恢復，著色後再依層段淡化
   for (const item of v.items.values()) {
     const id = item.data.id;
     if (item.body && item.data.type !== 'rack' && item.data.type !== 'label' && item.data.type !== 'area')
@@ -47,6 +90,13 @@ function applyState() {
     selectionBoxes.push(b);
   }
   v.showOnlyFloor(state.onlyCurrentFloor ? state.currentFloor : null);
+  // 另一個層段：淡化；勾了「只顯示目前樓層」時只顯示目前層段
+  for (const item of v.items.values()) {
+    if (!isOtherDeck(item.data)) continue;
+    if (state.onlyCurrentFloor) item.group.visible = false;
+    else setDimmed(item, true);
+  }
+  buildDeckPlane();
   buildHandles();
 }
 
@@ -77,7 +127,7 @@ function buildHandles() {
   if (!item) return;
   const e = item.data;
   const id = e.id;
-  const base = e.type === 'elevator' ? currentElevation() : elevation(e.floor);
+  const base = e.type === 'elevator' ? currentElevation() : v.baseOf(e);
   if (state.canResize) {
     for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
       const p = item.group.localToWorld(new THREE.Vector3(sx * e.w / 2, 0, sy * e.h / 2));
@@ -90,7 +140,7 @@ function buildHandles() {
     handleMesh(heightGeometry, 0xFFFFFF, { kind: 'height', id, base }, p);
   }
   for (const h of state.handles) {
-    const p = new THREE.Vector3(h.x, elevation(e.floor) + 0.1, h.y);
+    const p = new THREE.Vector3(h.x, v.baseOf(e) + 0.1, h.y);
     if (h.kind === 'railPoint') handleMesh(pointGeometry, h.selected ? 0xF59E0B : 0xFFFFFF, { kind: h.kind, id, index: h.index }, p);
     else if (h.kind === 'railSegment') handleMesh(segmentGeometry, h.selected ? 0xF59E0B : 0xFFFFFF, { kind: h.kind, id, index: h.index }, p);
     else handleMesh(transferGeometry, 0xF59E0B, { kind: h.kind, id }, p);
@@ -127,7 +177,7 @@ v.onFrame(() => {
 // ---- 滑鼠 ----
 
 const canvas = v.renderer.domElement;
-let drag = null;     // { kind, floor, elevation, start: {clientX, clientY}, base }
+let drag = null;     // { kind, floor, deck, elevation, start: {clientX, clientY}, base }
 let pending = null;  // 拖曳中最新的 move 訊息（每個畫面送一次）
 let pointer = null;  // 滑鼠在目前樓層平面上的位置（Ctrl+V 貼上用）
 let boxLine = null;
@@ -151,17 +201,19 @@ function elementUnder(ev) {
     if (!o) continue;
     const item = v.items.get(o.userData.id);
     if (!item) continue;
+    if (item.dimmed) continue; // 另一個層段：點不到
     if (item.data.type === 'area') { area = area || { item, hit }; continue; } // 區域在最下層：沒有其他元素時才選它
     return { item, hit };
   }
   return area;
 }
 
-function begin(ev, target, floor, extra = {}) {
-  const elev = elevation(floor);
+/** deck：點到的元素的層段（null＝不換層段，例如電梯、空白處）；平面為那一層的那個層段。 */
+function begin(ev, target, floor, extra = {}, deck = null) {
+  const elev = v.deckElevation(floor, deck || (state ? state.currentDeck : 'lower'));
   const p = v.projectToPlane(ev, elev) || { x: 0, y: 0 };
-  post({ kind: 'down', target, floor, x: p.x, y: p.y, ctrl: ev.ctrlKey, detail: ev.detail });
-  drag = { kind: target ? target.kind : 'box', floor, elevation: elev, start: { clientX: ev.clientX, clientY: ev.clientY, x: p.x, y: p.y }, ...extra };
+  post({ kind: 'down', target, floor, deck, x: p.x, y: p.y, ctrl: ev.ctrlKey, detail: ev.detail });
+  drag = { kind: target ? target.kind : 'box', floor, deck, elevation: elev, start: { clientX: ev.clientX, clientY: ev.clientY, x: p.x, y: p.y }, ...extra };
   canvas.setPointerCapture(ev.pointerId);
 }
 
@@ -177,7 +229,8 @@ canvas.addEventListener('pointerdown', (ev) => {
   }
   const found = elementUnder(ev);
   if (found) {
-    begin(ev, { kind: 'element', id: found.item.data.id }, floorOfHit(found.item, found.hit));
+    const e = found.item.data;
+    begin(ev, { kind: 'element', id: e.id }, floorOfHit(found.item, found.hit), {}, e.type === 'elevator' ? null : deckOf(e));
     return;
   }
   begin(ev, null, v.slabAt(ev) || (state ? state.currentFloor : null)); // 空白處：框選
@@ -234,10 +287,11 @@ function drawBox(a, b, elev) {
 /** 點元素的名稱：與點元素本身相同（選取它）。 */
 function clickElement(id, ev) {
   const item = v.items.get(id);
-  if (!item) return;
+  if (!item || item.dimmed) return; // 另一個層段：點不到
   const e = item.data;
   const floor = e.type === 'elevator' && state && (e.servedFloors || []).includes(state.currentFloor) ? state.currentFloor : e.floor;
-  post({ kind: 'down', target: { kind: 'element', id }, floor, x: e.x, y: e.y, ctrl: ev.ctrlKey, detail: 1 });
+  const deck = e.type === 'elevator' ? null : deckOf(e);
+  post({ kind: 'down', target: { kind: 'element', id }, floor, deck, x: e.x, y: e.y, ctrl: ev.ctrlKey, detail: 1 });
   post({ kind: 'up', x: e.x, y: e.y, ctrl: ev.ctrlKey, moved: false });
 }
 

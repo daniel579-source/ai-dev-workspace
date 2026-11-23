@@ -165,6 +165,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         foreach (var e in Elements) e.IsSelected = e == newValue;
         OnSelectionChanged();
         if (newValue is not null && !OnFloor(newValue, CurrentFloor)) CurrentFloor = FloorOf(newValue); // 例如從元素清單選了別層的元素
+        if (newValue is { IsElevator: false } && DeckOf(newValue) != CurrentDeck) CurrentDeck = DeckOf(newValue); // 別的層段：切到那個層段
         RefreshServedFloorChoices();
     }
 
@@ -287,7 +288,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         _document.Plant = PlantName.Trim();
         _document.Layout.StorageCodeRule = string.IsNullOrWhiteSpace(StorageCodeRule) ? null : StorageCodeRule.Trim();
         _document.Layout.Elements = Elements.Select(e => e.ToModel()).ToList();
-        _document.Layout.Floors = FloorList.Select(f => new LayoutFloor(f, HeightOf(f))).ToList();
+        _document.Layout.Floors = FloorModels();
         _document.Layout.Rows = RowsModel();
         _document.ModuleOrder = Lines(ModuleOrderText);
         _document.KnownLoggers = Lines(KnownLoggersText);
@@ -387,7 +388,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             or nameof(LayoutElementViewModel.H) or nameof(LayoutElementViewModel.From) or nameof(LayoutElementViewModel.To)
             or nameof(LayoutElementViewModel.Name) or nameof(LayoutElementViewModel.FromPoint) or nameof(LayoutElementViewModel.ToPoint)
             or nameof(LayoutElementViewModel.Floor) or nameof(LayoutElementViewModel.RailPoints) or nameof(LayoutElementViewModel.Closed)
-            or nameof(LayoutElementViewModel.ServedFloors))
+            or nameof(LayoutElementViewModel.ServedFloors) or nameof(LayoutElementViewModel.IsUpperDeck))
         {
             if (propertyName is nameof(LayoutElementViewModel.Name)) RefreshElementList();
             RefreshEndpoints();
@@ -496,6 +497,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
                 Id = id, Type = type, Name = $"新{LayoutElementTypes.Label(type)} {id[(id.IndexOf('-') + 1)..]}",
                 X = x, Y = y, W = w, H = h, Rotation = 0, Height = height,
                 Floor = type == LayoutElementType.Elevator ? null : CurrentFloor,
+                Deck = type != LayoutElementType.Elevator && CurrentDeck == LayoutDeck.Upper ? LayoutDeck.Upper : null,
                 ServedFloors = type == LayoutElementType.Elevator ? [.. FloorList] : null, // 電梯預設服務所有樓層（使用者決定）
                 Aliases = LayoutElement.CanHaveAliases(type) ? [] : null,
             };
@@ -657,7 +659,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             {
                 map[e.Id] = e.Id = NextId(e.Type);
                 (e.X, e.Y) = (e.X + dx, e.Y + dy);
-                if (e.Type != LayoutElementType.Elevator) e.Floor = floor; // 電梯維持服務的樓層
+                if (e.Type != LayoutElementType.Elevator) (e.Floor, e.Deck) = (floor, CurrentDeck == LayoutDeck.Upper ? LayoutDeck.Upper : null); // 電梯維持服務的樓層
                 if (e.Points is { } pts) e.Points = RailPath.Shift(pts, dx, dy);
                 e.Rail = null; // 貼上的搬送機清除導軌指定（使用者決定）
                 added.Add(AttachNew(e));
@@ -684,7 +686,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         IsDirty = true;
         CurrentFloor = floor;
         SetSelection(added);
-        Status = $"已貼上 {added.Count} 個元素到「{floor}」；別名照抄，重複的別名存檔前會提示。";
+        Status = $"已貼上 {added.Count} 個元素到「{floor}」的{LayoutFloors.DeckLabel(CurrentDeck)}；別名照抄，重複的別名存檔前會提示。";
     }
 
     LayoutElementViewModel AttachNew(LayoutElement model)
@@ -708,7 +710,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
     /// <summary>復原的狀態：樓層清單與元素（樓層改名會一併改元素，所以兩者一起記錄）。</summary>
     sealed record UndoState(List<LayoutFloor> Floors, string Elements, List<LayoutRow>? Rows = null);
 
-    string Snapshot() => System.Text.Json.JsonSerializer.Serialize(new UndoState(FloorList.Select(f => new LayoutFloor(f, HeightOf(f))).ToList(), PlantConfigFile.SerializeElements(Elements.Select(e => e.ToModel())), RowsModel()));
+    string Snapshot() => System.Text.Json.JsonSerializer.Serialize(new UndoState(FloorModels(), PlantConfigFile.SerializeElements(Elements.Select(e => e.ToModel())), RowsModel()));
 
     /// <summary>
     /// 記錄一次修改：把修改前的狀態放進復原堆疊。key 相同的連續修改（同一欄位連續輸入）合併成一步；

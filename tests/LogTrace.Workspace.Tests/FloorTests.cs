@@ -228,7 +228,7 @@ public sealed class FloorPlaybackTests
         var p = Load(new FloorViewSettings());
 
         Assert.Equal(["1F", "2F"], p.Floors);
-        Assert.Equal([new SceneFloor("1F", 0, 5), new SceneFloor("2F", 5, 5)], p.Scene.Floors); // 沒有填樓板高度：5 公尺
+        Assert.Equal([new SceneFloor("1F", 0, 5, 2.5), new SceneFloor("2F", 5, 5, 2.5)], p.Scene.Floors); // 沒有填樓板高度：5 公尺
         Assert.Equal("2F", p.Scene.Elements.Single(e => e.Id == "st-2").Floor);
         Assert.Equal("2F", p.Equipment.Single(r => r.Id == "vh-1").Floor);
         p.SelectElementCommand.Execute(p.Elements.Single(e => e.Id == "st-1"));

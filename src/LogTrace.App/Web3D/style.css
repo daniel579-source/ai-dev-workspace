@@ -14,6 +14,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #F8FAFC; fon
 .label .summary:empty { display: none; }
 .label.alarm { border-color: #DC2626; background: rgba(254, 226, 226, 0.92); }
 .label.selected { border-color: #2563EB; box-shadow: 0 0 0 1px #2563EB; }
+.label.dimmed { opacity: 0.3; pointer-events: none; }
 .label.aux { background: transparent; border-color: transparent; color: #64748B; }
 .label.estimated { border-style: dashed; }
 .floor-label { pointer-events: none; font: 600 14px "Microsoft JhengHei UI", "Segoe UI", sans-serif; color: #475569; }

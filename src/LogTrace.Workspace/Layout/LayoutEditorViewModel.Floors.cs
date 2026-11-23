@@ -13,6 +13,7 @@ public sealed record FloorViewSettings(bool Follow = false, bool OnlyCurrentFloo
 
 // 樓層（ADR-0006 第 13 點、ADR-0018 第 6 點）：每個元素屬於一層；3D 中所有樓層上下堆疊。
 // 編輯一律在「目前樓層」的平面上：滑鼠操作傳進來的座標是目前樓層的座標（公尺）；點了別層的元素時，目前樓層先切到那一層。
+// 同一樓層再分上層與下層（層段）：編輯在目前層段的地板上；另一個層段的元素在 3D 中淡化、點不到，從元素清單選取時切到那個層段。
 public sealed partial class LayoutEditorViewModel
 {
     Action<FloorViewSettings>? _saveView;
@@ -54,6 +55,7 @@ public sealed partial class LayoutEditorViewModel
     {
         FloorNameText = value;
         FloorHeightText = HeightText(value);
+        UpperHeightText = UpperText(value);
         RefreshLayoutView();
         // 換到別層時，別層的元素取消選取：避免被 Del 刪除或被拖曳一起移動（Jev，0.78）
         if (Elements.Any(e => e.IsSelected && !e.IsOnCanvas)) SetSelection(Selection.Where(e => e.IsOnCanvas));
@@ -68,6 +70,41 @@ public sealed partial class LayoutEditorViewModel
         if (e.IsElevator) return ServedFloorsOf(e).FirstOrDefault() ?? FloorList[0];
         return LayoutFloors.Canonical(e.Floor, FloorList) ?? FloorList[0];
     }
+
+    // ---- 層段（同一樓層的上層與下層） ----
+
+    /// <summary>層段的選項（樓層列與屬性面板）：下層、上層。</summary>
+    public static IReadOnlyList<string> Decks { get; } = [LayoutFloors.DeckLabel(LayoutDeck.Lower), LayoutFloors.DeckLabel(LayoutDeck.Upper)];
+
+    /// <summary>目前層段：編輯的平面；新增與貼上的元素放在這一層段，框選只選這一層段的元素。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CurrentDeckName))]
+    public partial LayoutDeck CurrentDeck { get; set; }
+
+    /// <summary>樓層列的層段切換（「下層」或「上層」）。</summary>
+    public string CurrentDeckName
+    {
+        get => LayoutFloors.DeckLabel(CurrentDeck);
+        set => CurrentDeck = value == LayoutFloors.DeckLabel(LayoutDeck.Upper) ? LayoutDeck.Upper : LayoutDeck.Lower;
+    }
+
+    partial void OnCurrentDeckChanged(LayoutDeck value)
+    {
+        RefreshLayoutView();
+        if (Elements.Any(e => e.IsSelected && !e.IsOnCanvas)) SetSelection(Selection.Where(e => e.IsOnCanvas));
+    }
+
+    /// <summary>元素所在的層段：輸送線取起點（沒有時取終點）的層段；電梯為下層。</summary>
+    public LayoutDeck DeckOf(LayoutElementViewModel e)
+    {
+        if (e.IsElevator) return LayoutDeck.Lower;
+        if (e.IsConveyor) return (Find(e.From) ?? Find(e.To)) is { IsConveyor: false } end ? DeckOf(end) : LayoutDeck.Lower;
+        return e.IsUpperDeck ? LayoutDeck.Upper : LayoutDeck.Lower;
+    }
+
+    /// <summary>元素是否在目前編輯的平面（目前樓層的目前層段）；電梯在每個服務的樓層，不分層段。</summary>
+    bool OnCurrentPlane(LayoutElementViewModel e) =>
+        OnFloor(e, CurrentFloor) && (e.IsElevator || DeckOf(e) == CurrentDeck);
 
     /// <summary>電梯服務的樓層（依樓層順序，清單中的寫法）。</summary>
     IReadOnlyList<string> ServedFloorsOf(LayoutElementViewModel e) =>
@@ -110,11 +147,56 @@ public sealed partial class LayoutEditorViewModel
     {
         Floors.Clear();
         _floorHeights.Clear();
+        _upperHeights.Clear();
         foreach (var f in LayoutFloors.Of(layout)) Floors.Add(f);
         foreach (var f in layout.Floors ?? [])
+        {
             if (f.Height is { } h) _floorHeights[f.Name] = h;
+            if (f.UpperHeight is { } u) _upperHeights[f.Name] = u;
+        }
         CurrentFloor = Floors[0];
         FloorHeightText = HeightText(CurrentFloor);
+        UpperHeightText = UpperText(CurrentFloor);
+    }
+
+    /// <summary>樓層清單（含樓板高度與上層高度），存檔、復原與 3D 畫布使用。</summary>
+    List<LayoutFloor> FloorModels() => FloorList.Select(f => new LayoutFloor(f, HeightOf(f), UpperHeightOf(f))).ToList();
+
+    // ---- 上層高度：上層地板離樓層地板的距離；沒有填時使用 LayoutFloors.DefaultUpperHeight ----
+
+    readonly Dictionary<string, double> _upperHeights = new(LayoutFloors.NameComparer);
+
+    /// <summary>樓層填的上層高度；沒有填時為 null（使用預設）。</summary>
+    public double? UpperHeightOf(string floor) => _upperHeights.TryGetValue(floor, out var h) ? h : null;
+
+    string UpperText(string floor) => UpperHeightOf(floor) is { } h ? h.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) : "";
+
+    /// <summary>目前樓層的上層高度（公尺）；空白＝使用預設。</summary>
+    [ObservableProperty]
+    public partial string UpperHeightText { get; set; } = "";
+
+    /// <summary>設定目前樓層的上層高度：空白時恢復預設；要大於 0、小於樓板高度。</summary>
+    [RelayCommand]
+    void SetUpperHeight()
+    {
+        var text = UpperHeightText.Trim();
+        var floor = CurrentFloor;
+        var floorHeight = HeightOf(floor) ?? LayoutFloors.DefaultHeight;
+        if (text.Length == 0)
+        {
+            if (!_upperHeights.Remove(floor)) return;
+            FloorsChanged($"樓層「{floor}」的上層高度恢復預設 {LayoutFloors.DefaultUpperHeight(floorHeight):0.###} 公尺。");
+            return;
+        }
+        if (!double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var h)
+            || !(h > 0 && h < floorHeight))
+        {
+            Status = $"上層高度要是大於 0、小於樓板高度 {floorHeight:0.###} 的數字（公尺）。";
+            return;
+        }
+        if (UpperHeightOf(floor) == h) return;
+        _upperHeights[floor] = h;
+        FloorsChanged($"樓層「{floor}」的上層高度為 {h:0.###} 公尺。");
     }
 
     // ---- 樓板高度（ADR-0017 第 6 點）：3D 回放把樓層上下堆疊時使用；沒有填時為 5 公尺 ----
@@ -162,7 +244,7 @@ public sealed partial class LayoutEditorViewModel
         if (!FloorList.Any(f => SameFloor(f, CurrentFloor))) CurrentFloor = FloorList[0];
         foreach (var e in Elements)
         {
-            e.IsOnCanvas = OnFloor(e, CurrentFloor);
+            e.IsOnCanvas = OnCurrentPlane(e);
             (e.OffsetX, e.OffsetY) = (0, 0);
         }
         RefreshServedFloorChoices();
@@ -232,6 +314,7 @@ public sealed partial class LayoutEditorViewModel
             foreach (var e in Elements.Where(e => e.IsElevator && e.ServedFloors.Any(s => SameFloor(s.Trim(), old))))
                 e.ServedFloors = e.ServedFloors.Select(s => SameFloor(s.Trim(), old) ? name : s).ToList(); // 電梯服務的樓層一併改名
             if (_floorHeights.Remove(old, out var height)) _floorHeights[name] = height; // 樓板高度跟著改名
+            if (_upperHeights.Remove(old, out var upper)) _upperHeights[name] = upper;
             Floors[i] = name;
             CurrentFloor = name;
         });
@@ -278,22 +361,24 @@ public sealed partial class LayoutEditorViewModel
         }
         var name = CurrentFloor;
         _floorHeights.Remove(name);
+        _upperHeights.Remove(name);
         Floors.RemoveAt(i);
         CurrentFloor = Floors[Math.Max(0, i - 1)];
         FloorsChanged($"已刪除樓層「{name}」。");
     }
 
-    /// <summary>把選取的元素移到 MoveTargetFloor（座標不變）。</summary>
+    /// <summary>把選取的元素移到 MoveTargetFloor 的目前層段（座標不變）。</summary>
     [RelayCommand]
     void MoveSelectionToFloor()
     {
         if (MoveTargetFloor is not { } target) return;
         var items = Selection.Where(e => (e.HasGeometry || e.IsPath) && !e.IsElevator).ToList(); // 電梯以服務的樓層表示
+        var upper = CurrentDeck == LayoutDeck.Upper;
         Batch(() =>
         {
-            foreach (var e in items) e.Floor = target;
+            foreach (var e in items) (e.Floor, e.IsUpperDeck) = (target, upper);
         });
-        Status = $"已把 {items.Count} 個元素移到「{target}」。";
+        Status = $"已把 {items.Count} 個元素移到「{target}」的{LayoutFloors.DeckLabel(CurrentDeck)}。";
     }
 }
 

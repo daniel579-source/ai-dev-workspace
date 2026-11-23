@@ -477,11 +477,15 @@ export function createViewer(opts = {}) {
 
   function buildConveyor(e, item) {
     // 輸送線：台面（阻斷時變紅）、兩側護欄、滾筒、每 2 公尺一對腳與方向箭頭
+    // 兩端在不同層段（toBase）：畫成斜線，整條輸送線沿長度方向傾斜
     const [[x1, y1], [x2, y2]] = e.path;
-    const len = Math.max(Math.hypot(x2 - x1, y2 - y1), 0.01);
+    const run = Math.max(Math.hypot(x2 - x1, y2 - y1), 0.01);
+    const rise = e.toBase != null ? e.toBase - (e.base || 0) : 0;
+    const len = Math.hypot(run, rise);
     const width = 0.8;
-    item.group.position.set((x1 + x2) / 2, baseOf(e), (y1 + y2) / 2);
+    item.group.position.set((x1 + x2) / 2, baseOf(e) + rise / 2, (y1 + y2) / 2);
     item.group.rotation.y = -Math.atan2(y2 - y1, x2 - x1);
+    item.group.rotation.z = Math.atan2(rise, run);
     item.body = box(len, 0.05, width - 0.1, mat(COLOR.conveyor, { transparent: true, opacity: 0.85 }), 0, e.height - 0.1, 0);
     item.group.add(item.body);
     item.group.add(instanced([at(0, e.height - 0.02, -width / 2 + 0.03, len, 0.1, 0.06), at(0, e.height - 0.02, width / 2 - 0.03, len, 0.1, 0.06)], frameMat));

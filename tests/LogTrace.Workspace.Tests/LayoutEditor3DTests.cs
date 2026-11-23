@@ -233,5 +233,19 @@ public sealed class LayoutEditor3DTests : IDisposable
 
         Assert.Equal(LayoutDeck.Upper, _vm.DeckOf(conveyor));
         Assert.Equal("upper", _vm.BuildScene().Elements.Single(e => e.Id == conveyor.Id).Deck);
+        Assert.Null(_vm.BuildScene().Elements.Single(e => e.Id == conveyor.Id).ToBase); // 兩端同一層段：不傾斜
+    }
+
+    [Fact]
+    public void 輸送線兩端在不同層段_畫成斜線_終點帶層段高度()
+    {
+        Station(1, 1);
+        _vm.CurrentDeckName = "上層";
+        Station(5, 1);
+        _vm.AddElementCommand.Execute(LayoutElementType.Conveyor); // 起點下層、終點上層
+        var conveyor = _vm.BuildScene().Elements.Single(e => e.Type == "conveyor");
+
+        Assert.Null(conveyor.Deck);
+        Assert.Equal(LayoutFloors.DefaultUpperHeight(LayoutFloors.DefaultHeight), conveyor.ToBase);
     }
 }

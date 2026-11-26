@@ -38,7 +38,7 @@ public static class ElevatorGates
         var sides = new HashSet<string>(StringComparer.Ordinal);
 
         var box = LayoutGeometry.Bounds(elevator.X ?? 0, elevator.Y ?? 0, elevator.W ?? 0, elevator.H ?? 0, elevator.Rotation ?? 0);
-        foreach (var e in layout.Elements.Where(e => e.Type is LayoutElementType.Dock || LayoutElement.IsStationLike(e.Type)))
+        foreach (var e in layout.Elements.Where(e => LayoutElement.IsStationLike(e.Type)))
         {
             if (!served.Any(f => LayoutFloors.NameComparer.Equals(f, LayoutFloors.FloorOf(e, floors, Find)))) continue;
             var b = LayoutGeometry.Bounds(e.X ?? 0, e.Y ?? 0, e.W ?? 0, e.H ?? 0, e.Rotation ?? 0);
@@ -67,7 +67,7 @@ public static class EqDoors
         var box = LayoutGeometry.Bounds(eq.X ?? 0, eq.Y ?? 0, eq.W ?? 0, eq.H ?? 0, eq.Rotation ?? 0);
         LayoutElement? best = null;
         double bestGap = double.MaxValue;
-        foreach (var d in layout.Elements.Where(e => e.Type == LayoutElementType.Dock))
+        foreach (var d in layout.Elements.Where(e => e.Type == LayoutElementType.Conv))
         {
             if (!LayoutFloors.NameComparer.Equals(LayoutFloors.FloorOf(d, floors, Find), floor)) continue;
             var b = LayoutGeometry.Bounds(d.X ?? 0, d.Y ?? 0, d.W ?? 0, d.H ?? 0, d.Rotation ?? 0);

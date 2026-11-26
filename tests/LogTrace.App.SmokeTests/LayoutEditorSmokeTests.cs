@@ -43,7 +43,7 @@ public sealed class LayoutEditorSmokeTests : IDisposable
 
             var editor = OpenEditor();
             In(editor, "PlantName").AsTextBox().Text = "冒煙測試廠";
-            In(editor, "Add_Station").AsButton().Invoke();
+            In(editor, "Add_Conv").AsButton().Invoke();
             In(editor, "NewAlias").AsTextBox().Text = "A-01";
             In(editor, "AddAlias").AsButton().Invoke();
             In(editor, "SaveConfig").AsButton().Invoke();
@@ -67,7 +67,7 @@ public sealed class LayoutEditorSmokeTests : IDisposable
             var item = Retry.WhileNull(() => In(editor, "ElementList").FindFirstChild(cf.ByControlType(ControlType.ListItem)), TimeSpan.FromSeconds(10)).Result;
             Assert.NotNull(item);
             var texts = string.Concat(item.FindAllDescendants().Select(e => e.Name));
-            Assert.Contains("新站點 1", texts);
+            Assert.Contains("新 Conv 1", texts);
             Assert.Contains("A-01", texts);
             Assert.Contains("冒煙測試廠", In(editor, "PlantName").AsTextBox().Text);
             Assert.Contains("修訂 1", In(editor, "RevisionInfo").Name);
@@ -79,10 +79,10 @@ public sealed class LayoutEditorSmokeTests : IDisposable
             // 點 3D 畫布上的元素名稱選取它，屬性面板顯示；再 Ctrl+C／Ctrl+V／Del／Ctrl+Z（按鍵由網頁轉給程式）
             int Count() => In(editor, "ElementList").FindAllChildren(cf.ByControlType(ControlType.ListItem)).Length;
             bool Becomes(int n) => Retry.WhileFalse(() => Count() == n, TimeSpan.FromSeconds(5)).Result;
-            var label = Retry.WhileNull(() => In(editor, "Editor3D").FindFirstDescendant(cf.ByName("新站點 1")), TimeSpan.FromSeconds(20)).Result
+            var label = Retry.WhileNull(() => In(editor, "Editor3D").FindFirstDescendant(cf.ByName("新 Conv 1")), TimeSpan.FromSeconds(20)).Result
                 ?? throw new InvalidOperationException("3D 畫布中找不到「新站點 1」");
             label.Click();
-            Assert.True(Retry.WhileFalse(() => In(editor, "ElementName").AsTextBox().Text == "新站點 1", TimeSpan.FromSeconds(10)).Result);
+            Assert.True(Retry.WhileFalse(() => In(editor, "ElementName").AsTextBox().Text == "新 Conv 1", TimeSpan.FromSeconds(10)).Result);
             Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_C);
             Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_V);
             Assert.True(Becomes(2), In(editor, "EditorStatus").Name);
@@ -125,8 +125,8 @@ public sealed class LayoutEditorSmokeTests : IDisposable
                 TimeSpan.FromSeconds(10)).Result ?? throw new InvalidOperationException("找不到 Layout 編輯器視窗");
 
             In(editor, "PlantName").AsTextBox().Text = "防火門測試廠";
-            In(editor, "Add_Station").AsButton().Invoke();
-            In(editor, "Add_Station").AsButton().Invoke();
+            In(editor, "Add_Conv").AsButton().Invoke();
+            In(editor, "Add_Conv").AsButton().Invoke();
             In(editor, "Add_Conveyor").AsButton().Invoke();
             In(editor, "Add_FireDoor").AsButton().Invoke();
             In(editor, "NewAlias").AsTextBox().Text = "FD-01"; // 虛構的編號
@@ -143,7 +143,7 @@ public sealed class LayoutEditorSmokeTests : IDisposable
                 In(editor, "EditorStatus").Name);
 
             var json = File.ReadAllText(Path.Combine(dataRoot, "Plants", "防火門測試廠.json"));
-            Assert.Contains("\"formatVersion\": 3", json);
+            Assert.Contains("\"formatVersion\": 11", json);
             Assert.Contains("\"type\": \"fireDoor\"", json);
             Assert.Contains("\"doorState\": \"closed\"", json);
             Assert.Contains("\"cv-1\"", json);
@@ -177,17 +177,17 @@ public sealed class LayoutEditorSmokeTests : IDisposable
                 TimeSpan.FromSeconds(10)).Result ?? throw new InvalidOperationException("找不到 Layout 編輯器視窗");
 
             In(editor, "PlantName").AsTextBox().Text = "樓層測試廠";
-            In(editor, "Add_Station").AsButton().Invoke(); // 1F
+            In(editor, "Add_Conv").AsButton().Invoke(); // 1F
             In(editor, "AddFloor").AsButton().Invoke();
-            In(editor, "Add_Station").AsButton().Invoke(); // 2F
+            In(editor, "Add_Conv").AsButton().Invoke(); // 2F
             Assert.Equal("2F", In(editor, "ElementFloor").AsComboBox().SelectedItem?.Text);
             // 3D 中兩層都畫出來（上下堆疊）；勾「只顯示目前樓層」後只剩 2F（ADR-0018）
             var canvas = In(editor, "Editor3D");
-            Assert.True(Retry.WhileFalse(() => canvas.FindFirstDescendant(cf.ByName("新站點 1")) is not null && canvas.FindFirstDescendant(cf.ByName("新站點 2")) is not null,
+            Assert.True(Retry.WhileFalse(() => canvas.FindFirstDescendant(cf.ByName("新 Conv 1")) is not null && canvas.FindFirstDescendant(cf.ByName("新 Conv 2")) is not null,
                 TimeSpan.FromSeconds(30)).Result);
             In(editor, "EditorOnlyCurrentFloor").AsCheckBox().IsChecked = true;
-            Assert.True(Retry.WhileFalse(() => canvas.FindFirstDescendant(cf.ByName("新站點 1")) is null, TimeSpan.FromSeconds(10)).Result);
-            Assert.NotNull(canvas.FindFirstDescendant(cf.ByName("新站點 2")));
+            Assert.True(Retry.WhileFalse(() => canvas.FindFirstDescendant(cf.ByName("新 Conv 1")) is null, TimeSpan.FromSeconds(10)).Result);
+            Assert.NotNull(canvas.FindFirstDescendant(cf.ByName("新 Conv 2")));
             In(editor, "SaveConfig").AsButton().Invoke();
             Assert.True(Retry.WhileFalse(() => In(editor, "EditorStatus").Name.Contains("修訂 1"), TimeSpan.FromSeconds(10)).Result,
                 In(editor, "EditorStatus").Name);

@@ -115,7 +115,7 @@ public sealed class SearchTests : IDisposable
     public void 篩選_旗標與解析欄位()
     {
         Assert.Equal(["[A-01] 卸貨完成 CMD_NO=00050001"],
-            Find(new SearchQuery { FieldKinds = [Parsing.FieldKinds.Station], FieldValues = ["a-01"] }));
+            Find(new SearchQuery { FieldKinds = [Parsing.FieldKinds.Conv], FieldValues = ["a-01"] }));
         Assert.Equal(["時間倒退的虛構紀錄"], Find(new SearchQuery { Flags = EventFlags.TimeBackward }));
         Assert.Equal(["時間倒退的虛構紀錄"], Find(new SearchQuery { Flags = EventFlags.TimeBackward | EventFlags.EncodingError }));
         Assert.Empty(Find(new SearchQuery { Flags = EventFlags.TimeBackward, AllOf = "卸貨" }));

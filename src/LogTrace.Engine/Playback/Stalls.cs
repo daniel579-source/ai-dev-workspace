@@ -109,7 +109,7 @@ public static class Stalls
             var next = dispatchesByPallet.TryGetValue(pallet, out var ds) ? ds.FirstOrDefault(d => d.Sequence > read.Sequence) : null;
             lastHandled[pallet] = next?.Sequence ?? long.MaxValue;
             var to = next is not null && timeOf(next.Sequence) is { } nt ? nt : caseEnd;
-            Add(StallKind.WaitingDispatch, null, pallet, read, t, next, to, $"棧板 {pallet} 在站點 {read.Get(FieldKinds.Station)} 被讀到");
+            Add(StallKind.WaitingDispatch, null, pallet, read, t, next, to, $"棧板 {pallet} 在 Conv {read.Get(FieldKinds.Conv)} 被讀到");
         }
 
         return found.OrderBy(s => s.From).ThenBy(s => s.LastSequence).ToList();

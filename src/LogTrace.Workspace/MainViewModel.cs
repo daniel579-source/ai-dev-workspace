@@ -521,7 +521,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             var path = SelectedPlant!.Path;
             // 有廠別設定檔卻選內建預設：先確認，避免建出沒有 Layout 的案件（ADR-0002 第 7 點，#72）
             if (path is null && Plants.Count > 1 && !_ui.Confirm("建立案件",
-                    "存放位置有廠別設定檔，但這個案件選了「內建預設」：案件不會有 Layout，回放無法顯示站點與設備。\n\n仍要以內建預設建立嗎？"))
+                    "存放位置有廠別設定檔，但這個案件選了「內建預設」：案件不會有 Layout，回放無法顯示 Conv 與設備。\n\n仍要以內建預設建立嗎？"))
             {
                 Status = "未建立案件。請在「廠別」選擇要使用的廠別設定。";
                 return;

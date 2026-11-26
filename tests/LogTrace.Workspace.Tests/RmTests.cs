@@ -110,7 +110,7 @@ public sealed class RmPlaybackTests
             [
                 new() { Id = "rl-1", Type = LayoutElementType.Rail, Points = RailPath.StraightTemplate(0, 5) },
                 new() { Id = "rm-1", Type = LayoutElementType.Rm, Name = "RM 1", Aliases = ["RM01"], X = 8, Y = 4.4, W = 2, H = 1.2, Rotation = 0, Rail = "rl-1" },
-                new() { Id = "eq-1", Type = LayoutElementType.Dock, Name = "Conv P1", Aliases = ["P1"], X = 0, Y = 6, W = 2, H = 2, Rotation = 0 },
+                new() { Id = "eq-1", Type = LayoutElementType.Conv, Name = "Conv P1", Aliases = ["P1"], X = 0, Y = 6, W = 2, H = 2, Rotation = 0 },
                 new() { Id = "rk-1", Type = LayoutElementType.Rack, Name = "深排", Row = "1", ColFrom = 1, ColTo = 10, Levels = 2, LevelHeight = 1.5, X = 0, Y = 1, W = 20, H = 1.2, Rotation = 0 },
                 new() { Id = "rk-2", Type = LayoutElementType.Rack, Name = "淺排", Row = "2", ColFrom = 1, ColTo = 10, Levels = 2, LevelHeight = 1.5, X = 0, Y = 2.4, W = 20, H = 1.2, Rotation = 0 },
             ],

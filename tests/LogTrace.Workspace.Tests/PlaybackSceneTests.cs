@@ -17,8 +17,8 @@ public sealed class PlaybackSceneTests
         Floors = [new LayoutFloor("1F", 6), "2F"],
         Elements =
         [
-            new() { Id = "st-1", Type = LayoutElementType.Station, Name = "入庫站", Aliases = ["A-01"], Floor = "1F", X = 1, Y = 1, W = 2, H = 2 },
-            new() { Id = "st-2", Type = LayoutElementType.Station, Name = "出庫站", Aliases = ["B-01"], Floor = "2F", X = 1, Y = 1, W = 2, H = 2, Height = 1.1 },
+            new() { Id = "st-1", Type = LayoutElementType.Conv, Name = "入庫站", Aliases = ["A-01"], Floor = "1F", X = 1, Y = 1, W = 2, H = 2 },
+            new() { Id = "st-2", Type = LayoutElementType.Conv, Name = "出庫站", Aliases = ["B-01"], Floor = "2F", X = 1, Y = 1, W = 2, H = 2, Height = 1.1 },
             new() { Id = "rk-1", Type = LayoutElementType.Rack, Name = "料架 01", Floor = "1F", X = 10, Y = 1, W = 6, H = 1.2, Rotation = 90,
                 Row = "01", ColFrom = 1, ColTo = 3, Levels = 4, LevelHeight = 1.5 },
             new() { Id = "rl-1", Type = LayoutElementType.Rail, Name = "導軌", Floor = "1F", Points = [new(1, 6), new(20, 6)] },
@@ -51,8 +51,8 @@ public sealed class PlaybackSceneTests
     {
         var s = Load().Scene.Elements.ToDictionary(e => e.Id);
 
-        Assert.Equal(("station", "1F", 1.0, 1.0, 2.0, 2.0, 0), (s["st-1"].Type, s["st-1"].Floor, s["st-1"].X, s["st-1"].Y, s["st-1"].W, s["st-1"].H, s["st-1"].Rotation));
-        Assert.Equal(PlaybackScene.DefaultHeight(LayoutElementType.Station), s["st-1"].Height);
+        Assert.Equal(("conv", "1F", 1.0, 1.0, 2.0, 2.0, 0), (s["st-1"].Type, s["st-1"].Floor, s["st-1"].X, s["st-1"].Y, s["st-1"].W, s["st-1"].H, s["st-1"].Rotation));
+        Assert.Equal(PlaybackScene.DefaultHeight(LayoutElementType.Conv), s["st-1"].Height);
         Assert.Equal(1.1, s["st-2"].Height); // 有填高度時用填的值
         Assert.Equal("2F", s["st-2"].Floor);
         Assert.Equal(PlaybackScene.DefaultHeight(LayoutElementType.Vehicle), s["vh-1"].Height);
@@ -79,7 +79,7 @@ public sealed class PlaybackSceneTests
     {
         var p = Load(
         [
-            E(1, EffectKinds.Signal, (FieldKinds.Station, "A-01"), (FieldKinds.Signal, "在席"), (FieldKinds.SignalValue, "ON")),
+            E(1, EffectKinds.Signal, (FieldKinds.Conv, "A-01"), (FieldKinds.Signal, "在席"), (FieldKinds.SignalValue, "ON")),
             E(2, EffectKinds.CommandCreated, (FieldKinds.Command, "C-1"), (FieldKinds.Pallet, "P-001"), (FieldKinds.Source, "A-01")),
             E(3, EffectKinds.ElevatorDispatched, (FieldKinds.Command, "C-1"), (FieldKinds.Elevator, "L1"), (FieldKinds.Destination, "B-01"), (FieldKinds.Source, "A-01")),
             E(4, EffectKinds.ElevatorArrived, (FieldKinds.Command, "C-1"), (FieldKinds.Destination, "B-01")),

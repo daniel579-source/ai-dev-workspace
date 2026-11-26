@@ -14,8 +14,8 @@ public sealed class StallTests
     {
         Elements =
         [
-            new() { Id = "st-1", Type = LayoutElementType.Station, Aliases = ["A-01"], X = 1, Y = 1, W = 2, H = 2, Rotation = 0 },
-            new() { Id = "st-2", Type = LayoutElementType.Station, Aliases = ["A-02"], X = 5, Y = 1, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "st-1", Type = LayoutElementType.Conv, Aliases = ["A-01"], X = 1, Y = 1, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "st-2", Type = LayoutElementType.Conv, Aliases = ["A-02"], X = 5, Y = 1, W = 2, H = 2, Rotation = 0 },
             new() { Id = "vh-1", Type = LayoutElementType.Vehicle, Aliases = ["VH01"], X = 3, Y = 4, W = 1, H = 1, Rotation = 0 },
         ],
     };
@@ -60,7 +60,7 @@ public sealed class StallTests
             (1, 0, EffectKinds.SegmentDispatched, P((FieldKinds.Command, "C-002"), (FieldKinds.Vehicle, "VH01"), (FieldKinds.Destination, "A-02"))),
             (2, 300, EffectKinds.SegmentArrived, P((FieldKinds.Command, "C-002"), (FieldKinds.Destination, "A-02"))), // 剛好 5 分鐘，不超過
             (3, 310, EffectKinds.CommandCompleted, P((FieldKinds.Command, "C-002"))),
-            (4, 2000, EffectKinds.Signal, P((FieldKinds.Station, "A-01"), (FieldKinds.Signal, "在席"), (FieldKinds.SignalValue, "ON"))));
+            (4, 2000, EffectKinds.Signal, P((FieldKinds.Conv, "A-01"), (FieldKinds.Signal, "在席"), (FieldKinds.SignalValue, "ON"))));
 
         Assert.Empty(Stalls.Find(model, timeOf, end, 300, []));
     }
@@ -70,7 +70,7 @@ public sealed class StallTests
     {
         var (model, timeOf, end) = Build(
             (1, 0, EffectKinds.SegmentDispatched, P((FieldKinds.Command, "C-003"), (FieldKinds.Vehicle, "VH01"), (FieldKinds.Destination, "A-02"))),
-            (2, 900, EffectKinds.Signal, P((FieldKinds.Station, "A-01"), (FieldKinds.Signal, "在席"), (FieldKinds.SignalValue, "ON"))));
+            (2, 900, EffectKinds.Signal, P((FieldKinds.Conv, "A-01"), (FieldKinds.Signal, "在席"), (FieldKinds.SignalValue, "ON"))));
 
         var stall = Assert.Single(Stalls.Find(model, timeOf, end, 300, []));
 
@@ -84,8 +84,8 @@ public sealed class StallTests
     public void 棧板在站點被讀到後超過門檻沒有派送_重複讀到時從第一次開始算()
     {
         var (model, timeOf, end) = Build(
-            (1, 0, EffectKinds.PalletRead, P((FieldKinds.Station, "A-01"), (FieldKinds.Pallet, "P-004"))),
-            (2, 60, EffectKinds.PalletRead, P((FieldKinds.Station, "A-01"), (FieldKinds.Pallet, "P-004"))),
+            (1, 0, EffectKinds.PalletRead, P((FieldKinds.Conv, "A-01"), (FieldKinds.Pallet, "P-004"))),
+            (2, 60, EffectKinds.PalletRead, P((FieldKinds.Conv, "A-01"), (FieldKinds.Pallet, "P-004"))),
             (3, 400, EffectKinds.CommandCreated, P((FieldKinds.Command, "C-004"), (FieldKinds.Pallet, "P-004"))),
             (4, 420, EffectKinds.SegmentDispatched, P((FieldKinds.Command, "C-004"), (FieldKinds.Vehicle, "VH01"), (FieldKinds.Destination, "A-02"))),
             (5, 480, EffectKinds.SegmentArrived, P((FieldKinds.Command, "C-004"), (FieldKinds.Destination, "A-02"))),
@@ -95,7 +95,7 @@ public sealed class StallTests
 
         Assert.Equal(StallKind.WaitingDispatch, stall.Kind);
         Assert.Equal(("P-004", 1L, (long?)4), (stall.Pallet, stall.LastSequence, stall.NextSequence));
-        Assert.Equal("棧板 P-004 在站點 A-01 被讀到後 7 分鐘沒有下一步", stall.Reason);
+        Assert.Equal("棧板 P-004 在 Conv A-01 被讀到後 7 分鐘沒有下一步", stall.Reason);
     }
 
     [Fact]

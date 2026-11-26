@@ -19,7 +19,7 @@ public sealed class LayoutEditor3DTests : IDisposable
 
     LayoutElementViewModel Station(double x, double y, double w = 2, double h = 1, int rotation = 0)
     {
-        _vm.AddElementCommand.Execute(LayoutElementType.Station);
+        _vm.AddElementCommand.Execute(LayoutElementType.Conv);
         var e = _vm.SelectedElement!;
         (e.X, e.Y, e.W, e.H, e.Rotation) = (x, y, w, h, rotation);
         return e;
@@ -131,7 +131,7 @@ public sealed class LayoutEditor3DTests : IDisposable
         Assert.Equal([a.Id, b.Id], _vm.BuildSceneState().Issues.Order());
 
         var scene = _vm.BuildScene();
-        Assert.Equal(["station", "station", "rail"], scene.Elements.Select(e => e.Type));
+        Assert.Equal(["conv", "conv", "rail"], scene.Elements.Select(e => e.Type));
         Assert.Equal("1F", scene.Floors.Single().Name);
     }
 

@@ -39,12 +39,12 @@ public sealed class LayoutEditorViewModelTests : IDisposable
             if (LayoutElement.HasPath(type)) Assert.Equal(2, e.RailPoints.Count); // 導軌、圍欄沒有寬深：直線範本（ADR-0006 第 14 點、ADR-0020）
             else Assert.True(e.W > 0 && e.H > 0);
         }
-        var conveyor = Add(LayoutElementType.Conveyor); // 已有站點、工站點、搬送機與對接設備，可以加輸送線
+        var conveyor = Add(LayoutElementType.Conveyor); // 已有 Conv、工站點、搬送機與 EQ，可以加輸送線
 
         Assert.Equal(LayoutElementType.Conveyor, conveyor.Type);
-        Assert.Equal(["st-1", "ws-1"], new[] { conveyor.From!, conveyor.To! }); // 依加入的順序：站點、工站點（ADR-0020）
-        Assert.Equal(15, _vm.Elements.Count);
-        Assert.Equal(15, _vm.Elements.Select(e => e.Id).Distinct().Count());
+        Assert.Equal(["st-1", "ws-1"], new[] { conveyor.From!, conveyor.To! }); // 依加入的順序：Conv、工站點（ADR-0020）
+        Assert.Equal(14, _vm.Elements.Count);
+        Assert.Equal(14, _vm.Elements.Select(e => e.Id).Distinct().Count());
         Assert.True(_vm.IsDirty);
     }
 
@@ -53,7 +53,7 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     {
         _vm.ViewCenter = (30, 20);
 
-        var station = Add(LayoutElementType.Station); // 預設 2 × 2
+        var station = Add(LayoutElementType.Conv); // 預設 2 × 2
         Assert.Equal((29d, 19d), (station.X, station.Y));
         var rail = Add(LayoutElementType.Rail); // 直線 20 公尺
         Assert.Equal([(20d, 20d), (40d, 20d)], rail.RailPoints.Select(p => (p.X, p.Y)));
@@ -62,14 +62,14 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     [Fact]
     public void 元素清單先依類型_同類型依名稱自然排序_名稱空白的在前_不改變畫布與存檔順序()
     {
-        var dock = Add(LayoutElementType.Dock);
+        var dock = Add(LayoutElementType.Eq);
         dock.Name = "出貨口";
-        var s10 = Add(LayoutElementType.Station);
+        var s10 = Add(LayoutElementType.Conv);
         s10.Name = "站點10";
         var vehicle = Add(LayoutElementType.Vehicle);
-        var s2 = Add(LayoutElementType.Station);
+        var s2 = Add(LayoutElementType.Conv);
         s2.Name = "站點2";
-        var blank = Add(LayoutElementType.Station);
+        var blank = Add(LayoutElementType.Conv);
         blank.Name = "";
         var conveyor = Add(LayoutElementType.Conveyor);
         var created = _vm.Elements.ToList();
@@ -82,9 +82,9 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     [Fact]
     public void 改名稱後重新排序_選取與輸送線兩端不變()
     {
-        var a = Add(LayoutElementType.Station);
+        var a = Add(LayoutElementType.Conv);
         a.Name = "A-4";
-        var b = Add(LayoutElementType.Station);
+        var b = Add(LayoutElementType.Conv);
         b.Name = "A-12";
         var conveyor = Add(LayoutElementType.Conveyor);
         (conveyor.From, conveyor.To) = (a.Id, b.Id);
@@ -113,7 +113,7 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     [Fact]
     public void 拖曳到很遠的位置_設定檔不寫畫布大小()
     {
-        var e = Add(LayoutElementType.Station);
+        var e = Add(LayoutElementType.Conv);
         (e.X, e.Y) = (50, 30);
 
         _vm.BeginDrag(e);
@@ -130,7 +130,7 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     [Fact]
     public void 沒有兩個站點或對接設備時_不能加輸送線()
     {
-        Add(LayoutElementType.Station);
+        Add(LayoutElementType.Conv);
 
         _vm.AddElementCommand.Execute(LayoutElementType.Conveyor);
 
@@ -141,7 +141,7 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     [Fact]
     public void 拖曳移動_吸附到半公尺格線_不超出左上角()
     {
-        var e = Add(LayoutElementType.Station);
+        var e = Add(LayoutElementType.Conv);
         (e.X, e.Y) = (3, 4);
 
         _vm.BeginDrag(e);
@@ -208,8 +208,8 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     [Fact]
     public void 移動站點時_輸送線的端點跟著移動()
     {
-        var a = Add(LayoutElementType.Station);
-        var b = Add(LayoutElementType.Station);
+        var a = Add(LayoutElementType.Conv);
+        var b = Add(LayoutElementType.Conv);
         (b.X, b.Y) = (10, 1);
         var cv = Add(LayoutElementType.Conveyor);
 
@@ -223,11 +223,11 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     [Fact]
     public void 輸送線連到搬送機_交接點在搬送機邊緣_線畫到交接點_改回站點時清除()
     {
-        var st = Add(LayoutElementType.Station);
+        var st = Add(LayoutElementType.Conv);
         (st.X, st.Y) = (1, 1);
         var vh = Add(LayoutElementType.Vehicle);
         (vh.X, vh.Y, vh.W, vh.H) = (10, 1, 2.5, 1.2);
-        var st2 = Add(LayoutElementType.Station);
+        var st2 = Add(LayoutElementType.Conv);
         var cv = Add(LayoutElementType.Conveyor);
         Assert.Equal(["st-1", "vh-1"], new[] { cv.From!, cv.To! });
 
@@ -248,7 +248,7 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     [Fact]
     public void 拖曳交接點_吸附到半公尺_搬送機移動時交接點不動_存檔讀回不變()
     {
-        Add(LayoutElementType.Station);
+        Add(LayoutElementType.Conv);
         var vh = Add(LayoutElementType.Vehicle);
         (vh.X, vh.Y) = (10, 1);
         var cv = Add(LayoutElementType.Conveyor);
@@ -276,7 +276,7 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     [Fact]
     public void 刪除搬送機時_連到它的輸送線一起刪除()
     {
-        Add(LayoutElementType.Station);
+        Add(LayoutElementType.Conv);
         var vh = Add(LayoutElementType.Vehicle);
         Add(LayoutElementType.Conveyor);
 
@@ -289,7 +289,7 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     [Fact]
     public void 別名_可以有多個_已屬於其他元素時擋下並指出是哪一個()
     {
-        var st = Add(LayoutElementType.Station);
+        var st = Add(LayoutElementType.Conv);
         st.Name = "入庫口1";
         _vm.NewAlias = "A-01";
         _vm.AddAliasCommand.Execute(null);
@@ -320,7 +320,7 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     [Fact]
     public void 自訂屬性_新增與移除()
     {
-        var e = Add(LayoutElementType.Station);
+        var e = Add(LayoutElementType.Conv);
 
         _vm.AddPropertyCommand.Execute(null);
         _vm.AddPropertyCommand.Execute(null);
@@ -335,7 +335,7 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     public void 存檔再從清單開啟_元素都在_修訂號遞增()
     {
         _vm.PlantName = "範例廠";
-        var st = Add(LayoutElementType.Station);
+        var st = Add(LayoutElementType.Conv);
         _vm.NewAlias = "A-01";
         _vm.AddAliasCommand.Execute(null);
         _vm.AddPropertyCommand.Execute(null);
@@ -459,11 +459,11 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     public void 別名重複時無法存檔_標出衝突的元素()
     {
         _vm.PlantName = "範例廠";
-        var a = Add(LayoutElementType.Station);
+        var a = Add(LayoutElementType.Conv);
         a.Aliases.Add("A-01");
-        var b = Add(LayoutElementType.Dock);
+        var b = Add(LayoutElementType.Eq);
         b.Aliases.Add("A-01"); // 繞過輸入檢查，例如手動修改過的檔案
-        var c = Add(LayoutElementType.Station);
+        var c = Add(LayoutElementType.Conv);
 
         _vm.SaveCommand.Execute(null);
 
@@ -482,7 +482,7 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     {
         var path = Path.Combine(_tmp.Path, "新版.json");
         File.WriteAllText(path, $$"""{ "formatVersion": {{Newer}}, "plant": "虛構" }""");
-        Add(LayoutElementType.Station);
+        Add(LayoutElementType.Conv);
         _ui.ConfirmResult = true;
         _ui.PlantConfigFileResult = path;
 
@@ -495,7 +495,7 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     [Fact]
     public void 有未存檔的修改時_新建要先確認()
     {
-        Add(LayoutElementType.Station);
+        Add(LayoutElementType.Conv);
 
         _ui.ConfirmResult = false;
         _vm.NewCommand.Execute(null);
@@ -510,8 +510,8 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     [Fact]
     public void 刪除站點時_連到它的輸送線一起刪除()
     {
-        var a = Add(LayoutElementType.Station);
-        Add(LayoutElementType.Station);
+        var a = Add(LayoutElementType.Conv);
+        Add(LayoutElementType.Conv);
         Add(LayoutElementType.Conveyor);
         _vm.SelectedElement = a;
 
@@ -524,7 +524,7 @@ public sealed class LayoutEditorViewModelTests : IDisposable
     public void 另存新檔()
     {
         _vm.PlantName = "範例廠";
-        Add(LayoutElementType.Station);
+        Add(LayoutElementType.Conv);
         var path = Path.Combine(_tmp.Path, "分享", "範例廠.json");
         _ui.PlantConfigSavePathResult = path;
 

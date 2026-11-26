@@ -195,7 +195,7 @@ public sealed class RailPlaybackTests
             Elements =
             [
                 new() { Id = "rl-1", Type = LayoutElementType.Rail, Name = "導軌 1", Floor = "2F", Points = RailPath.LoopTemplate(4, 2), Closed = true },
-                new() { Id = "st-1", Type = LayoutElementType.Station, Name = "站點 1", Floor = "1F", X = 1, Y = 1, W = 2, H = 2 },
+                new() { Id = "st-1", Type = LayoutElementType.Conv, Name = "站點 1", Floor = "1F", X = 1, Y = 1, W = 2, H = 2 },
             ],
         };
         var p = new PlaybackViewModel();

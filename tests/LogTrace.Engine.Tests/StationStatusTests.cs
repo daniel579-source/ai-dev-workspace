@@ -9,7 +9,7 @@ public sealed class StationStatusTests
 {
     static readonly LayoutSection Layout = new()
     {
-        Elements = [new() { Id = "st-1", Type = LayoutElementType.Station, Name = "入庫口1", Aliases = ["A-01"] }],
+        Elements = [new() { Id = "st-1", Type = LayoutElementType.Conv, Name = "入庫口1", Aliases = ["A-01"] }],
     };
 
     static EventEffect E(long seq, string effect, params (string Kind, string Value)[] p) =>
@@ -39,10 +39,10 @@ public sealed class StationStatusTests
     {
         var world = new WorldModel(
         [
-            E(1, EffectKinds.StationMode, (FieldKinds.Station, "A-01"), (FieldKinds.StationMode, "1")),
-            E(2, EffectKinds.StationStatus, (FieldKinds.Station, "A-01"), (FieldKinds.StationStatus, "手動")),
-            E(3, EffectKinds.StationStatus, (FieldKinds.Station, "A-01"), (FieldKinds.StationStatus, "異常")),
-            E(4, EffectKinds.StationStatus, (FieldKinds.Station, "A-99"), (FieldKinds.StationStatus, "手動")), // 對應不到 Layout
+            E(1, EffectKinds.StationMode, (FieldKinds.Conv, "A-01"), (FieldKinds.StationMode, "1")),
+            E(2, EffectKinds.StationStatus, (FieldKinds.Conv, "A-01"), (FieldKinds.StationStatus, "手動")),
+            E(3, EffectKinds.StationStatus, (FieldKinds.Conv, "A-01"), (FieldKinds.StationStatus, "異常")),
+            E(4, EffectKinds.StationStatus, (FieldKinds.Conv, "A-99"), (FieldKinds.StationStatus, "手動")), // 對應不到 Layout
         ], Layout, "在席");
 
         Assert.Null(world.StateAt(1).Stations["st-1"].Status);

@@ -51,8 +51,8 @@ public sealed record PlantConfig
     public static IReadOnlyList<ParseRule> DefaultParseRules { get; } =
     [
         new("命令編號（8 位數字，前導 000）", null, null, @"(?<![0-9])(?<command>000[0-9]{5})(?![0-9])"),
-        new("站點與設備（[A-nn] 或 [A-nn-設備]）", "PLC", null, @"^\[(?<station>[A-Z]-[0-9]{2})(?:-(?<vehicle>[A-Z]{4}[0-9]{2}))?\]"),
-        new("站點狀態變化（訊號 = ON／OFF）", "PLC", null, @"^\[(?<station>[A-Z]-[0-9]{2})\]\[Station_Status_Change\] => (?<signal>.+?) = (?<signalValue>ON|OFF)\s*$",
+        new("Conv 與設備（[A-nn] 或 [A-nn-設備]）", "PLC", null, @"^\[(?<conv>[A-Z]-[0-9]{2})(?:-(?<vehicle>[A-Z]{4}[0-9]{2}))?\]"),
+        new("Conv 狀態變化（訊號 = ON／OFF）", "PLC", null, @"^\[(?<conv>[A-Z]-[0-9]{2})\]\[Station_Status_Change\] => (?<signal>.+?) = (?<signalValue>ON|OFF)\s*$",
             Parsing.EffectKinds.Signal),
         new("棧板命令（9 位數字）", null, null, @"棧板命令\s*=\s*(?<pallet>[0-9]{9})(?![0-9])"),
         new("設備（4 個英文字母＋2 位數字）", null, null, @"(?<![A-Za-z0-9])(?<vehicle>[A-Z]{4}[0-9]{2})(?![0-9])"),

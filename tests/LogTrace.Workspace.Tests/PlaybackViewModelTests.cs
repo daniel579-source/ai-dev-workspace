@@ -90,8 +90,8 @@ public sealed class PlaybackViewModelTests : IDisposable
         Assert.Contains("[A-04][Station_Status_Change] => 在席 = OFF", presence.CauseText);
         Assert.Contains(P.Detail, d => d.Label == "貨物" && d.Value.Contains("PLT-EX-0002") && d.Value.Contains("案件開始前已存在"));
         Assert.Contains(P.Detail, d => d.Label == "不一致");
-        Assert.Equal("未知", P.Detail.Single(d => d.Label == "站點模式").Value); // 推不出來就是未知
-        Assert.Null(P.Detail.Single(d => d.Label == "站點模式").Cause);
+        Assert.Equal("未知", P.Detail.Single(d => d.Label == "Conv 模式").Value); // 推不出來就是未知
+        Assert.Null(P.Detail.Single(d => d.Label == "Conv 模式").Cause);
 
         P.GoToCauseCommand.Execute(presence.Cause);
         Assert.Equal(presence.Cause, _vm.SelectedEvent!.Sequence);
@@ -224,14 +224,14 @@ public sealed class PlaybackViewModelTests : IDisposable
         {
             Elements =
             [
-                new() { Id = "st-1", Type = Engine.Plants.LayoutElementType.Station, Name = "入庫口1", Aliases = ["A-01"], X = 1, Y = 1, W = 2, H = 2 },
-                new() { Id = "st-2", Type = Engine.Plants.LayoutElementType.Station, Name = "入庫口2", Aliases = ["A-02"], X = 5, Y = 1, W = 2, H = 2 },
+                new() { Id = "st-1", Type = Engine.Plants.LayoutElementType.Conv, Name = "入庫口1", Aliases = ["A-01"], X = 1, Y = 1, W = 2, H = 2 },
+                new() { Id = "st-2", Type = Engine.Plants.LayoutElementType.Conv, Name = "入庫口2", Aliases = ["A-02"], X = 5, Y = 1, W = 2, H = 2 },
             ],
         };
         static Engine.Parsing.EventEffect E(long seq, string station, string status) =>
             new(seq, Engine.Parsing.EffectKinds.StationStatus, new Dictionary<string, IReadOnlyList<string>>
             {
-                [Engine.Parsing.FieldKinds.Station] = [station], [Engine.Parsing.FieldKinds.StationStatus] = [status],
+                [Engine.Parsing.FieldKinds.Conv] = [station], [Engine.Parsing.FieldKinds.StationStatus] = [status],
             });
         var world = new Engine.Playback.WorldModel([E(1, "A-01", "自動"), E(2, "A-02", "手動"), E(3, "A-01", "異常")], layout, "在席");
         var p = new PlaybackViewModel();
@@ -256,7 +256,7 @@ public sealed class PlaybackViewModelTests : IDisposable
     [Fact]
     public void 輸送線連到搬送機時_回放畫面畫到交接點_其他端畫到中心()
     {
-        var st = new Engine.Plants.LayoutElement { Id = "st-1", Type = Engine.Plants.LayoutElementType.Station, X = 1, Y = 1, W = 2, H = 2 };
+        var st = new Engine.Plants.LayoutElement { Id = "st-1", Type = Engine.Plants.LayoutElementType.Conv, X = 1, Y = 1, W = 2, H = 2 };
         var vh = new Engine.Plants.LayoutElement { Id = "vh-1", Type = Engine.Plants.LayoutElementType.Vehicle, X = 10, Y = 1, W = 2.5, H = 1.2 };
         var cv = new Engine.Plants.LayoutElement
         {

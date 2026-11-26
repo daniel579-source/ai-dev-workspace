@@ -30,9 +30,9 @@ public sealed class WorkstationFenceTests : IDisposable
         Elements =
         [
             new() { Id = "ev-1", Type = LayoutElementType.Elevator, Name = "電梯", Aliases = ["EV01"], X = 10, Y = 10, W = 2, H = 2, Rotation = 0, ServedFloors = ["1F", "2F"] },
-            new() { Id = "st-1", Type = LayoutElementType.Station, Name = "左站", Aliases = ["A-01"], X = 8, Y = 10, W = 2, H = 2, Rotation = 0, Floor = "1F" },
+            new() { Id = "st-1", Type = LayoutElementType.Conv, Name = "左站", Aliases = ["A-01"], X = 8, Y = 10, W = 2, H = 2, Rotation = 0, Floor = "1F" },
             new() { Id = "ws-1", Type = LayoutElementType.Workstation, Name = "右工站", Aliases = ["W-01"], X = 12, Y = 10, W = 2, H = 2, Rotation = 0, Floor = "2F" },
-            new() { Id = "eq-1", Type = LayoutElementType.Dock, Name = "Conv", Aliases = ["EQ1"], X = 0, Y = 0, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "eq-1", Type = LayoutElementType.Conv, Name = "Conv", Aliases = ["EQ1"], X = 0, Y = 0, W = 2, H = 2, Rotation = 0 },
             new() { Id = "vh-1", Type = LayoutElementType.Vehicle, Name = "STV", Aliases = ["V1"], X = 0, Y = 4, W = 2, H = 1, Rotation = 0 },
             new() { Id = "fc-1", Type = LayoutElementType.Fence, Name = "圍欄", Points = [new RailPoint(0, 20), new RailPoint(8, 20), new RailPoint(8, 26)] },
             new() { Id = "fg-1", Type = LayoutElementType.FenceGate, Name = "圍欄門", X = 8, Y = 20, W = 1, H = 0.1, Rotation = 90 },
@@ -62,7 +62,7 @@ public sealed class WorkstationFenceTests : IDisposable
         {
             E(1, EffectKinds.ElevatorDispatched, (FieldKinds.Command, "C-1"), (FieldKinds.Elevator, "EV01"), (FieldKinds.Destination, "W-01")),
             E(2, EffectKinds.ElevatorArrived, (FieldKinds.Command, "C-1"), (FieldKinds.Destination, "W-01")),
-            E(3, EffectKinds.Signal, (FieldKinds.Station, "W-01"), (FieldKinds.Signal, "在席"), (FieldKinds.SignalValue, "ON")),
+            E(3, EffectKinds.Signal, (FieldKinds.Conv, "W-01"), (FieldKinds.Signal, "在席"), (FieldKinds.SignalValue, "ON")),
             E(4, EffectKinds.ElevatorDispatched, (FieldKinds.Command, "C-2"), (FieldKinds.Elevator, "EV01"), (FieldKinds.Destination, "A-01")),
         };
         var p = new PlaybackViewModel();
@@ -110,21 +110,21 @@ public sealed class WorkstationFenceTests : IDisposable
     }
 
     [Fact]
-    public void EQ_門朝緊鄰的Conv_Conv上有棧板等待完成回報時門開_推估()
+    public void EQ_門朝緊鄰的Conv_EQ上有棧板等待完成回報時門開_完成回報後已交出_推估()
     {
         var layout = new LayoutSection
         {
             Elements =
             [
-                new() { Id = "eq-1", Type = LayoutElementType.Dock, Name = "Conv", Aliases = ["EQ901"], X = 0, Y = 0, W = 2, H = 2, Rotation = 0 },
-                new() { Id = "eqp-1", Type = LayoutElementType.Eq, Name = "EQ", X = 2.1, Y = 0, W = 1.5, H = 1.5, Rotation = 0 },
-                new() { Id = "st-1", Type = LayoutElementType.Station, Name = "站", Aliases = ["A-01"], X = 0, Y = 5, W = 2, H = 2, Rotation = 0 },
+                new() { Id = "eq-1", Type = LayoutElementType.Conv, Name = "Conv", Aliases = ["C-01"], X = 0, Y = 0, W = 2, H = 2, Rotation = 0 },
+                new() { Id = "eqp-1", Type = LayoutElementType.Eq, Name = "EQ", Aliases = ["EQ901"], X = 2.1, Y = 0, W = 1.5, H = 1.5, Rotation = 0 },
+                new() { Id = "st-1", Type = LayoutElementType.Conv, Name = "站", Aliases = ["A-01"], X = 0, Y = 5, W = 2, H = 2, Rotation = 0 },
             ],
         };
         var effects = new List<EventEffect>
         {
             E(1, EffectKinds.CommandCreated, (FieldKinds.Command, "C-1"), (FieldKinds.Pallet, "P-1")),
-            E(2, EffectKinds.PalletRead, (FieldKinds.Station, "A-01"), (FieldKinds.Pallet, "P-1")),
+            E(2, EffectKinds.PalletRead, (FieldKinds.Conv, "A-01"), (FieldKinds.Pallet, "P-1")),
             E(3, EffectKinds.SegmentArrived, (FieldKinds.Command, "C-1"), (FieldKinds.Destination, "EQ901")),
             E(4, EffectKinds.CommandCompleted, (FieldKinds.Command, "C-1")),
         };
@@ -135,12 +135,14 @@ public sealed class WorkstationFenceTests : IDisposable
         Assert.Equal(1.8, PlaybackScene.DefaultHeight(LayoutElementType.Eq));
         p.SetMoment(2);
         Assert.False(p.SceneNow.Elements.Single(e => e.Id == "eqp-1").DoorOpen);
-        p.SetMoment(3); // 抵達 Conv，等待完成回報
+        p.SetMoment(3); // 抵達 EQ，等待完成回報
         Assert.True(p.SceneNow.Elements.Single(e => e.Id == "eqp-1").DoorOpen);
         p.SelectElementCommand.Execute(p.Elements.Single(e => e.Id == "eqp-1"));
         Assert.Contains("開著（推估", p.Detail.Single(d => d.Label == "門").Value);
         p.SetMoment(4); // 完成回報：已交出
         Assert.False(p.SceneNow.Elements.Single(e => e.Id == "eqp-1").DoorOpen);
-        Assert.DoesNotContain(p.Equipment, r => r.Id == "eqp-1"); // EQ 不推導狀態
+        Assert.Contains(p.Equipment, r => r.Id == "eqp-1"); // EQ 推導交出（ADR-0026）
+        p.SelectElementCommand.Execute(p.Elements.Single(e => e.Id == "eqp-1"));
+        Assert.Contains(p.Detail, d => d.Label == "已交出" && d.Value.Contains("P-1"));
     }
 }

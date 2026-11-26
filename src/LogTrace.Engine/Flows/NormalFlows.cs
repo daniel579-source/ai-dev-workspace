@@ -27,8 +27,8 @@ public static class NormalFlows
     public const double ExpectedRatio = 0.9;
     public const double MaxFalsePositiveRate = 0.1;
 
-    public const string RoleFromStation = "來源站點", RoleToStation = "目的站點",
-        RoleFromAdjacent = "來源相鄰站點", RoleToAdjacent = "目的相鄰站點";
+    public const string RoleFromStation = "來源 Conv", RoleToStation = "目的 Conv",
+        RoleFromAdjacent = "來源相鄰 Conv", RoleToAdjacent = "目的相鄰 Conv";
 
     public static string StatusText(FlowStatus s) => s switch
     {
@@ -54,7 +54,7 @@ public static class NormalFlows
                 foreach (var a in e.Aliases ?? [])
                     _byAlias.TryAdd(a.Trim(), e);
             var byId = layout.Elements.GroupBy(e => e.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
-            // 對接設備（Conv）本身沒有訊號，訊號在以輸送線相連的站點上（ADR-0024 第 2 點補充）
+            // EQ（其他公司的設備）本身沒有訊號，訊號在以輸送線相連的 Conv 上（ADR-0024 第 2 點補充、ADR-0026）
             foreach (var c in layout.Elements.Where(e => e.Type == LayoutElementType.Conveyor && e.From is not null && e.To is not null))
             {
                 if (!byId.TryGetValue(c.From!, out var a) || !byId.TryGetValue(c.To!, out var b)) continue;
@@ -64,7 +64,7 @@ public static class NormalFlows
 
             void Link(LayoutElement dock, LayoutElement station)
             {
-                if (dock.Type != LayoutElementType.Dock || !LayoutElement.IsStationLike(station.Type)) return;
+                if (dock.Type != LayoutElementType.Eq || !LayoutElement.IsStationLike(station.Type)) return;
                 if (!_adjacent.TryGetValue(dock.Id, out var set)) _adjacent[dock.Id] = set = new(StringComparer.Ordinal);
                 set.Add(station.Id);
             }
@@ -72,11 +72,11 @@ public static class NormalFlows
 
         public LayoutElement? Resolve(string? code) => code is not null && _byAlias.TryGetValue(code.Trim(), out var e) ? e : null;
 
-        /// <summary>位置的種類名稱：站點、Conv、儲位；對應不到時為 null。</summary>
+        /// <summary>位置的種類名稱：Conv、EQ、儲位；對應不到時為 null。</summary>
         public string? PlaceLabel(string? code)
         {
             if (Resolve(code) is { } e)
-                return LayoutElement.IsStationLike(e.Type) ? "站點" : e.Type == LayoutElementType.Dock ? "Conv" : null;
+                return LayoutElement.IsStationLike(e.Type) ? "Conv" : e.Type == LayoutElementType.Eq ? "EQ" : null;
             return code is not null && StorageCode.TryParse(_storageRule, code.Trim(), out _) ? "儲位" : null;
         }
 
@@ -109,8 +109,8 @@ public static class NormalFlows
             var t = Resolve(to);
             if (f?.Id == s.Id) return RoleFromStation;
             if (t?.Id == s.Id) return RoleToStation;
-            if (f is { Type: LayoutElementType.Dock } && _adjacent.TryGetValue(f.Id, out var fa) && fa.Contains(s.Id)) return RoleFromAdjacent;
-            if (t is { Type: LayoutElementType.Dock } && _adjacent.TryGetValue(t.Id, out var ta) && ta.Contains(s.Id)) return RoleToAdjacent;
+            if (f is { Type: LayoutElementType.Eq } && _adjacent.TryGetValue(f.Id, out var fa) && fa.Contains(s.Id)) return RoleFromAdjacent;
+            if (t is { Type: LayoutElementType.Eq } && _adjacent.TryGetValue(t.Id, out var ta) && ta.Contains(s.Id)) return RoleToAdjacent;
             return null;
         }
     }
@@ -184,7 +184,7 @@ public static class NormalFlows
             if (endSequence is { } es && e.Sequence > es) break;
             if (e.Effect != EffectKinds.Signal || c.TimeOf(e.Sequence) is not { } t) continue;
             if (endTime is { } et && t > et) break;
-            if (e.Get(FieldKinds.Station) is not { } station || e.Get(FieldKinds.Signal) is not { } name) continue;
+            if (e.Get(FieldKinds.Conv) is not { } station || e.Get(FieldKinds.Signal) is not { } name) continue;
             if (index.RoleOf(station, s.From, s.To) is null) continue;
             bool on = string.Equals(e.Get(FieldKinds.SignalValue), "ON", StringComparison.OrdinalIgnoreCase);
             if (!seen.Add((station.Trim().ToUpperInvariant(), name.Trim(), on))) continue;
@@ -254,7 +254,7 @@ public static class NormalFlows
     public static string Describe(string key)
     {
         var p = key.Split('｜');
-        return p.Length == 3 ? $"{p[0]}的 {p[1]} {p[2]}" : key;
+        return p.Length == 3 ? $"{p[0]} 的 {p[1]} {p[2]}" : key;
     }
 
     /// <summary>樣本中各訊號（以角色表示）第一次出現的秒數與模組。</summary>

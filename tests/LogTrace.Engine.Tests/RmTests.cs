@@ -21,7 +21,7 @@ public sealed class RmTests
             new() { Id = "rl-1", Type = LayoutElementType.Rail, Points = RailPath.StraightTemplate(0, 5) },
             new() { Id = "rm-1", Type = LayoutElementType.Rm, Name = "RM 1", Aliases = ["RM01"], X = 8, Y = 4.4, W = 2, H = 1.2, Rotation = 0, Rail = "rl-1" },
             new() { Id = "vh-1", Type = LayoutElementType.Vehicle, Name = "STV 1", Aliases = ["STV01"], X = 8, Y = 20, W = 2, H = 1, Rotation = 0 },
-            new() { Id = "eq-1", Type = LayoutElementType.Dock, Name = "Conv P1", Aliases = ["P1"], X = 0, Y = 6, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "eq-1", Type = LayoutElementType.Conv, Name = "Conv P1", Aliases = ["P1"], X = 0, Y = 6, W = 2, H = 2, Rotation = 0 },
             new() { Id = "rk-1", Type = LayoutElementType.Rack, Row = "1", ColFrom = 1, ColTo = 10, Levels = 4, LevelHeight = 1.5, X = 0, Y = 1, W = 20, H = 1.2, Rotation = 0 },
             new() { Id = "rk-2", Type = LayoutElementType.Rack, Row = "2", ColFrom = 1, ColTo = 10, Levels = 4, LevelHeight = 1.5, X = 0, Y = 2.4, W = 20, H = 1.2, Rotation = 0 },
         ],
@@ -38,7 +38,7 @@ public sealed class RmTests
     {
         var json = PlantConfigFile.Serialize(Doc(Layout()));
 
-        Assert.Contains("\"formatVersion\": 7", json);
+        Assert.Contains("\"formatVersion\": 11", json);
         Assert.Contains("\"type\": \"rm\"", json);
         Assert.Contains("\"depth\": \"deep\"", json);
         var back = PlantConfigFile.Deserialize(json).Layout;
@@ -46,7 +46,7 @@ public sealed class RmTests
         Assert.Equal("rl-1", back.Elements.Single(e => e.Id == "rm-1").Rail);
 
         var plain = Layout();
-        plain.Elements.RemoveAll(e => e.Type == LayoutElementType.Rm);
+        plain.Elements.RemoveAll(e => e.Type is LayoutElementType.Rm or LayoutElementType.Conv); // 有 Conv 時為 11（ADR-0026）
         plain.Rows = null;
         Assert.DoesNotContain("\"formatVersion\": 7", PlantConfigFile.Serialize(Doc(plain)));
         plain.Rows = [new LayoutRow("1")]; // 只有排的配置表（單深）也要版本 7

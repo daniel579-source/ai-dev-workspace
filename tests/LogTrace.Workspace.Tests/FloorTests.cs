@@ -35,12 +35,12 @@ public sealed class FloorEditorTests : IDisposable
     public void 新設定只有1F_新增樓層後新元素放在目前樓層_單層檢視只畫目前樓層()
     {
         Assert.Equal(["1F"], _vm.Floors);
-        var a = Add(LayoutElementType.Station);
+        var a = Add(LayoutElementType.Conv);
         _vm.AddFloorCommand.Execute(null);
 
         Assert.Equal(["1F", "2F"], _vm.Floors);
         Assert.Equal("2F", _vm.CurrentFloor);
-        var b = Add(LayoutElementType.Station);
+        var b = Add(LayoutElementType.Conv);
         Assert.Equal(("1F", "2F"), (a.Floor, b.Floor));
         Assert.False(a.IsOnCanvas);
         Assert.True(b.IsOnCanvas);
@@ -56,9 +56,9 @@ public sealed class FloorEditorTests : IDisposable
     [Fact]
     public void 樓層改名時元素一併更新_名稱不可空白或重複_復原後回來()
     {
-        Add(LayoutElementType.Station);
+        Add(LayoutElementType.Conv);
         _vm.AddFloorCommand.Execute(null);
-        var b = Add(LayoutElementType.Station);
+        var b = Add(LayoutElementType.Conv);
 
         _vm.FloorNameText = "1f";
         _vm.RenameFloorCommand.Execute(null);
@@ -80,12 +80,12 @@ public sealed class FloorEditorTests : IDisposable
     [Fact]
     public void 刪除還有元素的樓層時擋下_至少保留一層_調整順序()
     {
-        Add(LayoutElementType.Station);
+        Add(LayoutElementType.Conv);
         _vm.DeleteFloorCommand.Execute(null);
         Assert.Contains("至少要有一個樓層", _vm.Status);
 
         _vm.AddFloorCommand.Execute(null);
-        var b = Add(LayoutElementType.Station);
+        var b = Add(LayoutElementType.Conv);
         _vm.DeleteFloorCommand.Execute(null);
         Assert.Contains("還有 1 個元素", _vm.Status);
         Assert.Equal(2, _vm.Floors.Count);
@@ -101,9 +101,9 @@ public sealed class FloorEditorTests : IDisposable
     [Fact]
     public void 只顯示目前樓層_預設關_切換時記住設定_框選只選目前樓層()
     {
-        var a = Add(LayoutElementType.Station);
+        var a = Add(LayoutElementType.Conv);
         _vm.AddFloorCommand.Execute(null);
-        var b = Add(LayoutElementType.Station); // 2F，座標與 a 相同
+        var b = Add(LayoutElementType.Conv); // 2F，座標與 a 相同
 
         Assert.False(_vm.OnlyCurrentFloor);
         _vm.OnlyCurrentFloor = true;
@@ -121,7 +121,7 @@ public sealed class FloorEditorTests : IDisposable
     [Fact]
     public void 拖曳不換樓層_座標不小於0_整個拖曳算一步()
     {
-        var a = Add(LayoutElementType.Station, 2, 2);
+        var a = Add(LayoutElementType.Conv, 2, 2);
         _vm.AddFloorCommand.Execute(null);
         _vm.SelectFloorCommand.Execute("1F");
 
@@ -138,8 +138,8 @@ public sealed class FloorEditorTests : IDisposable
     [Fact]
     public void 貼上到目前樓層的滑鼠位置_多選一起移到其他樓層()
     {
-        var a = Add(LayoutElementType.Station, 2, 2);
-        var b = Add(LayoutElementType.Station, 6, 2);
+        var a = Add(LayoutElementType.Conv, 2, 2);
+        var b = Add(LayoutElementType.Conv, 6, 2);
         _vm.AddFloorCommand.Execute(null);
 
         _vm.SelectFloorCommand.Execute("1F");
@@ -161,8 +161,8 @@ public sealed class FloorEditorTests : IDisposable
     [Fact]
     public void 存檔讀回樓層與元素的樓層_輸送線兩端不同層時存檔擋下()
     {
-        var a = Add(LayoutElementType.Station, 2, 2);
-        var b = Add(LayoutElementType.Station, 8, 2);
+        var a = Add(LayoutElementType.Conv, 2, 2);
+        var b = Add(LayoutElementType.Conv, 8, 2);
         _vm.AddElementCommand.Execute(LayoutElementType.Conveyor);
         _vm.AddFloorCommand.Execute(null);
         b.Floor = "2F";
@@ -180,8 +180,8 @@ public sealed class FloorEditorTests : IDisposable
     [Fact]
     public void 防火門的依位置帶入只看同一層的輸送線()
     {
-        Add(LayoutElementType.Station, 1, 1);
-        Add(LayoutElementType.Station, 10, 1);
+        Add(LayoutElementType.Conv, 1, 1);
+        Add(LayoutElementType.Conv, 10, 1);
         _vm.AddElementCommand.Execute(LayoutElementType.Conveyor); // 1F，y = 2
         _vm.AddFloorCommand.Execute(null);
         var door = Add(LayoutElementType.FireDoor, 6, 1.75); // 2F，位置剛好在 1F 的線上
@@ -200,8 +200,8 @@ public sealed class FloorPlaybackTests
         Floors = ["1F", "2F"],
         Elements =
         [
-            new() { Id = "st-1", Type = LayoutElementType.Station, Name = "站點 1", Aliases = ["A-01"], Floor = "1F", X = 1, Y = 1, W = 2, H = 2 },
-            new() { Id = "st-2", Type = LayoutElementType.Station, Name = "站點 2", Aliases = ["B-01"], Floor = "2F", X = 1, Y = 1, W = 2, H = 2 },
+            new() { Id = "st-1", Type = LayoutElementType.Conv, Name = "站點 1", Aliases = ["A-01"], Floor = "1F", X = 1, Y = 1, W = 2, H = 2 },
+            new() { Id = "st-2", Type = LayoutElementType.Conv, Name = "站點 2", Aliases = ["B-01"], Floor = "2F", X = 1, Y = 1, W = 2, H = 2 },
             new() { Id = "vh-1", Type = LayoutElementType.Vehicle, Name = "搬送機 1", Aliases = ["V1"], Floor = "2F", X = 5, Y = 1, W = 2.5, H = 1.2 },
         ],
     };
@@ -260,7 +260,7 @@ public sealed class FloorPlaybackTests
         var focused = new List<string>();
         p.FocusRequested += focused.Add;
 
-        p.FollowEvent([new EventField(1, FieldKinds.Station, "X-99"), new EventField(1, FieldKinds.Station, "B-01")]);
+        p.FollowEvent([new EventField(1, FieldKinds.Conv, "X-99"), new EventField(1, FieldKinds.Conv, "B-01")]);
 
         Assert.Equal(["st-2"], focused);
         Assert.Null(p.SelectedElement);

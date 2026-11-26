@@ -6,9 +6,11 @@ namespace LogTrace.Engine.Parsing;
 /// <summary>解析欄位的種類（ADR-0005 第 8 點）。抽取規則以正規表示式的具名群組表示，群組名稱就是欄位種類。</summary>
 public static class FieldKinds
 {
-    public const string Station = "station";
+    /// <summary>Conv 的編號（ADR-0026；原本的站點，舊名稱 station）。</summary>
+    public const string Conv = "conv";
     public const string Vehicle = "vehicle";
-    public const string Dock = "dock";
+    /// <summary>EQ（其他公司的設備）的編號（ADR-0026；舊名稱 dock）。</summary>
+    public const string Eq = "eq";
     /// <summary>防火門的編號（LOG 樣式待確認，ADR-0006 第 1 點 2026-11-06 補充）。</summary>
     public const string FireDoor = "fireDoor";
     /// <summary>電梯的編號（LOG 樣式待確認，ADR-0005 第 11 點）；不和搬送機共用。</summary>
@@ -26,7 +28,7 @@ public static class FieldKinds
     public const string Signal = "signal";
     public const string SignalValue = "signalValue";
     public const string StationMode = "stationMode";
-    /// <summary>站點的運轉狀態（例如自動、手動），照 LOG 的文字（ADR-0005 第 3 點，#70）。</summary>
+    /// <summary>Conv 的運轉狀態（例如自動、手動），照 LOG 的文字（ADR-0005 第 3 點，#70）。</summary>
     public const string StationStatus = "stationStatus";
     public const string Alarm = "alarm";
     public const string AlarmCode = "alarmCode";
@@ -36,19 +38,46 @@ public static class FieldKinds
     /// <summary>所有欄位種類與中文名稱（依畫面顯示順序）。</summary>
     public static IReadOnlyList<(string Kind, string Label)> All { get; } =
     [
-        (Station, "站點"), (Vehicle, "搬送機"), (Dock, "Conv"), (FireDoor, "防火門"), (Elevator, "電梯"), (Rm, "RM"), (Storage, "儲位"),
+        (Conv, "Conv"), (Vehicle, "搬送機"), (Eq, "EQ"), (FireDoor, "防火門"), (Elevator, "電梯"), (Rm, "RM"), (Storage, "儲位"),
         (Command, "命令"), (CommandType, "命令類型"), (Segment, "段"), (Source, "來源"), (Destination, "目的地"),
         (Pallet, "棧板"), (Bin, "桶"),
-        (Signal, "訊號"), (SignalValue, "訊號值"), (StationMode, "站點模式"), (StationStatus, "運轉狀態"),
+        (Signal, "訊號"), (SignalValue, "訊號值"), (StationMode, "Conv 模式"), (StationStatus, "運轉狀態"),
         (Alarm, "警報"), (AlarmCode, "警報代碼"), (Online, "連線"), (Mode, "模式"),
     ];
 
     /// <summary>可以對應到 Layout 元素別名的欄位（ADR-0006 第 2、3 點）。</summary>
-    public static IReadOnlyList<string> Identifiers { get; } = [Station, Vehicle, Dock, FireDoor, Elevator, Rm];
+    public static IReadOnlyList<string> Identifiers { get; } = [Conv, Vehicle, Eq, FireDoor, Elevator, Rm];
 
-    public static bool IsKnown(string kind) => All.Any(k => k.Kind == kind);
+    /// <summary>
+    /// 舊的欄位種類名稱（ADR-0026）：規則的群組名稱與已建立的案件資料庫中仍可能是舊名稱，
+    /// 抽取與讀取時對應到新名稱；正規表示式與案件資料庫本身不改寫。
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> Legacy { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["station"] = Conv,
+        ["dock"] = Eq,
+    };
 
-    public static string Label(string kind) => All.FirstOrDefault(k => k.Kind == kind).Label ?? kind;
+    /// <summary>新名稱（舊名稱對應到新名稱，其他原樣）。</summary>
+    public static string Canonical(string kind) => Legacy.TryGetValue(kind, out var k) ? k : kind;
+
+    /// <summary>新名稱與對應到它的舊名稱（查詢舊案件資料庫用）。</summary>
+    public static IEnumerable<string> WithLegacy(IEnumerable<string> kinds)
+    {
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var k in kinds)
+        {
+            var c = Canonical(k);
+            set.Add(c);
+            foreach (var (old, now) in Legacy)
+                if (now == c) set.Add(old);
+        }
+        return set;
+    }
+
+    public static bool IsKnown(string kind) => All.Any(k => k.Kind == Canonical(kind));
+
+    public static string Label(string kind) => All.FirstOrDefault(k => k.Kind == Canonical(kind)).Label ?? kind;
 }
 
 /// <summary>
@@ -59,7 +88,7 @@ public static class EffectKinds
 {
     public const string Signal = "signal";
     public const string StationMode = "stationMode";
-    /// <summary>站點的運轉狀態（#70）。</summary>
+    /// <summary>Conv 的運轉狀態（#70）。</summary>
     public const string StationStatus = "stationStatus";
     public const string PalletRead = "palletRead";
     /// <summary>棧板加入一個桶（ADR-0005 第 2 點 2026-11-15 補充）：桶加到棧板的桶清單（去除重複），不移動棧板。</summary>
@@ -89,10 +118,10 @@ public static class EffectKinds
     /// <summary>效果的名稱，以及規則必須有的欄位（「A|B」表示其中之一）。</summary>
     public static IReadOnlyList<(string Effect, string Label, string[] Required)> All { get; } =
     [
-        (Signal, "站點訊號 ON／OFF（在席訊號決定在席燈）", [FieldKinds.Station, FieldKinds.Signal, FieldKinds.SignalValue]),
-        (StationMode, "站點模式", [FieldKinds.Station, FieldKinds.StationMode]),
-        (StationStatus, "站點運轉狀態（自動／手動等）", [FieldKinds.Station, FieldKinds.StationStatus]),
-        (PalletRead, "在站點讀到棧板（與桶）", [FieldKinds.Station, FieldKinds.Pallet]),
+        (Signal, "Conv 訊號 ON／OFF（在席訊號決定在席燈）", [FieldKinds.Conv, FieldKinds.Signal, FieldKinds.SignalValue]),
+        (StationMode, "Conv 模式", [FieldKinds.Conv, FieldKinds.StationMode]),
+        (StationStatus, "Conv 運轉狀態（自動／手動等）", [FieldKinds.Conv, FieldKinds.StationStatus]),
+        (PalletRead, "在 Conv 讀到棧板（與桶）", [FieldKinds.Conv, FieldKinds.Pallet]),
         (BinAdded, "棧板加入一個桶（每行一個桶，累加）", [FieldKinds.Pallet, FieldKinds.Bin]),
         (CommandCreated, "建立命令", [FieldKinds.Command]),
         (SegmentDispatched, "命令的一段派給搬送機或 RM", [FieldKinds.Command, $"{FieldKinds.Vehicle}|{FieldKinds.Rm}", FieldKinds.Destination]),
@@ -101,8 +130,8 @@ public static class EffectKinds
         (CommandCompleted, "命令完成", [FieldKinds.Command]),
         (CommandCancelled, "命令取消（樣式待確認）", [FieldKinds.Command]),
         (Connection, "搬送機或 RM 的連線狀態或自動／手動", [$"{FieldKinds.Vehicle}|{FieldKinds.Rm}", $"{FieldKinds.Online}|{FieldKinds.Mode}"]),
-        (AlarmRaised, "警報發生", [$"{FieldKinds.Vehicle}|{FieldKinds.Station}|{FieldKinds.Dock}|{FieldKinds.Elevator}|{FieldKinds.Rm}"]),
-        (AlarmCleared, "警報復歸", [$"{FieldKinds.Vehicle}|{FieldKinds.Station}|{FieldKinds.Dock}|{FieldKinds.Elevator}|{FieldKinds.Rm}"]),
+        (AlarmRaised, "警報發生", [$"{FieldKinds.Vehicle}|{FieldKinds.Conv}|{FieldKinds.Eq}|{FieldKinds.Elevator}|{FieldKinds.Rm}"]),
+        (AlarmCleared, "警報復歸", [$"{FieldKinds.Vehicle}|{FieldKinds.Conv}|{FieldKinds.Eq}|{FieldKinds.Elevator}|{FieldKinds.Rm}"]),
         (FireDoorOpened, "防火門開（樣式待確認）", [FieldKinds.FireDoor]),
         (FireDoorClosed, "防火門關（樣式待確認）", [FieldKinds.FireDoor]),
         (ElevatorDispatched, "命令的一段派給電梯（樣式待確認）", [FieldKinds.Command, FieldKinds.Elevator, FieldKinds.Destination]),
@@ -167,17 +196,18 @@ public sealed class FieldExtractor
             return $"規則「{rule.Name}」的正規表示式有誤：{ex.Message}";
         }
         var named = regex.GetGroupNames().Where(g => !int.TryParse(g, out _)).ToList();
+        var kinds = named.Select(FieldKinds.Canonical).ToList(); // 舊的群組名稱 station、dock 視為 conv、eq（ADR-0026）
         var unknown = named.Where(g => !FieldKinds.IsKnown(g)).ToList();
         if (unknown.Count > 0)
             return $"規則「{rule.Name}」有不認得的欄位：{string.Join("、", unknown)}；可以用的欄位：{string.Join("、", FieldKinds.All.Select(k => k.Kind))}。";
         if (named.Count == 0)
-            return $"規則「{rule.Name}」沒有任何欄位（具名群組，例如 (?<station>…)）。";
+            return $"規則「{rule.Name}」沒有任何欄位（具名群組，例如 (?<conv>…)）。";
         if (rule.Effect is { } effect)
         {
             if (!EffectKinds.IsKnown(effect))
                 return $"規則「{rule.Name}」的效果「{effect}」不認得；可以用的效果：{string.Join("、", EffectKinds.All.Select(e => e.Effect))}。";
             var missing = EffectKinds.All.Single(e => e.Effect == effect).Required
-                .Where(req => !req.Split('|').Any(named.Contains)).ToList();
+                .Where(req => !req.Split('|').Any(kinds.Contains)).ToList();
             if (missing.Count > 0)
                 return $"規則「{rule.Name}」的效果「{effect}」需要欄位：{string.Join("、", missing.Select(m => m.Replace("|", " 或 ")))}。";
         }
@@ -205,9 +235,10 @@ public sealed class FieldExtractor
                     {
                         var captured = match.Groups[g].Captures.Select(c => c.Value).Where(v => v.Length > 0).Distinct().ToList();
                         if (captured.Count == 0) continue;
-                        values[g] = captured;
+                        var kind = FieldKinds.Canonical(g); // 舊的群組名稱（ADR-0026）
+                        values[kind] = values.TryGetValue(kind, out var had) ? [.. had.Union(captured)] : captured;
                         foreach (var v in captured)
-                            if (!fields.Contains(new EventField(sequence, g, v))) fields.Add(new EventField(sequence, g, v));
+                            if (!fields.Contains(new EventField(sequence, kind, v))) fields.Add(new EventField(sequence, kind, v));
                     }
                     if (rule.Effect is { } effect) effects.Add(new EventEffect(sequence, effect, values));
                 }

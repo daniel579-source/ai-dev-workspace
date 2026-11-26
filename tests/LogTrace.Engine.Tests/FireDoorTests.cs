@@ -17,9 +17,9 @@ public sealed class FireDoorTests : IDisposable
     {
         Elements =
         [
-            new() { Id = "st-1", Type = LayoutElementType.Station, Name = "站點 1", Aliases = ["A-01"], X = 1, Y = 1, W = 2, H = 2, Rotation = 0 },
-            new() { Id = "st-2", Type = LayoutElementType.Station, Name = "站點 2", Aliases = ["A-02"], X = 10, Y = 1, W = 2, H = 2, Rotation = 0 },
-            new() { Id = "st-3", Type = LayoutElementType.Station, Name = "站點 3", Aliases = ["A-03"], X = 1, Y = 8, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "st-1", Type = LayoutElementType.Conv, Name = "站點 1", Aliases = ["A-01"], X = 1, Y = 1, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "st-2", Type = LayoutElementType.Conv, Name = "站點 2", Aliases = ["A-02"], X = 10, Y = 1, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "st-3", Type = LayoutElementType.Conv, Name = "站點 3", Aliases = ["A-03"], X = 1, Y = 8, W = 2, H = 2, Rotation = 0 },
             new() { Id = "cv-1", Type = LayoutElementType.Conveyor, From = "st-1", To = "st-2" },
             new() { Id = "cv-2", Type = LayoutElementType.Conveyor, From = "st-1", To = "st-3" },
             new()
@@ -34,7 +34,7 @@ public sealed class FireDoorTests : IDisposable
         new(seq, effect, p.ToDictionary(x => x.Kind, x => (IReadOnlyList<string>)[x.Value]));
 
     static EventEffect Read(long seq, string station, string pallet = "P-001") =>
-        E(seq, EffectKinds.PalletRead, (FieldKinds.Station, station), (FieldKinds.Pallet, pallet));
+        E(seq, EffectKinds.PalletRead, (FieldKinds.Conv, station), (FieldKinds.Pallet, pallet));
 
     static EventEffect Door(long seq, bool open) =>
         E(seq, open ? EffectKinds.FireDoorOpened : EffectKinds.FireDoorClosed, (FieldKinds.FireDoor, "FD-01"));
@@ -53,7 +53,7 @@ public sealed class FireDoorTests : IDisposable
         Assert.Equal(["cv-1"], fd.Conveyors);
         Assert.Equal(["FD-01"], fd.Aliases);
         var json = File.ReadAllText(path);
-        Assert.Contains("\"formatVersion\": 3", json); // 舊版程式不認得 fireDoor：明確提示改用新版
+        Assert.Contains("\"formatVersion\": 11", json); // 有 Conv 時為 11（ADR-0026）
         Assert.Contains("\"type\": \"fireDoor\"", json);
         Assert.Contains("\"doorState\": \"closed\"", json);
     }

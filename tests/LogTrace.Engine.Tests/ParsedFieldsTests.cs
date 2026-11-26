@@ -49,7 +49,7 @@ public sealed class ParsedFieldsTests : IDisposable
     {
         using var c = Import(PlantConfig.Default);
 
-        Assert.Equal([(FieldKinds.Station, "A-01"), (FieldKinds.Signal, "在席"), (FieldKinds.SignalValue, "ON")],
+        Assert.Equal([(FieldKinds.Conv, "A-01"), (FieldKinds.Signal, "在席"), (FieldKinds.SignalValue, "ON")],
             Fields(c, "在席 = ON"));
     }
 
@@ -60,7 +60,7 @@ public sealed class ParsedFieldsTests : IDisposable
 
         var fields = Fields(c, "命令編號 = 00030001");
 
-        Assert.Contains((FieldKinds.Station, "A-01"), fields);
+        Assert.Contains((FieldKinds.Conv, "A-01"), fields);
         Assert.Contains((FieldKinds.Vehicle, "SRCA01"), fields);
         Assert.Contains((FieldKinds.Command, "00030001"), fields);
     }
@@ -70,7 +70,7 @@ public sealed class ParsedFieldsTests : IDisposable
     {
         using var c = Import(PlantConfig.Default);
 
-        Assert.Equal([(FieldKinds.Command, "00030001"), (FieldKinds.Station, "A-02"), (FieldKinds.Pallet, "123456789")],
+        Assert.Equal([(FieldKinds.Command, "00030001"), (FieldKinds.Conv, "A-02"), (FieldKinds.Pallet, "123456789")],
             Fields(c, "卸貨完成"));
     }
 
@@ -87,7 +87,7 @@ public sealed class ParsedFieldsTests : IDisposable
     {
         using var c = Import(Full);
 
-        Assert.Equal([(FieldKinds.Dock, "EQ901"), (FieldKinds.Bin, "B001"), (FieldKinds.Bin, "B002")], Fields(c, "交給對接設備"));
+        Assert.Equal([(FieldKinds.Eq, "EQ901"), (FieldKinds.Bin, "B001"), (FieldKinds.Bin, "B002")], Fields(c, "交給對接設備"));
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public sealed class ParsedFieldsTests : IDisposable
     {
         using var c = Import(Full);
 
-        Assert.Equal([(FieldKinds.Station, "1001"), (FieldKinds.StationMode, "2")], Fields(c, "模式=2"));
+        Assert.Equal([(FieldKinds.Conv, "1001"), (FieldKinds.StationMode, "2")], Fields(c, "模式=2"));
     }
 
     [Fact]
@@ -167,10 +167,10 @@ public sealed class ParsedFieldsTests : IDisposable
 
         var counts = c.GetIdentifierCounts();
 
-        Assert.Contains((FieldKinds.Station, "A-01", 2L), counts);
-        Assert.Contains((FieldKinds.Station, "A-09", 1L), counts);
+        Assert.Contains((FieldKinds.Conv, "A-01", 2L), counts);
+        Assert.Contains((FieldKinds.Conv, "A-09", 1L), counts);
         Assert.Contains((FieldKinds.Vehicle, "SRCA02", 4L), counts);
-        Assert.Contains((FieldKinds.Dock, "EQ901", 1L), counts);
+        Assert.Contains((FieldKinds.Eq, "EQ901", 1L), counts);
         Assert.DoesNotContain(counts, x => x.Kind == FieldKinds.Command);
     }
 
@@ -180,11 +180,11 @@ public sealed class ParsedFieldsTests : IDisposable
         string folder;
         using (var c = Import(PlantConfig.Default))
         {
-            Assert.DoesNotContain(c.GetIdentifierCounts(), x => x.Kind == FieldKinds.Dock);
+            Assert.DoesNotContain(c.GetIdentifierCounts(), x => x.Kind == FieldKinds.Eq);
 
             c.ReparseFields([.. PlantConfig.DefaultParseRules, CustomRules[0]]);
 
-            Assert.Contains((FieldKinds.Dock, "EQ901", 1L), c.GetIdentifierCounts());
+            Assert.Contains((FieldKinds.Eq, "EQ901", 1L), c.GetIdentifierCounts());
             Assert.Equal("重新解析欄位", c.GetAudit()[^1].Action);
             folder = c.Folder;
         }

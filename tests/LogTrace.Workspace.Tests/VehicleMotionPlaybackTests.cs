@@ -26,8 +26,8 @@ public sealed class VehicleMotionPlaybackTests
             [
                 new() { Id = "rl-1", Type = LayoutElementType.Rail, Points = RailPath.StraightTemplate(0, 5), Name = "導軌 1" },
                 new() { Id = "vh-1", Type = LayoutElementType.Vehicle, Name = "搬送機 1", Aliases = ["V1"], X = 8, Y = 30, W = 2, H = 1, Rotation = 0, Rail = "rl-1" },
-                new() { Id = "st-a", Type = LayoutElementType.Station, Name = "A", Aliases = ["A"], X = 1, Y = 7, W = 2, H = 2, Rotation = 0 },
-                new() { Id = "st-b", Type = LayoutElementType.Station, Name = "B", Aliases = ["B"], X = 17, Y = 7, W = 2, H = 2, Rotation = 0 },
+                new() { Id = "st-a", Type = LayoutElementType.Conv, Name = "A", Aliases = ["A"], X = 1, Y = 7, W = 2, H = 2, Rotation = 0 },
+                new() { Id = "st-b", Type = LayoutElementType.Conv, Name = "B", Aliases = ["B"], X = 17, Y = 7, W = 2, H = 2, Rotation = 0 },
             ],
         };
         var effects = new List<EventEffect>

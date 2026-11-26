@@ -17,9 +17,9 @@ public sealed class ConveyorTests : IDisposable
         {
             Elements =
             [
-                new() { Id = "st-1", Type = LayoutElementType.Station, Name = "站點 1", X = 1, Y = 1, W = 2, H = 2, Rotation = 0 },
+                new() { Id = "st-1", Type = LayoutElementType.Conv, Name = "站點 1", X = 1, Y = 1, W = 2, H = 2, Rotation = 0 },
                 new() { Id = "vh-1", Type = LayoutElementType.Vehicle, Name = "搬送機 1", X = 10, Y = 1, W = 2.5, H = 1.2, Rotation = 0 },
-                new() { Id = "eq-1", Type = LayoutElementType.Dock, Name = "對接設備 1", X = 1, Y = 8, W = 2, H = 2, Rotation = 0 },
+                new() { Id = "eq-1", Type = LayoutElementType.Eq, Name = "對接設備 1", X = 1, Y = 8, W = 2, H = 2, Rotation = 0 },
                 new() { Id = "rk-1", Type = LayoutElementType.Rack, Name = "料架 1", X = 6, Y = 8, W = 12, H = 1.5, Rotation = 0,
                         Row = "01", ColFrom = 1, ColTo = 10, Levels = 5, LevelHeight = 2.5 },
                 .. conveyors,
@@ -43,7 +43,7 @@ public sealed class ConveyorTests : IDisposable
         Assert.Equal(new LayoutPoint(10, 1.6), cv.ToPoint);
         Assert.Null(cv.FromPoint);
         var json = File.ReadAllText(path);
-        Assert.Contains("\"formatVersion\": 2", json); // 用到雙向與交接點：格式版本 2
+        Assert.Contains("\"formatVersion\": 11", json); // 有 Conv 時為 11（ADR-0026）
         Assert.Contains("\"bidirectional\": true", json);
         Assert.Contains("\"toPoint\"", json);
         Assert.DoesNotContain("\"fromPoint\"", json);
@@ -73,7 +73,7 @@ public sealed class ConveyorTests : IDisposable
 
         Assert.Equal(2, issues.Count);
         Assert.Contains(issues, i => i.Message.Contains("交接點") && i.ElementIds.SequenceEqual(["cv-1"]));
-        Assert.Contains(issues, i => i.Message.Contains("站點、工站點、Conv 或搬送機") && i.ElementIds.SequenceEqual(["cv-2"]));
+        Assert.Contains(issues, i => i.Message.Contains("Conv、工站點、EQ 或搬送機") && i.ElementIds.SequenceEqual(["cv-2"]));
     }
 
     [Theory]

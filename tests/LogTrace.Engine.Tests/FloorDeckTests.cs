@@ -35,7 +35,7 @@ public sealed class FloorDeckTests
 
         var json = PlantConfigFile.Serialize(doc);
 
-        Assert.Contains("\"formatVersion\": 10", json);
+        Assert.Contains("\"formatVersion\": 11", json);
         Assert.Contains("\"deck\": \"upper\"", json);
         Assert.Contains("\"upperHeight\": 2.2", json);
         var back = PlantConfigFile.Deserialize(json).Layout;

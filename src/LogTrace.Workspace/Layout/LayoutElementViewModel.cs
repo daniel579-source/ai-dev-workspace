@@ -328,12 +328,17 @@ public sealed partial class LayoutElementViewModel : ObservableObject
 /// <summary>元素種類的名稱與新增時的預設值（沿用 Layout 編輯器原型）。</summary>
 public static class LayoutElementTypes
 {
-    public static IReadOnlyList<LayoutElementType> Addable { get; } =
+    /// <summary>新增按鈕的分組（ADR-0026 第 6 點）：本公司設備、其他公司、輔助。</summary>
+    public static IReadOnlyList<LayoutElementTypeGroup> Groups { get; } =
     [
-        LayoutElementType.Station, LayoutElementType.Workstation, LayoutElementType.Rack, LayoutElementType.Vehicle, LayoutElementType.Rm, LayoutElementType.Dock, LayoutElementType.Eq,
-        LayoutElementType.FireDoor, LayoutElementType.Elevator, LayoutElementType.Conveyor, LayoutElementType.Rail, LayoutElementType.Fence, LayoutElementType.FenceGate,
-        LayoutElementType.Area, LayoutElementType.Label,
+        new("本公司設備", [LayoutElementType.Conv, LayoutElementType.Workstation, LayoutElementType.Vehicle, LayoutElementType.Rm, LayoutElementType.Elevator,
+            LayoutElementType.Rack, LayoutElementType.FireDoor]),
+        new("其他公司", [LayoutElementType.Eq]),
+        new("輔助", [LayoutElementType.Conveyor, LayoutElementType.Rail, LayoutElementType.Fence, LayoutElementType.FenceGate, LayoutElementType.Area, LayoutElementType.Label]),
     ];
+
+    /// <summary>可以新增的種類（依分組的順序）。</summary>
+    public static IReadOnlyList<LayoutElementType> Addable { get; } = [.. Groups.SelectMany(g => g.Types)];
 
     /// <summary>
     /// 元素清單與下拉選單的顯示順序：先依類型（新增按鈕的順序），同類型再依名稱（自然排序）；
@@ -380,11 +385,10 @@ public static class LayoutElementTypes
 
     public static string Label(LayoutElementType type) => type switch
     {
-        LayoutElementType.Station => "站點",
+        LayoutElementType.Conv => "Conv", // 原本的站點與原本的 Conv（dock）合併（ADR-0026）
         LayoutElementType.Rack => "料架",
         LayoutElementType.Vehicle => "搬送機",
         LayoutElementType.Rm => "RM",
-        LayoutElementType.Dock => "Conv", // 設定檔的 type 仍為 dock（2026-11-14 使用者決定改名）
         LayoutElementType.FireDoor => "防火門",
         LayoutElementType.Rail => "導軌",
         LayoutElementType.Elevator => "電梯",
@@ -400,11 +404,10 @@ public static class LayoutElementTypes
 
     public static string IdPrefix(LayoutElementType type) => type switch
     {
-        LayoutElementType.Station => "st",
+        LayoutElementType.Conv => "st",
         LayoutElementType.Rack => "rk",
         LayoutElementType.Vehicle => "vh",
         LayoutElementType.Rm => "rm",
-        LayoutElementType.Dock => "eq",
         LayoutElementType.FireDoor => "fd",
         LayoutElementType.Rail => "rl",
         LayoutElementType.Elevator => "ev",
@@ -414,21 +417,20 @@ public static class LayoutElementTypes
         LayoutElementType.Workstation => "ws",
         LayoutElementType.Fence => "fc",
         LayoutElementType.FenceGate => "fg",
-        LayoutElementType.Eq => "eqp", // Conv（dock）已經用 eq
+        LayoutElementType.Eq => "eqp", // 舊設定檔中原本的 Conv（dock）是 eq 開頭
         _ => "el",
     };
 
     /// <summary>預設尺寸（寬、深、高，公尺）。</summary>
     public static (double W, double H, double Height) DefaultSize(LayoutElementType type) => type switch
     {
-        LayoutElementType.Station => (2, 2, 0.8),
+        LayoutElementType.Conv => (2, 2, 0.8),
         LayoutElementType.Workstation => (2, 2, 0.8),
         LayoutElementType.FenceGate => (1, 0.1, 2.5),
         LayoutElementType.Eq => (1.5, 1.5, 1.8),
         LayoutElementType.Rack => (12, 1.5, 0),
         LayoutElementType.Vehicle => (2.5, 1.2, 0.8),
         LayoutElementType.Rm => (2, 1.2, 12.5), // 與新料架預設的高度相同（5 層 × 2.5 公尺，#123 使用者決定）
-        LayoutElementType.Dock => (2, 2, 0.8),
         LayoutElementType.FireDoor => (2, 0.5, 3),
         LayoutElementType.Elevator => (2, 2, 3),
         LayoutElementType.Area => (6, 4, 0),
@@ -463,3 +465,6 @@ public sealed partial class RailHandleViewModel(LayoutElementViewModel rail, boo
     [ObservableProperty]
     public partial bool IsSelected { get; set; }
 }
+
+/// <summary>新增按鈕的一組：標題與種類。</summary>
+public sealed record LayoutElementTypeGroup(string Title, IReadOnlyList<LayoutElementType> Types);

@@ -13,8 +13,8 @@ public sealed class StorageStateTests
         Elements =
         [
             new() { Id = "vh-1", Type = LayoutElementType.Vehicle, Name = "SRCA01", Aliases = ["SRCA01"] },
-            new() { Id = "st-1", Type = LayoutElementType.Station, Name = "入庫口1", Aliases = ["A-01"] },
-            new() { Id = "st-2", Type = LayoutElementType.Station, Name = "出庫口1", Aliases = ["B-01"] },
+            new() { Id = "st-1", Type = LayoutElementType.Conv, Name = "入庫口1", Aliases = ["A-01"] },
+            new() { Id = "st-2", Type = LayoutElementType.Conv, Name = "出庫口1", Aliases = ["B-01"] },
         ],
     };
 
@@ -38,7 +38,7 @@ public sealed class StorageStateTests
     [Fact]
     public void 還沒有相關LOG的儲位_是未取得資訊()
     {
-        var world = World(E(1, EffectKinds.PalletRead, (FieldKinds.Station, "A-01"), (FieldKinds.Pallet, "PLT-1")), Created(2, "C1", "PLT-1"));
+        var world = World(E(1, EffectKinds.PalletRead, (FieldKinds.Conv, "A-01"), (FieldKinds.Pallet, "PLT-1")), Created(2, "C1", "PLT-1"));
 
         Assert.Empty(world.Final.Storage);
     }
@@ -47,7 +47,7 @@ public sealed class StorageStateTests
     public void 派送目的地是儲位_作業完成時放入()
     {
         var world = World(
-            E(1, EffectKinds.PalletRead, (FieldKinds.Station, "A-01"), (FieldKinds.Pallet, "PLT-1")),
+            E(1, EffectKinds.PalletRead, (FieldKinds.Conv, "A-01"), (FieldKinds.Pallet, "PLT-1")),
             Created(2, "C1", "PLT-1"),
             Dispatch(3, "C1", "0100302"),
             Finished(4, "C1"));
@@ -62,7 +62,7 @@ public sealed class StorageStateTests
     public void 派送目的地是儲位_抵達時放入()
     {
         var world = World(
-            E(1, EffectKinds.PalletRead, (FieldKinds.Station, "A-01"), (FieldKinds.Pallet, "PLT-1")),
+            E(1, EffectKinds.PalletRead, (FieldKinds.Conv, "A-01"), (FieldKinds.Pallet, "PLT-1")),
             Created(2, "C1", "PLT-1"),
             Dispatch(3, "C1", "0100302"),
             Arrived(4, "C1", "0100302"));
@@ -74,7 +74,7 @@ public sealed class StorageStateTests
     public void 目的地不是儲位_作業完成仍不推導貨物位置()
     {
         var world = World(
-            E(1, EffectKinds.PalletRead, (FieldKinds.Station, "A-01"), (FieldKinds.Pallet, "PLT-1")),
+            E(1, EffectKinds.PalletRead, (FieldKinds.Conv, "A-01"), (FieldKinds.Pallet, "PLT-1")),
             Created(2, "C1", "PLT-1"),
             Dispatch(3, "C1", "B-01"),
             Finished(4, "C1"));

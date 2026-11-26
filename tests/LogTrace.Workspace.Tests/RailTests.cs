@@ -141,7 +141,7 @@ public sealed class RailEditorTests : IDisposable
         _vm.SelectedElement = _vm.Elements.Single(e => e.Id == rail.Id);
         _vm.DeleteSelectedCommand.Execute(null);
         Assert.Null(_vm.Elements.Single(e => e.Id == vehicle.Id).Rail);
-        Assert.Contains("1 台搬送機的導軌指定已清除", _vm.Status);
+        Assert.Contains("1 個設備（搬送機、RM、Conv）的導軌指定已清除", _vm.Status);
         _vm.UndoCommand.Execute(null);
         Assert.Equal(rail.Id, _vm.Elements.Single(e => e.Id == vehicle.Id).Rail);
     }

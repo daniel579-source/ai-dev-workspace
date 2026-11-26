@@ -288,8 +288,8 @@ public static class PlantConfigFile
                 else if (LayoutFloors.DeckOf(e, _ => null) != LayoutFloors.DeckOf(rail, _ => null))
                     issues.Add(new($"「{Label(e)}」和它的導軌「{Label(rail)}」不在同一個層段（上層／下層）。", [e.Id, rail.Id]));
             }
-            if (e.Rail is not null && e.Type is not (LayoutElementType.Vehicle or LayoutElementType.Rm))
-                issues.Add(new($"「{Label(e)}」不能指定導軌；只有搬送機與 RM 可以。", [e.Id]));
+            if (e.Rail is not null && !LayoutElement.CanHaveRail(e.Type))
+                issues.Add(new($"「{Label(e)}」不能指定導軌；只有搬送機、RM 與 Conv 可以。", [e.Id]));
             if (e.Owner is { } ownerId)
             {
                 if (!LayoutElement.HasOwner(e.Type))

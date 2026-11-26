@@ -144,6 +144,10 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     [ObservableProperty]
     public partial VehiclePlacement? Placement { get; set; }
 
+    /// <summary>搭配導軌的 Conv 在目前時刻的位置與依據（ADR-0028）；其他元素為 null。</summary>
+    [ObservableProperty]
+    public partial ConvPlacement? ConvPlace { get; set; }
+
     /// <summary>料架的各列。</summary>
     public ObservableCollection<RackCellViewModel> Cells { get; } = [];
 
@@ -223,6 +227,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
 {
     WorldModel? _model;
     VehicleMotion? _motion;
+    ConvMotion? _convMotion;
     IReadOnlyList<Stall> _stalls = [];
     /// <summary>目前時刻的可能卡住：元素 id → 卡住的時段（含與沒有 LOG 重疊而不判定的）。</summary>
     Dictionary<string, List<Stall>> _stallsNow = new(StringComparer.Ordinal);
@@ -314,6 +319,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
         _effectAt = model.Effects.GroupBy(x => x.Sequence).ToDictionary(g => g.Key, g => g.ToList());
         _events = events.ToDictionary(e => e.Sequence);
         _motion = new VehicleMotion(model.Effects, layout, seq => _events.TryGetValue(seq, out var ev) ? ev.Timestamp : null);
+        _convMotion = new ConvMotion(model.PalletMoves, layout, seq => _events.TryGetValue(seq, out var ev) ? ev.Timestamp : null);
         var byId = layout.Elements.GroupBy(e => e.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
         LoadFloors(layout);
         _rows = layout.Rows ?? [];
@@ -379,6 +385,13 @@ public sealed partial class PlaybackViewModel : ObservableObject
                 el.Look = w.Alarms.ContainsKey(el.Id) ? ElementLook.Alarm
                     : pallets.Count > 0 ? ElementLook.Occupied
                     : s is null ? ElementLook.Unknown : ElementLook.Empty;
+                // 搭配導軌的 Conv（ADR-0028）：位置依貨物推估；不在擺放的位置時標為推估
+                if (el.Type == LayoutElementType.Conv && _convMotion?.PlacementAt(el.Id, w.Sequence, _momentTime) is { } cp)
+                {
+                    el.ConvPlace = cp;
+                    el.Placement = new VehiclePlacement(cp.X, cp.Y, cp.IsEstimated ? VehiclePositionBasis.Estimated : VehiclePositionBasis.Unknown, cp.Cause);
+                    el.IsEstimated = cp.IsEstimated;
+                }
                 break;
             }
             case LayoutElementType.Vehicle or LayoutElementType.Rm:
@@ -570,6 +583,12 @@ public sealed partial class PlaybackViewModel : ObservableObject
             _ => floor,
         };
 
+    /// <summary>搭配導軌的 Conv 位置依據的文字（ADR-0028）。</summary>
+    string ConvPlacementText(ConvPlacement p) =>
+        p.Cause is null ? "Layout 擺放的位置（還沒有依貨物對齊過）"
+        : p.Moving ? $"推估：移動中，前往對齊「{NameOf(p.Target)}」（兩次對齊之間依時間內插）"
+        : $"推估：對齊「{NameOf(p.Target)}」（{(p.Entering ? "貨物從那裡進入" : "貨物往那裡離開")}；LOG 沒有記錄 Conv 的位置）";
+
     /// <summary>搬送機位置依據的文字（ADR-0005 第 10 點）。</summary>
     public static string PlacementText(VehiclePositionBasis basis) => basis switch
     {
@@ -640,6 +659,8 @@ public sealed partial class PlaybackViewModel : ObservableObject
                     Detail.Add(Line("貨物", PalletText(p), p.LocationCause));
                 if (w.IsInconsistent(el.Id))
                     Detail.Add(Line("不一致", "命令說貨物在這個 Conv，但在席是 OFF（不判斷哪一邊才對）", s?.PresenceCause));
+                if (el.ConvPlace is { } cp)
+                    Detail.Add(Line("位置", ConvPlacementText(cp), cp.Cause));
                 break;
             }
             case LayoutElementType.Vehicle or LayoutElementType.Rm:

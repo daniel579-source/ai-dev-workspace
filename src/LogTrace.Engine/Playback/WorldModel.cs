@@ -54,6 +54,17 @@ public sealed class WorldModel
     /// <summary>有關聯輸送線的防火門：平時狀態（推估），以及每條輸送線的 id 與兩端元素 id。</summary>
     readonly List<(string Id, DoorState? Usual, IReadOnlyList<(string Conveyor, string From, string To)> Conveyors)> _doors;
 
+    /// <summary>
+    /// 貨物的移動紀錄（從頭推導時記錄一次；ADR-0028 依此推估搭配導軌的 Conv 的位置）：事件序號、棧板、移動前與移動後的位置。
+    /// </summary>
+    public sealed record PalletMove(long Sequence, string Pallet, LocationKind FromKind, string? FromId, LocationKind ToKind, string? ToId);
+
+    readonly List<PalletMove> _moves = [];
+    bool _recording;
+
+    /// <summary>所有貨物的移動（依事件序號）。</summary>
+    public IReadOnlyList<PalletMove> PalletMoves => _moves;
+
     /// <summary>Conv 的元素 id → 所屬的 BCR（棧板 BCR 在前）與磅秤（ADR-0027）。</summary>
     readonly Dictionary<string, List<LayoutElement>> _bcrsOf = new(StringComparer.Ordinal), _scalesOf = new(StringComparer.Ordinal);
 
@@ -89,11 +100,13 @@ public sealed class WorldModel
 
         var state = new WorldState();
         _snapshots.Add((0, state.Clone()));
+        _recording = true;
         for (int i = 0; i < _effects.Count; i++)
         {
             Apply(state, _effects[i]);
             if ((i + 1) % Math.Max(1, snapshotEvery) == 0) _snapshots.Add((i + 1, state.Clone()));
         }
+        _recording = false;
         Final = state;
     }
 
@@ -232,6 +245,7 @@ public sealed class WorldModel
         if (p.Location == LocationKind.Storage && p.LocationId is { } old && old != id && w.Storage.TryGetValue(old, out var there) && there.Pallet == p.Id)
             w.Storage[old] = new StorageSlotState(null, cause);
         CheckDoorCrossing(w, p, kind, id, cause);
+        if (_recording && (p.Location != kind || p.LocationId != id)) _moves.Add(new PalletMove(cause, p.Id, p.Location, p.LocationId, kind, id));
         (p.Location, p.LocationId, p.LocationCause) = (kind, id, cause);
         if (kind == LocationKind.Storage) PutInStorage(w, id, p.Id, cause);
     }

@@ -552,7 +552,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         var extra = removed.Count - selected.Count;
         var what = selected.Count == 1 ? $"「{selected[0].Name}」" : $" {selected.Count} 個元素";
         Status = (extra > 0 ? $"已刪除{what}與連到的 {extra} 條輸送線。" : $"已刪除{what}。")
-            + (clearedVehicles > 0 ? $" {clearedVehicles} 台搬送機的導軌指定已清除。" : "");
+            + (clearedVehicles > 0 ? $" {clearedVehicles} 個設備（搬送機、RM、Conv）的導軌指定已清除。" : "");
     }
 
     // ---- 選取（ADR-0006 第 10 點）：IsSelected 標示所有選取的元素；只選一個時 SelectedElement 為它，屬性面板才顯示 ----

@@ -254,7 +254,7 @@ public sealed class LayoutEditorSmokeTests : IDisposable
     }
 
     [Fact]
-    public void 導軌_新增跑道形導軌_插入點_搬送機指定導軌後存檔()
+    public void 導軌_新增跑道形導軌_插入點_搬送機與Conv指定導軌後存檔()
     {
         var dataRoot = Path.Combine(_tmp.Path, "AppData");
         using var app = FlaUI.Core.Application.Launch(new ProcessStartInfo(ImportSmokeTests.AppExe(), $"--data-root \"{dataRoot}\""));
@@ -283,15 +283,17 @@ public sealed class LayoutEditorSmokeTests : IDisposable
 
             In(editor, "Add_Vehicle").AsButton().Invoke();
             In(editor, "VehicleRail").AsComboBox().Select(0);
+            In(editor, "Add_Conv").AsButton().Invoke(); // Conv 也可以指定導軌（ADR-0028）
+            In(editor, "VehicleRail").AsComboBox().Select(0);
             In(editor, "SaveConfig").AsButton().Invoke();
             Assert.True(Retry.WhileFalse(() => In(editor, "EditorStatus").Name.Contains("修訂 1"), TimeSpan.FromSeconds(10)).Result,
                 In(editor, "EditorStatus").Name);
 
             var json = File.ReadAllText(Path.Combine(dataRoot, "Plants", "導軌測試廠.json"));
-            Assert.Contains("\"formatVersion\": 4", json);
+            Assert.Contains("\"formatVersion\": 13", json); // Conv 指定導軌（ADR-0028）
             Assert.Contains("\"type\": \"rail\"", json);
             Assert.Contains("\"closed\": true", json);
-            Assert.Contains("\"rail\": \"rl-1\"", json);
+            Assert.Equal(2, json.Split("\"rail\": \"rl-1\"").Length - 1); // 搬送機與 Conv
             editor.AsWindow().Close();
         }
         finally

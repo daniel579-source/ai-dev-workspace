@@ -54,6 +54,9 @@ public sealed class WorldModel
     /// <summary>有關聯輸送線的防火門：平時狀態（推估），以及每條輸送線的 id 與兩端元素 id。</summary>
     readonly List<(string Id, DoorState? Usual, IReadOnlyList<(string Conveyor, string From, string To)> Conveyors)> _doors;
 
+    /// <summary>Conv 的元素 id → 所屬的 BCR（棧板 BCR 在前）與磅秤（ADR-0027）。</summary>
+    readonly Dictionary<string, List<LayoutElement>> _bcrsOf = new(StringComparer.Ordinal), _scalesOf = new(StringComparer.Ordinal);
+
     /// <param name="effects">依事件序號排列的效果。</param>
     /// <param name="layout">廠別設定的 Layout：LOG 中的編號以別名（不分大小寫）對應到元素。</param>
     public WorldModel(IReadOnlyList<EventEffect> effects, LayoutSection layout, string presenceSignal, int snapshotEvery = DefaultSnapshotEvery)
@@ -75,6 +78,14 @@ public sealed class WorldModel
             .Select(e => (e.Id, e.DoorState, Conveyors: (IReadOnlyList<(string, string, string)>)(e.Conveyors ?? [])
                 .Where(conveyors.ContainsKey).Distinct(StringComparer.Ordinal).Select(c => (c, conveyors[c].Item1, conveyors[c].Item2)).ToList()))
             .Where(d => d.Conveyors.Count > 0).ToList();
+        // BCR 與磅秤所屬的 Conv（ADR-0027）：棧板 BCR 排在桶 BCR 前面
+        foreach (var e in layout.Elements.Where(e => LayoutElement.HasOwner(e.Type) && e.Owner is not null))
+        {
+            var map = e.Type == LayoutElementType.Bcr ? _bcrsOf : _scalesOf;
+            if (!map.TryGetValue(e.Owner!, out var list)) map[e.Owner!] = list = [];
+            list.Add(e);
+        }
+        foreach (var list in _bcrsOf.Values) list.Sort((a, b) => (a.Reads == BcrReads.Bin).CompareTo(b.Reads == BcrReads.Bin));
 
         var state = new WorldState();
         _snapshots.Add((0, state.Clone()));
@@ -144,6 +155,24 @@ public sealed class WorldModel
             if (target is null) continue;
             if (open.Remove(target.Id, out var o)) list.Add((target.Id, o.Code, o.Start, x.Sequence));
             if (x.Effect == EffectKinds.AlarmRaised) open[target.Id] = (x.Get(FieldKinds.AlarmCode), x.Sequence);
+        }
+        foreach (var (id, (code, start)) in open) list.Add((id, code, start, null));
+        return list.OrderBy(a => a.Item3).ToList();
+    }
+
+    /// <summary>
+    /// BCR 讀取失敗的期間（ADR-0027 第 3 點）：從讀取失敗到下一次讀到條碼或手動輸入；之後一直沒有時 EndSequence 為 null（延伸到案件結束）。
+    /// 連續的失敗算同一段，代碼取第一次的。
+    /// </summary>
+    public IReadOnlyList<(string ElementId, string? Code, long StartSequence, long? EndSequence)> BcrFailurePeriods()
+    {
+        var open = new Dictionary<string, (string? Code, long Start)>(StringComparer.Ordinal);
+        var list = new List<(string, string?, long, long?)>();
+        foreach (var x in _effects)
+        {
+            if (x.Effect is not (EffectKinds.BcrFailed or EffectKinds.BcrRead or EffectKinds.BcrManual) || BcrOf(x) is not { } bcr) continue;
+            if (x.Effect == EffectKinds.BcrFailed) open.TryAdd(bcr.Id, (x.Get(FieldKinds.ErrorCode)?.Trim(), x.Sequence));
+            else if (open.Remove(bcr.Id, out var o)) list.Add((bcr.Id, o.Code, o.Start, x.Sequence));
         }
         foreach (var (id, (code, start)) in open) list.Add((id, code, start, null));
         return list.OrderBy(a => a.Item3).ToList();
@@ -444,6 +473,58 @@ public sealed class WorldModel
                 (d.State, d.StateCause) = (x.Effect == EffectKinds.FireDoorOpened ? DoorState.Open : DoorState.Closed, seq);
                 break;
             }
+            // ---- BCR 與磅秤（ADR-0027） ----
+            case EffectKinds.BcrReadStart when BcrOf(x) is { } bcr:
+            {
+                var b = BcrStateOf(w, bcr.Id);
+                b.ReadingSince ??= seq; // 重複送出開始讀取時，從第一次開始計算
+                // 磅秤等待中（推估）：所屬 Conv 的棧板 BCR 開始讀取時
+                if (bcr.Reads != BcrReads.Bin && bcr.Owner is { } conv)
+                    foreach (var scale in _scalesOf.GetValueOrDefault(conv) ?? [])
+                        ScaleStateOf(w, scale.Id).WaitingSince ??= seq;
+                break;
+            }
+            case EffectKinds.BcrReadStop when BcrOf(x) is { } bcr:
+                BcrStateOf(w, bcr.Id).ReadingSince = null; // 沒有回傳時保留上一次的結果，不算異常（12a）
+                break;
+            case EffectKinds.BcrRead or EffectKinds.BcrManual when BcrOf(x) is { } bcr:
+            {
+                var b = BcrStateOf(w, bcr.Id);
+                var codes = Barcodes(x);
+                (b.ReadingSince, b.Result, b.ResultCause, b.Barcodes, b.ErrorCode, b.BinsPallet) =
+                    (null, x.Effect == EffectKinds.BcrManual ? BcrResult.Manual : BcrResult.Read, seq, codes, null, null);
+                // 桶 BCR：所屬 Conv 上只有一個棧板時，桶加入該棧板（比照「棧板加入一個桶」，Jev 0.64）
+                if (bcr.Reads == BcrReads.Bin && x.Effect == EffectKinds.BcrRead && bcr.Owner is { } conv && codes.Count > 0
+                    && w.PalletsAt(LocationKind.Station, conv).Take(2).ToList() is [var p])
+                {
+                    p.Bins = [.. (p.Bins ?? []).Concat(codes).Distinct(StringComparer.Ordinal)];
+                    b.BinsPallet = p.Id;
+                }
+                break;
+            }
+            case EffectKinds.BcrFailed when BcrOf(x) is { } bcr:
+            {
+                var b = BcrStateOf(w, bcr.Id);
+                (b.ReadingSince, b.Result, b.ResultCause, b.Barcodes, b.ErrorCode, b.BinsPallet) =
+                    (null, BcrResult.Failed, seq, [], x.Get(FieldKinds.ErrorCode)?.Trim(), null);
+                // 讀取失敗時 PLC 清除磅秤：磅秤不再等待（Jev 0.77）
+                if (bcr.Owner is { } conv)
+                    foreach (var scale in _scalesOf.GetValueOrDefault(conv) ?? [])
+                        if (w.Scales.TryGetValue(scale.Id, out var s)) s.WaitingSince = null;
+                break;
+            }
+            case EffectKinds.ScaleRead when ScaleOf(x) is { } scale && x.Get(FieldKinds.Weight) is { } text:
+            {
+                var s = ScaleStateOf(w, scale.Id);
+                (s.WaitingSince, s.WeightText, s.Weight, s.WeightCause) = (null, text.Trim(), ParseDouble(text), seq);
+                s.Pallet = x.Get(FieldKinds.Pallet)
+                    ?? (scale.Owner is { } conv && w.PalletsAt(LocationKind.Station, conv).Take(2).ToList() is [var p] ? p.Id : null);
+                break;
+            }
+            case EffectKinds.WeightLimits when x.Get(FieldKinds.Pallet) is { } pallet:
+                w.WeightLimits[pallet.Trim()] = new WeightLimitState(ParseDouble(x.Get(FieldKinds.MaxWeight)), ParseDouble(x.Get(FieldKinds.MinWeight)), seq);
+                break;
+
             case EffectKinds.AlarmRaised or EffectKinds.AlarmCleared:
             {
                 var target = Resolve(x.Get(FieldKinds.Vehicle)) ?? Resolve(x.Get(FieldKinds.Conv)) ?? Resolve(x.Get(FieldKinds.Eq))
@@ -463,6 +544,30 @@ public sealed class WorldModel
         if (e.FromFloor is { } from) (e.Floor, e.FloorCause, e.FloorBasis) = (from, seq, basis);
         (e.Work, e.WorkCause, e.Command, e.Destination, e.FromFloor, e.ToFloor) = (VehicleWork.Idle, seq, null, null, null, null);
     }
+
+    /// <summary>
+    /// 效果的 BCR（ADR-0027）：bcr 欄位（沒有時用 conv 欄位）對應到 BCR 元素；對應到 Conv 時，取所屬為該 Conv 的 BCR（棧板 BCR 優先）。
+    /// </summary>
+    LayoutElement? BcrOf(EventEffect x) => OwnedBy(x.Get(FieldKinds.Bcr) ?? x.Get(FieldKinds.Conv), LayoutElementType.Bcr, _bcrsOf);
+
+    /// <summary>效果的磅秤：scale 欄位（沒有時用 conv 欄位）對應到磅秤元素；對應到 Conv 時，取所屬為該 Conv 的磅秤。</summary>
+    LayoutElement? ScaleOf(EventEffect x) => OwnedBy(x.Get(FieldKinds.Scale) ?? x.Get(FieldKinds.Conv), LayoutElementType.Scale, _scalesOf);
+
+    LayoutElement? OwnedBy(string? code, LayoutElementType type, Dictionary<string, List<LayoutElement>> owned) =>
+        Resolve(code) is not { } e ? null
+        : e.Type == type ? e
+        : LayoutElement.IsStationLike(e.Type) && owned.TryGetValue(e.Id, out var list) ? list.FirstOrDefault() : null;
+
+    /// <summary>條碼欄位的值：逗號分隔的拆開，去除空白與空的。</summary>
+    static List<string> Barcodes(EventEffect x) =>
+        (x.GetAll(FieldKinds.Barcode) ?? []).SelectMany(v => v.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)).ToList();
+
+    static BcrState BcrStateOf(WorldState w, string id) => w.Bcrs.TryGetValue(id, out var b) ? b : w.Bcrs[id] = new BcrState();
+
+    static ScaleState ScaleStateOf(WorldState w, string id) => w.Scales.TryGetValue(id, out var s) ? s : w.Scales[id] = new ScaleState();
+
+    static double? ParseDouble(string? s) =>
+        double.TryParse(s?.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;
 
     static int? ParseInt(string? s) => int.TryParse(s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : null;
 }

@@ -38,6 +38,17 @@ public enum LayoutElementType
     FenceGate,
     /// <summary>EQ（有 LOG 意義，可以有別名，ADR-0026）：其他公司的設備（LOG 中的 EQxxx）；貨物在這裡交出。門朝緊鄰的 Conv（ADR-0020 補充）。</summary>
     Eq,
+    /// <summary>BCR（條碼讀取器，有 LOG 意義，可以有別名，ADR-0027）：擺在 Conv 旁，以 owner 指定所屬 Conv；reads 為 bin 時是桶 BCR。</summary>
+    Bcr,
+    /// <summary>磅秤（有 LOG 意義，可以有別名，ADR-0027）：以 owner 指定所屬 Conv。</summary>
+    Scale,
+}
+
+/// <summary>BCR 讀的對象（ADR-0027）：棧板（沒有寫出）或桶。JSON 中為 pallet、bin。</summary>
+public enum BcrReads
+{
+    Pallet,
+    Bin,
 }
 
 /// <summary>
@@ -157,6 +168,12 @@ public sealed class LayoutElement
     /// <summary>電梯服務的樓層（ADR-0006 第 15 點）：在每一層同一個位置畫出來；電梯不使用 floor。</summary>
     public List<string>? ServedFloors { get; set; }
 
+    /// <summary>BCR 與磅秤所屬的 Conv（元素 id，ADR-0027）：LOG 只寫 Conv 編號時，以此對應到 BCR 或磅秤。</summary>
+    public string? Owner { get; set; }
+
+    /// <summary>BCR 讀的對象（ADR-0027）：bin＝桶 BCR；null（不寫出）＝棧板 BCR。</summary>
+    public BcrReads? Reads { get; set; }
+
     /// <summary>自訂屬性（ADR-0006 第 6 點）：鍵＝值，值一律是文字；保持輸入順序。</summary>
     public List<KeyValuePair<string, string>>? Props { get; set; }
 
@@ -166,7 +183,10 @@ public sealed class LayoutElement
 
     public static bool CanHaveAliases(LayoutElementType type) =>
         type is LayoutElementType.Conv or LayoutElementType.Vehicle or LayoutElementType.Eq or LayoutElementType.FireDoor or LayoutElementType.Elevator
-            or LayoutElementType.Rm or LayoutElementType.Workstation;
+            or LayoutElementType.Rm or LayoutElementType.Workstation or LayoutElementType.Bcr or LayoutElementType.Scale;
+
+    /// <summary>以 owner 指定所屬 Conv 的種類：BCR 與磅秤（ADR-0027）。</summary>
+    public static bool HasOwner(LayoutElementType type) => type is LayoutElementType.Bcr or LayoutElementType.Scale;
 
     /// <summary>可以當作輸送線兩端的元素：Conv、工站點（ADR-0020）、EQ（ADR-0026）、搬送機。電梯不接輸送線（ADR-0006）。</summary>
     public static bool CanBeConveyorEnd(LayoutElementType type) =>
@@ -456,15 +476,17 @@ public sealed class PlantConfigDocument
     /// 7：RM 與排的配置表（#123，ADR-0019）。8：工站點、圍欄、圍欄門（ADR-0020）。9：EQ（ADR-0020 補充）。
     /// 10：同一樓層的上層與下層（元素的 deck、樓層的 upperHeight；舊版程式會把上層元素畫在下層、存檔時遺失上層高度）。
     /// 11：站點與原本的 Conv（dock）合併為 Conv，type 寫 conv（ADR-0026；舊版程式不認得 conv 這個種類）。
+    /// 12：BCR 與磅秤（ADR-0027；舊版程式不認得 bcr、scale 這兩個種類）。
     /// 存檔時只寫實際用到的最低版本，讓舊版程式照常開啟（ADR-0006 第 7 點）。
     /// </summary>
-    public const int CurrentFormatVersion = 11;
+    public const int CurrentFormatVersion = 12;
 
     /// <summary>
-    /// 這份設定需要的格式版本：有 Conv 時為 11；有上層元素或填了上層高度時為 10；有 EQ 時為 9；有工站點、圍欄、圍欄門時為 8；有 RM 或排的配置表時為 7；有填樓板高度時為 6；有電梯時為 5；有導軌時為 4；有防火門時為 3；有雙向或連到搬送機（有交接點）的輸送線時為 2；否則為 1。
+    /// 這份設定需要的格式版本：有 BCR 或磅秤時為 12；有 Conv 時為 11；有上層元素或填了上層高度時為 10；有 EQ 時為 9；有工站點、圍欄、圍欄門時為 8；有 RM 或排的配置表時為 7；有填樓板高度時為 6；有電梯時為 5；有導軌時為 4；有防火門時為 3；有雙向或連到搬送機（有交接點）的輸送線時為 2；否則為 1。
     /// </summary>
     public int RequiredFormatVersion() =>
-        Layout.Elements.Any(e => e.Type == LayoutElementType.Conv) ? 11
+        Layout.Elements.Any(e => LayoutElement.HasOwner(e.Type)) ? 12
+        : Layout.Elements.Any(e => e.Type == LayoutElementType.Conv) ? 11
         : Layout.Elements.Any(e => e.Deck == LayoutDeck.Upper) || Layout.Floors?.Any(f => f.UpperHeight is not null) == true ? 10
         : Layout.Elements.Any(e => e.Type == LayoutElementType.Eq) ? 9
         : Layout.Elements.Any(e => e.Type is LayoutElementType.Workstation or LayoutElementType.Fence or LayoutElementType.FenceGate) ? 8

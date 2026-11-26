@@ -43,8 +43,8 @@ public sealed class LayoutEditorViewModelTests : IDisposable
 
         Assert.Equal(LayoutElementType.Conveyor, conveyor.Type);
         Assert.Equal(["st-1", "ws-1"], new[] { conveyor.From!, conveyor.To! }); // 依加入的順序：Conv、工站點（ADR-0020）
-        Assert.Equal(14, _vm.Elements.Count);
-        Assert.Equal(14, _vm.Elements.Select(e => e.Id).Distinct().Count());
+        Assert.Equal(16, _vm.Elements.Count);
+        Assert.Equal(16, _vm.Elements.Select(e => e.Id).Distinct().Count());
         Assert.True(_vm.IsDirty);
     }
 

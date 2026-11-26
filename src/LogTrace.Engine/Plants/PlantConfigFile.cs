@@ -246,7 +246,7 @@ public static class PlantConfigFile
         foreach (var e in elements)
         {
             if (e.Aliases is { Count: > 0 } && !LayoutElement.CanHaveAliases(e.Type))
-                issues.Add(new($"「{Label(e)}」不能有別名；只有 Conv、工站點、搬送機、RM、EQ、防火門、電梯可以。", [e.Id]));
+                issues.Add(new($"「{Label(e)}」不能有別名；只有 Conv、工站點、搬送機、RM、EQ、防火門、電梯、BCR、磅秤可以。", [e.Id]));
             if (e.Aliases?.Any(string.IsNullOrWhiteSpace) == true)
                 issues.Add(new($"「{Label(e)}」有空白的別名。", [e.Id]));
             if (e.Rotation is { } r && !AllowedRotations.Contains(r))
@@ -290,6 +290,15 @@ public static class PlantConfigFile
             }
             if (e.Rail is not null && e.Type is not (LayoutElementType.Vehicle or LayoutElementType.Rm))
                 issues.Add(new($"「{Label(e)}」不能指定導軌；只有搬送機與 RM 可以。", [e.Id]));
+            if (e.Owner is { } ownerId)
+            {
+                if (!LayoutElement.HasOwner(e.Type))
+                    issues.Add(new($"「{Label(e)}」不能指定所屬 Conv；只有 BCR 與磅秤可以。", [e.Id]));
+                else if (!elements.Any(x => x.Id == ownerId && LayoutElement.IsStationLike(x.Type)))
+                    issues.Add(new($"「{Label(e)}」指定的所屬 Conv「{ownerId}」不存在。", [e.Id]));
+            }
+            if (e.Reads is not null && e.Type != LayoutElementType.Bcr)
+                issues.Add(new($"「{Label(e)}」不能設定讀取對象；只有 BCR 可以。", [e.Id]));
             if (e.Type == LayoutElementType.FireDoor)
             {
                 foreach (var id in e.Conveyors ?? [])

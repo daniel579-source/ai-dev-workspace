@@ -31,6 +31,7 @@ export function listen(handlers) {
 export const LOOK = {
   unknown: 0xE5E7EB, empty: 0xFFFFFF, occupied: 0xBFDBFE, executing: 0xFDE68A, alarm: 0xFCA5A5,
   auxiliary: 0x94A3B8, doorOpen: 0x86EFAC, doorClosed: 0xF87171,
+  reading: 0x93C5FD, readOk: 0x86EFAC, manual: 0xFDBA74, // BCR 與磅秤（ADR-0027）
 };
 export const COLOR = {
   frame: 0x64748B, beam: 0xF59E0B, cargo: 0x93C5FD, rail: 0x94A3B8, conveyor: 0x94A3B8, blocked: 0xDC2626,
@@ -353,6 +354,44 @@ export function createViewer(opts = {}) {
     item.group.add(holder);
   }
 
+  function buildBcr(e, item) {
+    // BCR（ADR-0027）：立柱上的讀取頭（狀態顏色）與鏡頭；讀取中時從鏡頭射出藍色掃描光束，對準所屬 Conv 的台面
+    const head = Math.min(0.3, Math.max(0.12, Math.min(e.w, e.h)));
+    item.group.add(box(0.05, e.height, 0.05, frameMat, 0, e.height / 2, 0));
+    item.group.add(box(Math.max(0.2, e.w * 0.6), 0.04, Math.max(0.2, e.h * 0.6), darkMat, 0, 0.02, 0));
+    item.body = box(head, head * 0.7, head, mat(LOOK.unknown), 0, e.height + head * 0.35, 0);
+    item.group.add(item.body);
+    const lens = new THREE.Vector3(0, e.height + head * 0.35, 0);
+    // 光束的終點：所屬 Conv 的台面中心（世界座標轉成元件自己的座標）；沒有所屬 Conv 時朝前方 1.5 公尺
+    item.group.updateMatrixWorld(true);
+    const target = e.aim ? item.group.worldToLocal(new THREE.Vector3(e.aim[0], baseOf(e) + e.aim[2], e.aim[1])) : new THREE.Vector3(0, 0.3, 1.5);
+    const dir = target.clone().sub(lens);
+    const len = Math.max(dir.length(), 0.1);
+    const beam = new THREE.Mesh(new THREE.ConeGeometry(Math.min(0.35, len * 0.25), len, 16, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0x3B82F6, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide }));
+    beam.position.copy(lens.clone().add(dir.clone().multiplyScalar(0.5)));
+    beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir.clone().normalize()); // 錐尖在鏡頭、底面在台面
+    beam.visible = false;
+    item.beam = beam;
+    item.group.add(beam);
+  }
+
+  function buildScale(e, item) {
+    // 磅秤（ADR-0027）：貼在地板上的秤台（狀態顏色）與深色外框，一角有顯示器
+    const t = Math.max(0.05, e.height);
+    item.group.add(box(e.w, t * 0.5, e.h, darkMat, 0, t * 0.25, 0));
+    item.body = box(e.w * 0.9, t * 0.5, e.h * 0.9, mat(LOOK.unknown), 0, t * 0.75, 0);
+    item.group.add(item.body);
+    item.group.add(box(0.04, 0.9, 0.04, frameMat, -e.w / 2 + 0.05, 0.45, -e.h / 2 + 0.05));
+    item.group.add(box(0.28, 0.18, 0.06, darkMat, -e.w / 2 + 0.05, 0.95, -e.h / 2 + 0.05));
+    // 等待中（推估）時秤台上方的提示光圈
+    item.beam = new THREE.Mesh(new THREE.RingGeometry(Math.min(e.w, e.h) * 0.3, Math.min(e.w, e.h) * 0.45, 32).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0x3B82F6, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide }));
+    item.beam.position.y = t + 0.03;
+    item.beam.visible = false;
+    item.group.add(item.beam);
+  }
+
   function buildFence(e, item) {
     // 圍欄（ADR-0020）：沿折線的黃色網狀圍欄，不參與狀態
     const elevation = baseOf(e);
@@ -542,6 +581,8 @@ export function createViewer(opts = {}) {
       case 'fence': buildFence(e, item); break;
       case 'rm': place(item.group, e, elevation); buildRm(e, item); break;
       case 'fireDoor': place(item.group, e, elevation); buildFireDoor(e, item); break;
+      case 'bcr': place(item.group, e, elevation); buildBcr(e, item); break;
+      case 'scale': place(item.group, e, elevation); buildScale(e, item); break;
       case 'area': place(item.group, e, elevation); buildArea(e, item); break;
       case 'label':
         place(item.group, e, elevation);

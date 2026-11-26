@@ -319,6 +319,21 @@
                                       SelectedValuePath="Id" SelectedValue="{Binding Rail}" AutomationProperties.AutomationId="VehicleRail" />
                         </DockPanel>
 
+                        <!-- BCR 與磅秤所屬的 Conv（ADR-0027）：只列同一層的 Conv 與工站點 -->
+                        <StackPanel Visibility="{Binding HasOwner, Converter={StaticResource Visible}}">
+                            <DockPanel>
+                                <TextBlock Text="所屬 Conv" Style="{StaticResource Field}" />
+                                <Button DockPanel.Dock="Right" Content="×" Padding="6,0" Margin="4,0,0,0" ToolTip="清除所屬 Conv"
+                                        Command="{Binding DataContext.ClearOwnerCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                <ComboBox ItemsSource="{Binding DataContext.OwnerChoices, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="Name"
+                                          SelectedValuePath="Id" SelectedValue="{Binding Owner}" AutomationProperties.AutomationId="ElementOwner" />
+                            </DockPanel>
+                            <CheckBox Content="讀桶的條碼（桶 BCR）" IsChecked="{Binding IsBinBcr}" Margin="0,4,0,0"
+                                      Visibility="{Binding IsBcr, Converter={StaticResource Visible}}" AutomationProperties.AutomationId="BcrReadsBin" />
+                            <TextBlock Text="LOG 中只寫 Conv 編號時（例如讀取器名稱與 Conv 相同、磅秤回傳值），對應到所屬為該 Conv 的 BCR（棧板 BCR 優先）或磅秤；這時 BCR 不用設別名。先選取 Conv 再新增，會自動指定為所屬。"
+                                       TextWrapping="Wrap" Foreground="#777" Margin="0,4,0,6" />
+                        </StackPanel>
+
                         <!-- 防火門（ADR-0006 第 1 點 2026-11-06 補充） -->
                         <StackPanel Visibility="{Binding IsFireDoor, Converter={StaticResource Visible}}">
                             <DockPanel>

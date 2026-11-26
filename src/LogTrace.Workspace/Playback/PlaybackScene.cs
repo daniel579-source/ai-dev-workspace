@@ -17,6 +17,7 @@ public sealed record SceneFloor(string Name, double Elevation, double Height, do
 /// 沒有填時依種類使用預設值（<see cref="PlaybackScene.DefaultHeight"/>）。Path 為導軌的折線或輸送線的兩端（公尺）。
 /// Deck 為 "upper" 時元素在上層，Base 為上層地板離樓層地板的高度（公尺）；下層兩者皆為 null。
 /// ToBase：輸送線兩端在不同層段時，終點那一端的層段高度（公尺；畫成斜線）；兩端同一層段時為 null。
+/// Aim：BCR 掃描光束對準的位置（所屬 Conv 的中心與高度，[x, y, 高度]，ADR-0027）；沒有所屬 Conv 時為 null。
 /// </summary>
 public sealed record SceneElement(
     string Id, string Type, string Name, string Floor,
@@ -24,7 +25,7 @@ public sealed record SceneElement(
     int? Levels = null, double? LevelHeight = null, int? ColFrom = null, int? ColTo = null,
     IReadOnlyList<double[]>? Path = null, bool Closed = false, bool Bidirectional = false,
     IReadOnlyList<string>? ServedFloors = null, IReadOnlyList<string>? Gates = null, string? Door = null,
-    string? Deck = null, double? Base = null, double? ToBase = null);
+    string? Deck = null, double? Base = null, double? ToBase = null, double[]? Aim = null);
 
 /// <summary>場景的靜態部分；載入案件時傳一次。</summary>
 public sealed record SceneLayout(IReadOnlyList<SceneFloor> Floors, IReadOnlyList<SceneElement> Elements)
@@ -38,6 +39,7 @@ public sealed record SceneLayout(IReadOnlyList<SceneFloor> Floors, IReadOnlyList
 /// ElevatorFloor：電梯目前的樓層；移動中時為 null，改用 MovingFrom、MovingTo（推估）。
 /// RackSlots：料架有貨的儲位（[列, 層]）。Lift：RM 載貨台的高度（公尺，推估）。
 /// CargoLabel：搬送中的貨物（在搬送機、RM、電梯上）的標示，命令編號或棧板編號（#125）；沒有貨物時為 null。
+/// Reading：BCR 讀取中、磅秤等待中（ADR-0027），畫出掃描光束；Summary 為標籤的簡短結果。
 /// </summary>
 public sealed record SceneElementState(
     string Id, string Look, bool Selected = false,
@@ -46,7 +48,7 @@ public sealed record SceneElementState(
     string? Summary = null, double? X = null, double? Y = null,
     string? ElevatorFloor = null, string? MovingFrom = null, string? MovingTo = null,
     IReadOnlyList<int[]>? RackSlots = null, int? SelectedColumn = null, double? Lift = null, string? CargoLabel = null,
-    bool Stalled = false, string? OpenGate = null, bool DoorOpen = false);
+    bool Stalled = false, string? OpenGate = null, bool DoorOpen = false, bool Reading = false);
 
 /// <summary>場景的目前時刻狀態；目前時刻或選取改變時傳。</summary>
 public sealed record SceneState(long Sequence, IReadOnlyList<SceneElementState> Elements)
@@ -74,6 +76,8 @@ public static class PlaybackScene
         LayoutElementType.Rack => 1,
         LayoutElementType.Elevator => 1.2, // 台車的高度；井道依服務的樓層
         LayoutElementType.Label => 2,
+        LayoutElementType.Bcr => 1.2, // 立柱上的讀取頭（ADR-0027）
+        LayoutElementType.Scale => 0.1, // 貼在地板上的秤台（ADR-0027）
         _ => 0.02, // 區域、導軌：貼在地板上
     };
 
@@ -152,11 +156,18 @@ public static class PlaybackScene
                 default:
                     list.Add(new SceneElement(e.Id, type, e.Name, e.Floor, e.X, e.Y, e.W, e.H, e.Rotation, m.Height is > 0 ? m.Height.Value : DefaultHeight(m.Type),
                         ServedFloors: e.IsElevator ? e.ServedFloors : null, Gates: e.IsElevator ? ElevatorGates.SidesOf(m, layout) : null,
-                        Door: m.Type == LayoutElementType.Eq ? EqDoors.Of(m, layout).Side : null));
+                        Door: m.Type == LayoutElementType.Eq ? EqDoors.Of(m, layout).Side : null,
+                        Aim: m.Type == LayoutElementType.Bcr ? AimOf(m, layout) : null));
                     break;
             }
         }
     }
+
+    /// <summary>BCR 掃描光束對準所屬 Conv 的台面中心（ADR-0027）；所屬 Conv 不存在時為 null。</summary>
+    static double[]? AimOf(LayoutElement bcr, LayoutSection layout) =>
+        layout.Elements.FirstOrDefault(x => x.Id == bcr.Owner && LayoutElement.IsStationLike(x.Type)) is { } conv
+            ? [(conv.X ?? 0) + (conv.W ?? 0) / 2, (conv.Y ?? 0) + (conv.H ?? 0) / 2, conv.Height is > 0 ? conv.Height.Value : DefaultHeight(conv.Type)]
+            : null;
 
     /// <summary>目前時刻的狀態：沿用 Layout 回放面板已推導的元素狀態（<see cref="PlaybackViewModel"/>），不另外推導。</summary>
     public static SceneState StateOf(IEnumerable<PlaybackElementViewModel> elements, WorldState world, PlaybackElementViewModel? selected, RackCellViewModel? selectedCell, string? storageRule, bool cargoByPallet = false)
@@ -204,7 +215,7 @@ public static class PlaybackScene
                     break;
                 default:
                     list.Add(new SceneElementState(e.Id, look, isSelected, Inconsistent: e.IsInconsistent, Estimated: e.IsEstimated,
-                        Blocked: e.IsBlocked, BlockedEstimated: e.IsBlockedEstimated, Summary: e.Summary, DoorOpen: e.IsDoorOpen));
+                        Blocked: e.IsBlocked, BlockedEstimated: e.IsBlockedEstimated, Summary: e.Summary, DoorOpen: e.IsDoorOpen, Reading: e.IsReading));
                     break;
             }
         }

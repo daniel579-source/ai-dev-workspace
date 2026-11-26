@@ -5,6 +5,8 @@ import { THREE, LOOK, COLOR, post, listen, setColor, setCargoLabel, unitBox, cre
 const pick = (id, column) => post({ kind: 'pick', id, column });
 const v = createViewer({ onLabelClick: (id) => pick(id, null) });
 let selectionBox = null;
+/** 讀取中的 BCR、等待中的磅秤（ADR-0027）：每一幀讓光束閃爍。 */
+const reading = new Set();
 
 function applyState(state) {
   let selected = null;
@@ -75,6 +77,13 @@ function applyState(state) {
       case 'fireDoor':
         setColor(item.body, color, faded);
         break;
+      case 'bcr':
+      case 'scale':
+        // BCR 與磅秤（ADR-0027）：狀態顏色；讀取中／等待中畫出閃爍的光束
+        setColor(item.body, color, faded);
+        if (item.beam) item.beam.visible = !!s.reading;
+        if (s.reading) reading.add(item); else reading.delete(item);
+        break;
     }
     // 搬送中貨物的標示（#125）：搬送機、RM、電梯上的貨箱
     if (e.type === 'vehicle' || e.type === 'rm' || e.type === 'elevator') setCargoLabel(item, s.loaded ? s.cargoLabel : null);
@@ -88,7 +97,12 @@ function applyState(state) {
       l.div.classList.toggle('selected', !!s.selected);
       // 設備名稱只在點選時顯示（#128）：沒有選取時透明，但仍可點選；文字、區域照常顯示
       // 可能卡住（#142）時名稱一直顯示，否則只看得到點選的設備
-      l.div.classList.toggle('muted', !s.selected && !s.stalled && e.type !== 'label' && e.type !== 'area');
+      // BCR 與磅秤的標籤一直顯示，只看 Layout 就看得到讀取結果（ADR-0027）
+      const always = e.type === 'label' || e.type === 'area' || ((e.type === 'bcr' || e.type === 'scale') && !!s.summary);
+      l.div.classList.toggle('muted', !s.selected && !s.stalled && !always);
+      l.div.classList.toggle('reading', !!s.reading);
+      l.div.classList.toggle('ok', s.look === 'readOk');
+      l.div.classList.toggle('manual', s.look === 'manual');
       l.div.classList.toggle('stalled', !!s.stalled);
       l.div.classList.toggle('estimated', !!s.estimated);
     }
@@ -138,10 +152,15 @@ v.renderer.domElement.addEventListener('pointerup', (ev) => {
   pick(item.data.id, column);
 });
 
-v.onFrame(() => { if (selectionBox) selectionBox.update(); });
+v.onFrame(() => {
+  if (selectionBox) selectionBox.update();
+  // 光束閃爍：約每秒兩次
+  const blink = 0.15 + 0.35 * (0.5 + 0.5 * Math.sin(performance.now() / 160));
+  for (const item of reading) if (item.beam && item.beam.parent) item.beam.material.opacity = blink;
+});
 
 listen({
-  scene: (layout) => { updateSelection(null); v.loadScene(layout); },
+  scene: (layout) => { updateSelection(null); reading.clear(); v.loadScene(layout); },
   state: applyState,
   focus: (id) => v.focus(id),
   resetView: () => v.resetView(),

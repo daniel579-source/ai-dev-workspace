@@ -24,3 +24,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #F8FAFC; fon
 .label.muted { opacity: 0; }
 /* 可能卡住（推估，#142）：橘色虛線框 */
 .label.stalled { border: 1px dashed #F59E0B; color: #B45309; }
+/* BCR 與磅秤（ADR-0027）：讀取中藍、讀到綠、手動橘；讀取失敗與超重沿用 .alarm */
+.label.reading { border-color: #3B82F6; background: rgba(219, 234, 254, 0.92); }
+.label.ok { border-color: #16A34A; background: rgba(220, 252, 231, 0.92); }
+.label.manual { border-color: #EA580C; background: rgba(255, 237, 213, 0.92); }

@@ -34,6 +34,19 @@ public static class FieldKinds
     public const string AlarmCode = "alarmCode";
     public const string Online = "online";
     public const string Mode = "mode";
+    /// <summary>BCR（條碼讀取器）的名稱（ADR-0027），對應到 BCR 元素的別名。</summary>
+    public const string Bcr = "bcr";
+    /// <summary>BCR 讀到或手動輸入的條碼；一次多個時以逗號分隔（ADR-0027）。</summary>
+    public const string Barcode = "barcode";
+    /// <summary>讀取失敗的錯誤代碼（ADR-0027）。</summary>
+    public const string ErrorCode = "errorCode";
+    /// <summary>磅秤的編號（ADR-0027），對應到磅秤元素的別名。</summary>
+    public const string Scale = "scale";
+    /// <summary>磅秤讀到的重量（單位視為 kg，假設；ADR-0027）。</summary>
+    public const string Weight = "weight";
+    /// <summary>重量上限、下限（ADR-0027）；0 或空白表示沒有上下限。</summary>
+    public const string MaxWeight = "maxWeight";
+    public const string MinWeight = "minWeight";
 
     /// <summary>所有欄位種類與中文名稱（依畫面顯示順序）。</summary>
     public static IReadOnlyList<(string Kind, string Label)> All { get; } =
@@ -43,10 +56,11 @@ public static class FieldKinds
         (Pallet, "棧板"), (Bin, "桶"),
         (Signal, "訊號"), (SignalValue, "訊號值"), (StationMode, "Conv 模式"), (StationStatus, "運轉狀態"),
         (Alarm, "警報"), (AlarmCode, "警報代碼"), (Online, "連線"), (Mode, "模式"),
+        (Bcr, "BCR"), (Barcode, "條碼"), (ErrorCode, "錯誤代碼"), (Scale, "磅秤"), (Weight, "重量"), (MaxWeight, "重量上限"), (MinWeight, "重量下限"),
     ];
 
     /// <summary>可以對應到 Layout 元素別名的欄位（ADR-0006 第 2、3 點）。</summary>
-    public static IReadOnlyList<string> Identifiers { get; } = [Conv, Vehicle, Eq, FireDoor, Elevator, Rm];
+    public static IReadOnlyList<string> Identifiers { get; } = [Conv, Vehicle, Eq, FireDoor, Elevator, Rm, Bcr, Scale];
 
     /// <summary>
     /// 舊的欄位種類名稱（ADR-0026）：規則的群組名稱與已建立的案件資料庫中仍可能是舊名稱，
@@ -115,6 +129,15 @@ public static class EffectKinds
     public const string ElevatorArrived = "elevatorArrived";
     public const string ElevatorFinished = "elevatorFinished";
 
+    /// <summary>BCR 與磅秤的效果（ADR-0027）：開始讀取、停止讀取、讀到條碼、讀取失敗、手動輸入、磅秤讀值、重量上下限。</summary>
+    public const string BcrReadStart = "bcrReadStart";
+    public const string BcrReadStop = "bcrReadStop";
+    public const string BcrRead = "bcrRead";
+    public const string BcrFailed = "bcrFailed";
+    public const string BcrManual = "bcrManual";
+    public const string ScaleRead = "scaleRead";
+    public const string WeightLimits = "weightLimits";
+
     /// <summary>效果的名稱，以及規則必須有的欄位（「A|B」表示其中之一）。</summary>
     public static IReadOnlyList<(string Effect, string Label, string[] Required)> All { get; } =
     [
@@ -137,6 +160,13 @@ public static class EffectKinds
         (ElevatorDispatched, "命令的一段派給電梯（樣式待確認）", [FieldKinds.Command, FieldKinds.Elevator, FieldKinds.Destination]),
         (ElevatorArrived, "電梯抵達目的地（樣式待確認）", [FieldKinds.Command, FieldKinds.Destination]),
         (ElevatorFinished, "電梯作業完成（LOG 沒有記錄地點，樣式待確認）", [FieldKinds.Command]),
+        (BcrReadStart, "BCR 開始讀取", [$"{FieldKinds.Bcr}|{FieldKinds.Conv}"]),
+        (BcrReadStop, "BCR 停止讀取", [$"{FieldKinds.Bcr}|{FieldKinds.Conv}"]),
+        (BcrRead, "BCR 讀到條碼（多個以逗號分隔）", [$"{FieldKinds.Bcr}|{FieldKinds.Conv}", FieldKinds.Barcode]),
+        (BcrFailed, "BCR 讀取失敗或逾時", [$"{FieldKinds.Bcr}|{FieldKinds.Conv}"]),
+        (BcrManual, "手動輸入條碼", [$"{FieldKinds.Bcr}|{FieldKinds.Conv}", FieldKinds.Barcode]),
+        (ScaleRead, "磅秤讀值（單位視為 kg）", [$"{FieldKinds.Scale}|{FieldKinds.Conv}", FieldKinds.Weight]),
+        (WeightLimits, "棧板的重量上下限（0 或空白＝沒有上下限）", [FieldKinds.Pallet, $"{FieldKinds.MaxWeight}|{FieldKinds.MinWeight}"]),
     ];
 
     public static bool IsKnown(string effect) => All.Any(e => e.Effect == effect);

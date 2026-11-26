@@ -57,6 +57,7 @@ public sealed record PlantConfig
         new("棧板命令（9 位數字）", null, null, @"棧板命令\s*=\s*(?<pallet>[0-9]{9})(?![0-9])"),
         new("設備（4 個英文字母＋2 位數字）", null, null, @"(?<![A-Za-z0-9])(?<vehicle>[A-Z]{4}[0-9]{2})(?![0-9])"),
         // BCR 與磅秤（ADR-0027）：讀取器的紀錄（開始／停止讀取、回傳），PLC 的讀取逾時、手動輸入與磅秤回傳值。
+        // 磅秤回傳值的數字可能有一部分寫在中括號外（例如 [86]4），一起抽出，推導時接起來（#209）。
         // PLC 的「收到 BCR 回傳」與讀取器的回傳是同一次讀取，只取讀取器的紀錄。重量上下限屬於上位系統的介面，不提供初始規則。
         new("BCR 開始讀取", "PLC", "BCR_LOG", @"Send\(LON\),MachineName=(?<bcr>[A-Za-z0-9_-]+)", Parsing.EffectKinds.BcrReadStart),
         new("BCR 停止讀取", "PLC", "BCR_LOG", @"Send\(LOFF\),MachineName=(?<bcr>[A-Za-z0-9_-]+)", Parsing.EffectKinds.BcrReadStop),
@@ -64,7 +65,7 @@ public sealed record PlantConfig
         new("BCR 讀到條碼", "PLC", "BCR_LOG", @"OnCommandArrived,MachineName=(?<bcr>[A-Za-z0-9_-]+),.*?,result=(?!ERROR\s*$)(?<barcode>.+?)\s*$", Parsing.EffectKinds.BcrRead),
         new("BCR 讀取逾時（PLC）", "PLC", "PLCLOG", @"^\[(?<conv>[A-Z]-[0-9]{2})\]\[Station_Storage_Request_BCR\] => .*?讀取異常:.*?\((?<errorCode>E[0-9]+)\)", Parsing.EffectKinds.BcrFailed),
         new("手動輸入條碼（PLC）", "PLC", "PLCLOG", @"^\[(?<conv>[A-Z]-[0-9]{2})\]\[Station_Storage_Request_BCR\] => 手動輸入的條碼,.*?PALLET=(?<barcode>[^,\s]+)", Parsing.EffectKinds.BcrManual),
-        new("磅秤回傳值（PLC）", "PLC", "PLCLOG", @"^\[(?<conv>[A-Z]-[0-9]{2})\]\[Station_Storage_Request_BCR\] => 磅秤回傳值\[(?<weight>-?[0-9]+(?:\.[0-9]+)?)\]", Parsing.EffectKinds.ScaleRead),
+        new("磅秤回傳值（PLC）", "PLC", "PLCLOG", @"^\[(?<conv>[A-Z]-[0-9]{2})\]\[Station_Storage_Request_BCR\] => 磅秤回傳值\[(?<weight>-?[0-9]+(?:\.[0-9]+)?\][0-9]*)", Parsing.EffectKinds.ScaleRead),
     ];
 
     /// <summary>

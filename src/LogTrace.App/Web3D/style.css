@@ -28,3 +28,6 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #F8FAFC; fon
 .label.reading { border-color: #3B82F6; background: rgba(219, 234, 254, 0.92); }
 .label.ok { border-color: #16A34A; background: rgba(220, 252, 231, 0.92); }
 .label.manual { border-color: #EA580C; background: rgba(255, 237, 213, 0.92); }
+/* 結果超過 2 分鐘變淡；選取中的標籤顯示在最上層（#209；CSS2DRenderer 依距離設定 z-index，這裡要蓋過它） */
+.label.stale { opacity: 0.4; }
+.label.selected { z-index: 100000 !important; opacity: 1; }

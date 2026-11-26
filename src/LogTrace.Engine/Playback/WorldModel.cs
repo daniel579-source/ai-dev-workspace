@@ -516,7 +516,8 @@ public sealed class WorldModel
             case EffectKinds.ScaleRead when ScaleOf(x) is { } scale && x.Get(FieldKinds.Weight) is { } text:
             {
                 var s = ScaleStateOf(w, scale.Id);
-                (s.WaitingSince, s.WeightText, s.Weight, s.WeightCause) = (null, text.Trim(), ParseDouble(text), seq);
+                var weight = WeightText(text);
+                (s.WaitingSince, s.WeightText, s.Weight, s.WeightCause) = (null, weight, ParseDouble(weight), seq);
                 s.Pallet = x.Get(FieldKinds.Pallet)
                     ?? (scale.Owner is { } conv && w.PalletsAt(LocationKind.Station, conv).Take(2).ToList() is [var p] ? p.Id : null);
                 break;
@@ -561,6 +562,11 @@ public sealed class WorldModel
     /// <summary>條碼欄位的值：逗號分隔的拆開，去除空白與空的。</summary>
     static List<string> Barcodes(EventEffect x) =>
         (x.GetAll(FieldKinds.Barcode) ?? []).SelectMany(v => v.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)).ToList();
+
+    /// <summary>
+    /// 磅秤回傳值的文字：數字有一部分寫在中括號外時（例如「86]4」），把括號外的數字接起來（#209，使用者確認）。
+    /// </summary>
+    public static string WeightText(string raw) => raw.Trim().Replace("]", "", StringComparison.Ordinal).Replace("[", "", StringComparison.Ordinal);
 
     static BcrState BcrStateOf(WorldState w, string id) => w.Bcrs.TryGetValue(id, out var b) ? b : w.Bcrs[id] = new BcrState();
 

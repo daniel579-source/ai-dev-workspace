@@ -39,7 +39,7 @@ public sealed record SceneLayout(IReadOnlyList<SceneFloor> Floors, IReadOnlyList
 /// ElevatorFloor：電梯目前的樓層；移動中時為 null，改用 MovingFrom、MovingTo（推估）。
 /// RackSlots：料架有貨的儲位（[列, 層]）。Lift：RM 載貨台的高度（公尺，推估）。
 /// CargoLabel：搬送中的貨物（在搬送機、RM、電梯上）的標示，命令編號或棧板編號（#125）；沒有貨物時為 null。
-/// Reading：BCR 讀取中、磅秤等待中（ADR-0027），畫出掃描光束；Summary 為標籤的簡短結果。
+/// Reading：BCR 讀取中、磅秤等待中（ADR-0027），畫出掃描光束；Summary 為標籤的簡短結果。Stale：結果超過 2 分鐘，標籤變淡（#209）。
 /// </summary>
 public sealed record SceneElementState(
     string Id, string Look, bool Selected = false,
@@ -48,7 +48,7 @@ public sealed record SceneElementState(
     string? Summary = null, double? X = null, double? Y = null,
     string? ElevatorFloor = null, string? MovingFrom = null, string? MovingTo = null,
     IReadOnlyList<int[]>? RackSlots = null, int? SelectedColumn = null, double? Lift = null, string? CargoLabel = null,
-    bool Stalled = false, string? OpenGate = null, bool DoorOpen = false, bool Reading = false);
+    bool Stalled = false, string? OpenGate = null, bool DoorOpen = false, bool Reading = false, bool Stale = false);
 
 /// <summary>場景的目前時刻狀態；目前時刻或選取改變時傳。</summary>
 public sealed record SceneState(long Sequence, IReadOnlyList<SceneElementState> Elements)
@@ -215,7 +215,7 @@ public static class PlaybackScene
                     break;
                 default:
                     list.Add(new SceneElementState(e.Id, look, isSelected, Inconsistent: e.IsInconsistent, Estimated: e.IsEstimated,
-                        Blocked: e.IsBlocked, BlockedEstimated: e.IsBlockedEstimated, Summary: e.Summary, DoorOpen: e.IsDoorOpen, Reading: e.IsReading));
+                        Blocked: e.IsBlocked, BlockedEstimated: e.IsBlockedEstimated, Summary: e.Summary, DoorOpen: e.IsDoorOpen, Reading: e.IsReading, Stale: e.IsStale));
                     break;
             }
         }

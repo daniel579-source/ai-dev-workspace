@@ -194,7 +194,7 @@ public sealed class VehicleMotion
     public const double DefaultLevelHeight = 1.2;
 
     /// <summary>料架某一列的中心（考慮旋轉）：列沿長邊（寬）切分。</summary>
-    static (double X, double Y) ColumnCenter(LayoutElement rack, int column)
+    internal static (double X, double Y) ColumnCenter(LayoutElement rack, int column)
     {
         double x = rack.X ?? 0, y = rack.Y ?? 0, w = rack.W ?? 0, h = rack.H ?? 0;
         int n = Math.Max(1, (rack.ColTo ?? 1) - (rack.ColFrom ?? 1) + 1);

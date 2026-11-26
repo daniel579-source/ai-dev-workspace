@@ -209,9 +209,10 @@ public static class PlaybackScene
                     break;
                 }
                 case LayoutElementType.Conv or LayoutElementType.Workstation:
+                    // 搭配導軌的 Conv：X、Y 為推估的位置（ADR-0028）
                     list.Add(new SceneElementState(e.Id, look, isSelected, Presence: e.PresenceLight switch { "●" => "on", "○" => "off", _ => "unknown" },
                         Badge: e.StatusBadge, Inconsistent: e.IsInconsistent, Loaded: e.Look == ElementLook.Occupied || world.PalletsAt(LocationKind.Station, e.Id).Any(),
-                        Summary: e.Summary));
+                        Summary: e.Summary, Estimated: e.ConvPlace?.IsEstimated == true, X: e.ConvPlace?.X, Y: e.ConvPlace?.Y));
                     break;
                 default:
                     list.Add(new SceneElementState(e.Id, look, isSelected, Inconsistent: e.IsInconsistent, Estimated: e.IsEstimated,

@@ -85,8 +85,8 @@ public sealed partial class LayoutElementViewModel : ObservableObject
     public bool IsVehicle => Type == LayoutElementType.Vehicle;
     public bool IsRm => Type == LayoutElementType.Rm;
 
-    /// <summary>可以指定所走的導軌：搬送機（STV）與 RM（ADR-0019）。</summary>
-    public bool CanHaveRail => Type is LayoutElementType.Vehicle or LayoutElementType.Rm;
+    /// <summary>可以指定所走的導軌：搬送機（STV）、RM（ADR-0019）與 Conv（ADR-0028，位置依貨物推估）。</summary>
+    public bool CanHaveRail => LayoutElement.CanHaveRail(Type);
     public bool IsElevator => Type == LayoutElementType.Elevator;
 
     /// <summary>以「所屬 Conv」指定位置意義的元素：BCR 與磅秤（ADR-0027）。</summary>

@@ -22,6 +22,9 @@ function applyState(state) {
         setColor(item.body, color);
         setColor(item.light, s.presence === 'on' ? COLOR.presenceOn : s.presence === 'off' ? COLOR.presenceOff : COLOR.presenceUnknown, s.presence === 'unknown' ? 0.5 : 1);
         item.cargo.visible = !!s.loaded;
+        // 搭配導軌的 Conv（ADR-0028）：位置依貨物推估，貨物跟著移動
+        if (s.x != null && s.y != null) item.group.position.set(s.x, item.group.position.y, s.y);
+        else if (e.type === 'conv') item.group.position.set(e.x + e.w / 2, item.group.position.y, e.y + e.h / 2);
         break;
       case 'vehicle':
         setColor(item.body, color, faded);
@@ -89,7 +92,7 @@ function applyState(state) {
     if (e.type === 'vehicle' || e.type === 'rm' || e.type === 'elevator') setCargoLabel(item, s.loaded ? s.cargoLabel : null);
     if (item.label) {
       const l = item.label;
-      l.name.textContent = (s.badge ? `[${s.badge}] ` : '') + e.name + (s.inconsistent ? ' ⚠' : '') + (s.estimated && (e.type === 'vehicle' || e.type === 'rm') ? '（推估位置）' : '')
+      l.name.textContent = (s.badge ? `[${s.badge}] ` : '') + e.name + (s.inconsistent ? ' ⚠' : '') + (s.estimated && (e.type === 'vehicle' || e.type === 'rm' || e.type === 'conv') ? '（推估位置）' : '')
         + (s.stalled ? '　可能卡住（推估）' : '');
       l.summary.textContent = s.summary || '';
       l.div.title = s.inconsistent ? '不一致（點選看詳細）' : s.stalled ? '可能卡住（推估；點選看依據）' : '';

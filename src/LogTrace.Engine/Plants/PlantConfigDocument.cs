@@ -162,7 +162,7 @@ public sealed class LayoutElement
     /// <summary>頭尾相接（最後一點接回第一點）；null（不寫出）表示不閉合。</summary>
     public bool? Closed { get; set; }
 
-    /// <summary>搬送機所走的導軌 id（ADR-0006 第 14 點）。</summary>
+    /// <summary>搬送機、RM 所走的導軌 id（ADR-0006 第 14 點、ADR-0019）；Conv 也可以指定，位置依貨物推估（ADR-0028）。</summary>
     public string? Rail { get; set; }
 
     /// <summary>電梯服務的樓層（ADR-0006 第 15 點）：在每一層同一個位置畫出來；電梯不使用 floor。</summary>
@@ -197,6 +197,9 @@ public sealed class LayoutElement
 
     /// <summary>以折線（points）表示的種類：導軌與圍欄（ADR-0020）。</summary>
     public static bool HasPath(LayoutElementType type) => type is LayoutElementType.Rail or LayoutElementType.Fence;
+
+    /// <summary>可以指定導軌的種類：搬送機、RM（ADR-0019）與 Conv（ADR-0028）。</summary>
+    public static bool CanHaveRail(LayoutElementType type) => type is LayoutElementType.Vehicle or LayoutElementType.Rm or LayoutElementType.Conv;
 }
 
 /// <summary>Layout 上的一個點（公尺）。</summary>
@@ -477,15 +480,17 @@ public sealed class PlantConfigDocument
     /// 10：同一樓層的上層與下層（元素的 deck、樓層的 upperHeight；舊版程式會把上層元素畫在下層、存檔時遺失上層高度）。
     /// 11：站點與原本的 Conv（dock）合併為 Conv，type 寫 conv（ADR-0026；舊版程式不認得 conv 這個種類）。
     /// 12：BCR 與磅秤（ADR-0027；舊版程式不認得 bcr、scale 這兩個種類）。
+    /// 13：Conv 指定導軌（ADR-0028；舊版程式的存檔前檢查不允許 Conv 有導軌）。
     /// 存檔時只寫實際用到的最低版本，讓舊版程式照常開啟（ADR-0006 第 7 點）。
     /// </summary>
-    public const int CurrentFormatVersion = 12;
+    public const int CurrentFormatVersion = 13;
 
     /// <summary>
-    /// 這份設定需要的格式版本：有 BCR 或磅秤時為 12；有 Conv 時為 11；有上層元素或填了上層高度時為 10；有 EQ 時為 9；有工站點、圍欄、圍欄門時為 8；有 RM 或排的配置表時為 7；有填樓板高度時為 6；有電梯時為 5；有導軌時為 4；有防火門時為 3；有雙向或連到搬送機（有交接點）的輸送線時為 2；否則為 1。
+    /// 這份設定需要的格式版本：有 Conv 指定導軌時為 13；有 BCR 或磅秤時為 12；有 Conv 時為 11；有上層元素或填了上層高度時為 10；有 EQ 時為 9；有工站點、圍欄、圍欄門時為 8；有 RM 或排的配置表時為 7；有填樓板高度時為 6；有電梯時為 5；有導軌時為 4；有防火門時為 3；有雙向或連到搬送機（有交接點）的輸送線時為 2；否則為 1。
     /// </summary>
     public int RequiredFormatVersion() =>
-        Layout.Elements.Any(e => LayoutElement.HasOwner(e.Type)) ? 12
+        Layout.Elements.Any(e => e.Type == LayoutElementType.Conv && e.Rail is not null) ? 13
+        : Layout.Elements.Any(e => LayoutElement.HasOwner(e.Type)) ? 12
         : Layout.Elements.Any(e => e.Type == LayoutElementType.Conv) ? 11
         : Layout.Elements.Any(e => e.Deck == LayoutDeck.Upper) || Layout.Floors?.Any(f => f.UpperHeight is not null) == true ? 10
         : Layout.Elements.Any(e => e.Type == LayoutElementType.Eq) ? 9

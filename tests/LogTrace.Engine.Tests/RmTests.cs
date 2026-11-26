@@ -65,7 +65,7 @@ public sealed class RmTests
             new LayoutRow("4", "rm-1", RowDepth.Shallow),     // 缺配對
             new LayoutRow("4", "rm-1"),                        // 重複
         ];
-        layout.Elements.Single(e => e.Id == "eq-1").Rail = "rl-1";
+        layout.Elements.Single(e => e.Id == "rk-1").Rail = "rl-1"; // Conv 可以指定導軌（ADR-0028），改用料架
 
         var issues = PlantConfigFile.Validate(Doc(layout)).Select(i => i.Message).ToList();
 
@@ -73,7 +73,7 @@ public sealed class RmTests
         Assert.Contains(issues, m => m.Contains("「rm-9」不存在"));
         Assert.Contains(issues, m => m.Contains("同時填深淺與配對"));
         Assert.Contains(issues, m => m.Contains("排號「4」重複"));
-        Assert.Contains(issues, m => m.Contains("只有搬送機與 RM 可以"));
+        Assert.Contains(issues, m => m.Contains("只有搬送機、RM 與 Conv 可以"));
         Assert.Empty(PlantConfigFile.Validate(Doc(Layout())));
     }
 

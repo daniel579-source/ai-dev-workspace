@@ -142,24 +142,33 @@ public sealed class DockLayoutSmokeTests : IDisposable
     [Fact]
     public void 拖動分隔線_同一排的其他面板依比例一起縮放()
     {
+        string dragged = "";
         Run((main, _) =>
         {
             // 下方一排：詳細資訊｜元素狀態等分頁｜原始 LOG｜異常紀錄。把詳細資訊右邊的分隔線往右拖 120 像素
+            // 測試用真實的滑鼠：先把視窗移到最上層，避免其他視窗蓋住分隔線（#201）
+            main.SetForeground();
+            FlaUI.Core.Input.Wait.UntilInputIsProcessed(TimeSpan.FromMilliseconds(300));
             var title = main.FindFirstDescendant(main.ConditionFactory.ByName("詳細資訊"))!.BoundingRectangle;
-            var splitter = main.FindAllDescendants(main.ConditionFactory.ByControlType(FlaUI.Core.Definitions.ControlType.Thumb))
+            System.Drawing.Rectangle[] Splitters() => main.FindAllDescendants(main.ConditionFactory.ByControlType(FlaUI.Core.Definitions.ControlType.Thumb))
                 .Select(t => t.BoundingRectangle)
                 .Where(r => r.Height > r.Width && r.Left > title.Left && r.Top <= title.Bottom && r.Bottom >= title.Top)
-                .OrderBy(r => r.Left).First();
+                .OrderBy(r => r.Left).ToArray();
+            var splitter = Splitters().First();
             var from = splitter.Center();
-            FlaUI.Core.Input.Mouse.Drag(from, new System.Drawing.Point(from.X + 120, from.Y));
-            FlaUI.Core.Input.Wait.UntilInputIsProcessed(TimeSpan.FromMilliseconds(500));
-            Thread.Sleep(300);
+            var to = new System.Drawing.Point(from.X + 120, from.Y);
+            FlaUI.Core.Input.Mouse.Drag(from, to);
+            // 等畫面上的分隔線真的移到拖曳終點附近，才關閉程式（關閉時保存版面）；不用固定的等待時間
+            var moved = Retry.WhileFalse(() => Splitters().Any(r => Math.Abs(r.Center().X - to.X) <= 10), TimeSpan.FromSeconds(5)).Result;
+            dragged = $"分隔線 {splitter} 拖到 {to}；拖曳後的分隔線 {string.Join("、", Splitters())}";
+            Assert.True(moved, "分隔線沒有移動（滑鼠可能被其他操作干擾）：" + dragged);
         });
 
         double states = Width("elementstate"), raw = Width("rawlog"), incidents = Width("incidents"), detail = Width("detail");
-        Assert.True(detail > states, $"詳細資訊 {detail}、元素狀態 {states}");
+        var widths = $"詳細資訊 {detail}、元素狀態 {states}、原始 LOG {raw}、異常紀錄 {incidents}；{dragged}";
+        Assert.True(detail > states, widths);
         // 分隔線右邊的面板依同一比例縮小：彼此的比例不變（預設 1：1：1.4）
-        Assert.Equal(1.0, states / raw, 2);
-        Assert.Equal(1.4, incidents / raw, 2);
+        Assert.True(Math.Abs(states / raw - 1.0) < 0.005, widths);
+        Assert.True(Math.Abs(incidents / raw - 1.4) < 0.005, widths);
     }
 }

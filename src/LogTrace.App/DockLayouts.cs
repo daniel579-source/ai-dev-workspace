@@ -14,6 +14,7 @@ namespace LogTrace.App;
 
 /// <summary>
 /// Docking 版面（ADR-0008 第 7 點）：兩種預設版面（回放、搜尋）、依使用者保存、還原預設。
+/// 面板可以關閉（隱藏），以「視窗」選單開啟或關閉（ADR-0029）。
 /// 面板的內容只在 MainWindow.xaml 宣告一次；排列方式由這裡建立，再以 ContentId 對回內容（ADR-0007）。
 /// </summary>
 public sealed class DockLayouts
@@ -105,11 +106,40 @@ public sealed class DockLayouts
     /// <summary>所有面板的 ContentId。</summary>
     public IReadOnlyCollection<string> PanelIds => _panels.Keys;
 
-    /// <summary>套用預設版面。面板的內容先從目前的版面取下，才能放進新的版面。</summary>
-    public void ApplyPreset(string name)
+    /// <summary>「視窗」選單的順序（ADR-0029）。</summary>
+    public static IReadOnlyList<string> MenuOrder { get; } =
+        ["cases", "search", "events", "playback", "timeline", "detail", "elementstate", "commands", "equipment", "unmapped", "knowledge", "rawlog", "incidents"];
+
+    /// <summary>面板的標題。</summary>
+    public string TitleOf(string id) => _panels.TryGetValue(id, out var p) ? p.Title : id;
+
+    LayoutAnchorable? Find(string id) => _dock.Layout.Descendents().OfType<LayoutAnchorable>().FirstOrDefault(a => a.ContentId == id);
+
+    /// <summary>面板是否顯示中（沒有被關閉）。</summary>
+    public bool IsShown(string id) => Find(id) is { IsHidden: false };
+
+    /// <summary>開啟或關閉面板（關閉是隱藏，開啟時回到關閉前的位置，ADR-0029）。</summary>
+    public void SetShown(string id, bool shown)
     {
+        if (Find(id) is not { } a) return;
+        if (shown && a.IsHidden)
+        {
+            a.Show();
+            a.IsActive = true; // 開啟的面板在同一區的分頁中顯示出來
+        }
+        else if (!shown && !a.IsHidden) a.Hide();
+    }
+
+    /// <summary>
+    /// 套用預設版面。面板的內容先從目前的版面取下，才能放進新的版面。keepClosed 為 true 時（切換回放／搜尋），
+    /// 使用者關掉的面板維持關閉；「還原預設版面」傳 false，所有面板都顯示（ADR-0029 第 5 點）。
+    /// </summary>
+    public void ApplyPreset(string name, bool keepClosed = false)
+    {
+        var closed = keepClosed ? MenuOrder.Where(id => Find(id) is { IsHidden: true }).ToList() : [];
         foreach (var a in _dock.Layout.Descendents().OfType<LayoutAnchorable>().ToList()) a.Content = null;
         _dock.Layout = Build(name);
+        foreach (var id in closed) Find(id)?.Hide(); // 隱藏後從「視窗」選單開啟時放回這個版面中的位置
     }
 
     /// <summary>目前的版面（XML）。</summary>
@@ -128,8 +158,14 @@ public sealed class DockLayouts
         try
         {
             Load(xml);
-            var ids = _dock.Layout.Descendents().OfType<LayoutAnchorable>().Select(a => a.ContentId).ToHashSet();
-            if (ids.SetEquals(_panels.Keys)) return true;
+            var all = _dock.Layout.Descendents().OfType<LayoutAnchorable>().ToList(); // 含關閉（隱藏）的面板
+            var ids = all.Select(a => a.ContentId).ToHashSet();
+            if (ids.SetEquals(_panels.Keys))
+            {
+                // 舊版程式存的版面標示面板不能隱藏：一律改為可以關閉（ADR-0029）
+                foreach (var a in all) (a.CanHide, a.CanClose) = (true, false);
+                return true;
+            }
         }
         catch (Exception) // 版面檔的內容不可預期（XmlSerializer 包裝的各種例外）；任何失敗都退回預設，不影響啟動
         {
@@ -156,7 +192,7 @@ public sealed class DockLayouts
     {
         var pane = new LayoutAnchorablePane();
         foreach (var id in ids)
-            pane.Children.Add(new LayoutAnchorable { ContentId = id, Title = _panels[id].Title, Content = _panels[id].Content, CanClose = false, CanHide = false });
+            pane.Children.Add(new LayoutAnchorable { ContentId = id, Title = _panels[id].Title, Content = _panels[id].Content, CanClose = false, CanHide = true }); // 關閉＝隱藏（ADR-0029）
         pane.SelectedContentIndex = 0; // 同一區的第一個分頁預設顯示
         SetSize(pane, size, along);
         return pane;

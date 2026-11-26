@@ -38,8 +38,8 @@ public sealed class DockLayoutSmokeTests : IDisposable
             }));
     }
 
-    /// <summary>啟動程式、做一些操作、關閉（關閉時保存版面）。</summary>
-    void Run(Action<Window, Func<string, AutomationElement>> act)
+    /// <summary>啟動程式、做一些操作、關閉（關閉時保存版面）。closed：預期啟動時是關閉的面板（ADR-0029）。</summary>
+    void Run(Action<Window, Func<string, AutomationElement>> act, params string[] closed)
     {
         using var app = FlaUI.Core.Application.Launch(new ProcessStartInfo(ImportSmokeTests.AppExe(), $"--data-root \"{_dataRoot}\""));
         using var automation = new UIA3Automation();
@@ -51,8 +51,9 @@ public sealed class DockLayoutSmokeTests : IDisposable
             AutomationElement In(string id) =>
                 Retry.WhileNull(() => main.FindFirstDescendant(cf.ByAutomationId(id)) ?? automation.GetDesktop().FindFirstDescendant(cf.ByAutomationId(id)),
                     TimeSpan.FromSeconds(10)).Result ?? throw new InvalidOperationException($"找不到 {id}");
-            Assert.True(Retry.WhileFalse(() => AllPanelsShown(main), TimeSpan.FromSeconds(10)).Result,
-                "有面板沒有顯示：" + string.Join("、", Panels.Where(t => main.FindFirstDescendant(cf.ByName(t)) is null)));
+            Assert.True(Retry.WhileFalse(() => Panels.Except(closed).All(t => Shown(main, t)), TimeSpan.FromSeconds(10)).Result,
+                "有面板沒有顯示：" + string.Join("、", Panels.Except(closed).Where(t => !Shown(main, t))));
+            foreach (var t in closed) Assert.False(Shown(main, t), $"「{t}」應該是關閉的");
             act(main, In);
         }
         finally
@@ -63,7 +64,18 @@ public sealed class DockLayoutSmokeTests : IDisposable
     }
 
     /// <summary>每個面板的標題都在畫面上（分頁的標題、或單一面板的標題列）。</summary>
-    static bool AllPanelsShown(Window main) => Panels.All(t => main.FindFirstDescendant(main.ConditionFactory.ByName(t)) is not null);
+    static bool AllPanelsShown(Window main) => Panels.All(t => Shown(main, t));
+
+    static bool Shown(Window main, string title) => main.FindFirstDescendant(main.ConditionFactory.ByName(title)) is not null;
+
+    /// <summary>「視窗」選單（ADR-0029）點一個項目：面板的 ContentId，或 ShowAll。</summary>
+    static void Toggle(Func<string, AutomationElement> @in, string id)
+    {
+        @in("WindowMenu").AsMenuItem().Expand();
+        @in(id == "ShowAll" ? "WindowShowAll" : "Window_" + id).AsMenuItem().Invoke();
+        FlaUI.Core.Input.Wait.UntilInputIsProcessed(TimeSpan.FromMilliseconds(500));
+        Thread.Sleep(300);
+    }
 
     static void Choose(Func<string, AutomationElement> @in, string item)
     {
@@ -129,6 +141,56 @@ public sealed class DockLayoutSmokeTests : IDisposable
         Assert.Equal(initial, Structure());
 
         Run((_, @in) => Assert.DoesNotContain("版面已更新", @in("Status").Name)); // 只有一次
+    }
+
+    [Fact]
+    public void 視窗選單_關閉面板後重新開啟仍關閉_切換預設版面維持關閉_還原預設全部顯示()
+    {
+        Run((main, @in) =>
+        {
+            Toggle(@in, "unmapped");
+            Assert.True(Retry.WhileFalse(() => !Shown(main, "未對應"), TimeSpan.FromSeconds(5)).Result, "關閉後「未對應」仍在畫面上");
+        });
+
+        Run((main, @in) =>
+        {
+            @in("WindowMenu").AsMenuItem().Expand();
+            Assert.False(@in("Window_unmapped").AsMenuItem().IsChecked); // 選單上沒有打勾
+            Assert.True(@in("Window_events").AsMenuItem().IsChecked);
+            @in("WindowMenu").AsMenuItem().Collapse();
+            Choose(@in, "LayoutSearch"); // 切換預設版面：關掉的維持關閉
+            Assert.True(Retry.WhileFalse(() => Panels.Except(["未對應"]).All(t => Shown(main, t)), TimeSpan.FromSeconds(10)).Result);
+            Assert.False(Shown(main, "未對應"));
+        }, "未對應");
+
+        Run((main, @in) =>
+        {
+            Toggle(@in, "unmapped"); // 從選單開回來
+            Assert.True(Retry.WhileFalse(() => Shown(main, "未對應"), TimeSpan.FromSeconds(5)).Result, "從選單開啟後「未對應」沒有顯示");
+            Toggle(@in, "rawlog");
+            Toggle(@in, "timeline");
+            Assert.True(Retry.WhileFalse(() => !Shown(main, "原始 LOG") && !Shown(main, "時間軸"), TimeSpan.FromSeconds(5)).Result);
+            Choose(@in, "LayoutReset"); // 還原預設：全部顯示
+            Assert.True(Retry.WhileFalse(() => AllPanelsShown(main), TimeSpan.FromSeconds(10)).Result);
+        }, "未對應");
+        Run((_, _) => { }); // 還原後重新開啟：全部顯示
+    }
+
+    [Fact]
+    public void 視窗選單_Layout回放關閉再開啟_3D仍載入_全部顯示()
+    {
+        Run((main, @in) =>
+        {
+            Assert.True(Retry.WhileFalse(() => @in("Playback3DStatus").Name.StartsWith("3D 已載入", StringComparison.Ordinal), TimeSpan.FromSeconds(30)).Result);
+            Toggle(@in, "playback");
+            Toggle(@in, "knowledge");
+            Assert.True(Retry.WhileFalse(() => !Shown(main, "Layout 回放") && !Shown(main, "知識庫"), TimeSpan.FromSeconds(5)).Result);
+            Toggle(@in, "ShowAll");
+            Assert.True(Retry.WhileFalse(() => AllPanelsShown(main), TimeSpan.FromSeconds(10)).Result);
+            main.FindFirstDescendant(main.ConditionFactory.ByName("Layout 回放"))?.Click();
+            Assert.True(Retry.WhileFalse(() => main.FindFirstDescendant(main.ConditionFactory.ByAutomationId("Playback3DStatus"))?.Name.StartsWith("3D 已載入", StringComparison.Ordinal) == true,
+                TimeSpan.FromSeconds(30)).Result, "重新開啟後 3D 沒有載入：" + main.FindFirstDescendant(main.ConditionFactory.ByAutomationId("Playback3DError"))?.Name);
+        });
     }
 
     /// <summary>版面檔中各面板所在區域的寬度比例（DockWidth，例如「1.4*」）。</summary>

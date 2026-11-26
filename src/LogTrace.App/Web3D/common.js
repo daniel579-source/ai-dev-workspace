@@ -234,7 +234,7 @@ export function createViewer(opts = {}) {
   }
 
   function buildStation(e, item) {
-    // 輸送站（2026-11-16 使用者要求與 Conv 的圖對換）：升降平台的外觀，加上在席指示燈與貨物
+    // Conv（ADR-0026；2026-11-16 使用者要求的輸送站外觀）：升降平台的外觀，加上在席指示燈與貨物
     const platform = liftLook(e, item);
     item.light = new THREE.Mesh(new THREE.SphereGeometry(Math.min(0.18, Math.min(e.w, e.h) / 4), 12, 8), mat(COLOR.presenceUnknown, { transparent: true, opacity: 0.6 }));
     item.light.position.set(e.w / 2 - 0.2, e.height + 0.12, -e.h / 2 + 0.2);
@@ -293,11 +293,6 @@ export function createViewer(opts = {}) {
     item.carriage.position.y = baseH + 0.05;
     item.baseH = baseH;
     item.group.add(item.carriage);
-  }
-
-  function buildDock(e, item) {
-    // Conv（對接設備；2026-11-16 使用者要求與站點的圖對換）：四支腳撐起的台面與滾筒，兩側不要護欄（ADR-0020）
-    deckLook(e, item, false);
   }
 
   const towerColors = [0xDC2626, 0x2563EB, 0xF8FAFC, 0x16A34A, 0xFACC15]; // 紅、藍、白、綠、黃（由上而下）
@@ -535,13 +530,12 @@ export function createViewer(opts = {}) {
     item.group.userData.id = e.id;
     const elevation = baseOf(e);
     switch (e.type) {
-      case 'station': place(item.group, e, elevation); buildStation(e, item); break;
+      case 'conv': place(item.group, e, elevation); buildStation(e, item); break; // Conv（原本的站點與原本的 Conv 合併，ADR-0026）
       case 'vehicle': place(item.group, e, elevation); buildVehicle(e, item); break;
       case 'rack': place(item.group, e, elevation); buildRack(e, item); break;
       case 'elevator': place(item.group, e, 0); buildElevator(e, item); break;
       case 'conveyor': buildConveyor(e, item); break;
       case 'rail': buildRail(e, item); break;
-      case 'dock': place(item.group, e, elevation); buildDock(e, item); break;
       case 'workstation': place(item.group, e, elevation); buildWorkstation(e, item); break;
       case 'fenceGate': place(item.group, e, elevation); buildFenceGate(e, item); break;
       case 'eq': place(item.group, e, elevation); buildEq(e, item); break;

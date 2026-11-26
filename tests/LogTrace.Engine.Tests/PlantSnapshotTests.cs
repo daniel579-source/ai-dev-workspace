@@ -66,12 +66,12 @@ public sealed class PlantSnapshotTests : IDisposable
     {
         string folder;
         using (var c = CreateCase()) folder = c.Folder;
-        EditPlant(d => d.Layout.Elements.RemoveAll(e => e.Type is LayoutElementType.Station or LayoutElementType.Conveyor));
+        EditPlant(d => d.Layout.Elements.RemoveAll(e => e.Type is LayoutElementType.Conv or LayoutElementType.Conveyor));
 
         using var opened = Case.Open(folder);
 
         Assert.Equal(1, opened.Info.Plant.Revision);
-        Assert.Equal(4, opened.PlantSnapshot!.Layout.Elements.Count(e => e.Type == LayoutElementType.Station));
+        Assert.Equal(4, opened.PlantSnapshot!.Layout.Elements.Count(e => e.Type == LayoutElementType.Conv));
         Assert.True(World(opened).Final.Stations.ContainsKey("st-1"));
     }
 

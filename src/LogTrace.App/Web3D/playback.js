@@ -15,8 +15,8 @@ function applyState(state) {
     const color = LOOK[s.look] ?? LOOK.unknown;
     const faded = s.estimated ? 0.5 : 1;
     switch (e.type) {
-      case 'station':
-      case 'workstation': // 工站點比照站點（ADR-0020）
+      case 'conv':
+      case 'workstation': // 工站點比照 Conv（ADR-0020、ADR-0026）
         setColor(item.body, color);
         setColor(item.light, s.presence === 'on' ? COLOR.presenceOn : s.presence === 'off' ? COLOR.presenceOff : COLOR.presenceUnknown, s.presence === 'unknown' ? 0.5 : 1);
         item.cargo.visible = !!s.loaded;
@@ -73,7 +73,6 @@ function applyState(state) {
         setColor(item.body, s.blocked ? COLOR.blocked : COLOR.conveyor, s.blocked && s.blockedEstimated ? 0.5 : 0.85);
         break;
       case 'fireDoor':
-      case 'dock':
         setColor(item.body, color, faded);
         break;
     }

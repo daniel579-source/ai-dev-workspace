@@ -21,15 +21,15 @@ public sealed class PlantConfigFileTests : IDisposable
             StorageCodeRule = "RRCCCLL",
             Elements =
             [
-                new() { Id = "st-1", Type = LayoutElementType.Station, Name = "入庫口1", Aliases = ["A-01", "1001"],
+                new() { Id = "st-1", Type = LayoutElementType.Conv, Name = "入庫口1", Aliases = ["A-01", "1001"],
                         X = 3, Y = 11.5, W = 2, H = 2, Rotation = 0, Height = 1.2, Props = [new("樓層", "1F"), new("備註", "虛構")] },
-                new() { Id = "st-2", Type = LayoutElementType.Station, Name = "輸送站2", Aliases = ["A-02"],
+                new() { Id = "st-2", Type = LayoutElementType.Conv, Name = "輸送站2", Aliases = ["A-02"],
                         X = 7.5, Y = 11.5, W = 2, H = 2, Rotation = 90, Height = 1.2 },
                 new() { Id = "rk-1", Type = LayoutElementType.Rack, Name = "料架 R01", Row = "01", ColFrom = 1, ColTo = 20,
                         Levels = 5, LevelHeight = 2.5, X = 2, Y = 2, W = 24, H = 1.5, Rotation = 0 },
                 new() { Id = "vh-1", Type = LayoutElementType.Vehicle, Name = "SRCA01", Aliases = ["SRCA01"],
                         X = 4, Y = 4.5, W = 2.5, H = 1.2, Rotation = 0, Height = 2 },
-                new() { Id = "eq-1", Type = LayoutElementType.Dock, Name = "EQ901", Aliases = ["EQ901"],
+                new() { Id = "eq-1", Type = LayoutElementType.Eq, Name = "EQ901", Aliases = ["EQ901"],
                         X = 18, Y = 11.5, W = 2, H = 2, Rotation = 180, Height = 1.5 },
                 new() { Id = "cv-1", Type = LayoutElementType.Conveyor, From = "st-1", To = "st-2" },
                 new() { Id = "ar-1", Type = LayoutElementType.Area, Name = "入庫區", X = 2, Y = 10.5, W = 14.5, H = 4, Rotation = 0 },
@@ -61,8 +61,8 @@ public sealed class PlantConfigFileTests : IDisposable
     {
         var json = PlantConfigFile.Serialize(Sample());
 
-        Assert.Contains("\"formatVersion\": 1", json);
-        Assert.Contains("\"type\": \"station\"", json);
+        Assert.Contains("\"formatVersion\": 11", json);
+        Assert.Contains("\"type\": \"conv\"", json);
         Assert.Contains("\"樓層\": \"1F\"", json);
         Assert.DoesNotContain("\"from\": null", json);
         Assert.DoesNotContain("\\u", json); // 中文不跳脫

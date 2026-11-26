@@ -17,10 +17,10 @@ public sealed class NormalFlowTests
     {
         Elements =
         [
-            new() { Id = "st-1", Type = LayoutElementType.Station, Aliases = ["A-01"], X = 1, Y = 1, W = 2, H = 2, Rotation = 0 },
-            new() { Id = "st-2", Type = LayoutElementType.Station, Aliases = ["A-02"], X = 5, Y = 1, W = 2, H = 2, Rotation = 0 },
-            new() { Id = "st-3", Type = LayoutElementType.Station, Aliases = ["B-01"], X = 9, Y = 1, W = 2, H = 2, Rotation = 0 },
-            new() { Id = "cv-1", Type = LayoutElementType.Dock, Aliases = ["CV01"], X = 9, Y = 5, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "st-1", Type = LayoutElementType.Conv, Aliases = ["A-01"], X = 1, Y = 1, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "st-2", Type = LayoutElementType.Conv, Aliases = ["A-02"], X = 5, Y = 1, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "st-3", Type = LayoutElementType.Conv, Aliases = ["B-01"], X = 9, Y = 1, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "cv-1", Type = LayoutElementType.Eq, Aliases = ["CV01"], X = 9, Y = 5, W = 2, H = 2, Rotation = 0 },
             new() { Id = "ln-1", Type = LayoutElementType.Conveyor, From = "cv-1", To = "st-3" },
             new() { Id = "vh-1", Type = LayoutElementType.Vehicle, Aliases = ["VH01"], X = 3, Y = 4, W = 1, H = 1, Rotation = 0 },
             new() { Id = "rm-1", Type = LayoutElementType.Rm, Aliases = ["RM01"], X = 3, Y = 8, W = 1, H = 1, Rotation = 0 },
@@ -55,7 +55,7 @@ public sealed class NormalFlowTests
         }
 
         /// <summary>
-        /// 一個正常的 STV 站點 → 站點命令（A-01 → A-02）：派送後 2 秒目的站點「置物可 ON」，5 秒來源站點「搬出完了 ON」，
+        /// 一個正常的 STV Conv → Conv命令（A-01 → A-02）：派送後 2 秒目的站點「置物可 ON」，5 秒來源站點「搬出完了 ON」，
         /// 30 秒抵達、35 秒完成。skip 指定要拿掉的訊號；swap 時兩個訊號順序對調。
         /// </summary>
         public void Normal(string command, double at, string? skip = null, bool swap = false, string carrier = "VH01", string to = "A-02")
@@ -66,7 +66,7 @@ public sealed class NormalFlowTests
             var signals = new List<(double, string, string)> { (3, to, "置物可"), (6, "A-01", "搬出完了") };
             if (swap) signals = [(3, "A-01", "搬出完了"), (6, to, "置物可")];
             foreach (var (sec, station, name) in signals)
-                if (name != skip) Add(at + sec, EffectKinds.Signal, "PLC", (FieldKinds.Station, station), (FieldKinds.Signal, name), (FieldKinds.SignalValue, "ON"));
+                if (name != skip) Add(at + sec, EffectKinds.Signal, "PLC", (FieldKinds.Conv, station), (FieldKinds.Signal, name), (FieldKinds.SignalValue, "ON"));
             Add(at + 31, EffectKinds.SegmentArrived, "WCS", (FieldKinds.Command, command), (FieldKinds.Segment, "1"), (FieldKinds.Destination, to));
             Add(at + 36, EffectKinds.CommandCompleted, "WCS", (FieldKinds.Command, command));
         }
@@ -79,15 +79,15 @@ public sealed class NormalFlowTests
                 (FieldKinds.Vehicle, "VH01"), (FieldKinds.Source, "A-01"), (FieldKinds.Destination, "A-02"));
             if (reversed)
             {
-                Add(at + 3, EffectKinds.Signal, "PLC", (FieldKinds.Station, "A-01"), (FieldKinds.Signal, "搬出完了"), (FieldKinds.SignalValue, "ON"));
-                Add(at + 6, EffectKinds.Signal, "PLC", (FieldKinds.Station, "A-02"), (FieldKinds.Signal, "置物可"), (FieldKinds.SignalValue, "ON"));
+                Add(at + 3, EffectKinds.Signal, "PLC", (FieldKinds.Conv, "A-01"), (FieldKinds.Signal, "搬出完了"), (FieldKinds.SignalValue, "ON"));
+                Add(at + 6, EffectKinds.Signal, "PLC", (FieldKinds.Conv, "A-02"), (FieldKinds.Signal, "置物可"), (FieldKinds.SignalValue, "ON"));
             }
             else
             {
-                if (withPlace) Add(at + 3, EffectKinds.Signal, "PLC", (FieldKinds.Station, "A-02"), (FieldKinds.Signal, "置物可"), (FieldKinds.SignalValue, "ON"));
-                if (withOut) Add(at + 6, EffectKinds.Signal, "PLC", (FieldKinds.Station, "A-01"), (FieldKinds.Signal, "搬出完了"), (FieldKinds.SignalValue, "ON"));
+                if (withPlace) Add(at + 3, EffectKinds.Signal, "PLC", (FieldKinds.Conv, "A-02"), (FieldKinds.Signal, "置物可"), (FieldKinds.SignalValue, "ON"));
+                if (withOut) Add(at + 6, EffectKinds.Signal, "PLC", (FieldKinds.Conv, "A-01"), (FieldKinds.Signal, "搬出完了"), (FieldKinds.SignalValue, "ON"));
             }
-            Add(at + 700, EffectKinds.Signal, "PLC", (FieldKinds.Station, "B-01"), (FieldKinds.Signal, "在席"), (FieldKinds.SignalValue, "OFF"));
+            Add(at + 700, EffectKinds.Signal, "PLC", (FieldKinds.Conv, "B-01"), (FieldKinds.Signal, "在席"), (FieldKinds.SignalValue, "OFF"));
         }
     }
 
@@ -115,7 +115,7 @@ public sealed class NormalFlowTests
         Assert.Equal(["A-02 置物可 ON 2", "A-01 搬出完了 ON 5"], sample.Signals.Select(s => $"{s.Station} {s.Signal} {(s.On ? "ON" : "OFF")} {s.Offset}"));
 
         var row = Assert.Single(NormalFlows.Progress(file, Layout).Kinds);
-        Assert.Equal(("STV 站點 → 站點", FlowStatus.Ready, 5, 2, 2), (row.Kind, row.Status, row.Samples, row.Sources, row.ExpectedSignals));
+        Assert.Equal(("STV Conv → Conv", FlowStatus.Ready, 5, 2, 2), (row.Kind, row.Status, row.Samples, row.Sources, row.ExpectedSignals));
         Assert.Equal(0, row.FalsePositiveRate);
     }
 
@@ -132,8 +132,8 @@ public sealed class NormalFlowTests
         var finding = NormalFlows.Analyze(stall, fc, file, Layout)!;
 
         Assert.Equal(FlowFindingKind.MissingSignal, finding.Kind);
-        Assert.Contains("和過去 5 次正常的「STV 站點 → 站點」相比（這是差異，不是真因）", finding.Text);
-        Assert.Contains("沒有出現：目的站點的 置物可 ON（正常在派送後 2～2 秒出現）", finding.Text);
+        Assert.Contains("和過去 5 次正常的「STV Conv → Conv」相比（這是差異，不是真因）", finding.Text);
+        Assert.Contains("沒有出現：目的 Conv 的 置物可 ON（正常在派送後 2～2 秒出現）", finding.Text);
         Assert.DoesNotContain("搬出完了", finding.Text);
         Assert.NotEmpty(finding.Sequences);
         Assert.DoesNotContain("真因是", finding.Text);
@@ -163,7 +163,7 @@ public sealed class NormalFlowTests
         var finding = NormalFlows.Analyze(Assert.Single(fc.Stalls), fc, file, Layout)!;
 
         Assert.Equal(FlowFindingKind.MissingSignal, finding.Kind);
-        Assert.Contains("順序不同：目的站點的 置物可 ON 正常在 來源站點的 搬出完了 ON 之前，這次在之後", finding.Text);
+        Assert.Contains("順序不同：目的 Conv 的 置物可 ON 正常在 來源 Conv 的 搬出完了 ON 之前，這次在之後", finding.Text);
         Assert.Equal(3, finding.Sequences.Count); // 派送與兩個訊號
     }
 
@@ -271,8 +271,8 @@ public sealed class NormalFlowTests
     {
         var c = new FakeCase("HASH-A");
         c.Add(0, EffectKinds.SegmentDispatched, "WCS", (FieldKinds.Command, "C-A00"), (FieldKinds.Vehicle, "VH01"), (FieldKinds.Source, "A-01"), (FieldKinds.Destination, "CV01"));
-        c.Add(2, EffectKinds.Signal, "PLC", (FieldKinds.Station, "B-01"), (FieldKinds.Signal, "受入可"), (FieldKinds.SignalValue, "ON"));
-        c.Add(3, EffectKinds.Signal, "PLC", (FieldKinds.Station, "A-02"), (FieldKinds.Signal, "無關"), (FieldKinds.SignalValue, "ON")); // 沒有角色，不記錄
+        c.Add(2, EffectKinds.Signal, "PLC", (FieldKinds.Conv, "B-01"), (FieldKinds.Signal, "受入可"), (FieldKinds.SignalValue, "ON"));
+        c.Add(3, EffectKinds.Signal, "PLC", (FieldKinds.Conv, "A-02"), (FieldKinds.Signal, "無關"), (FieldKinds.SignalValue, "ON")); // 沒有角色，不記錄
         c.Add(20, EffectKinds.SegmentArrived, "WCS", (FieldKinds.Command, "C-A00"), (FieldKinds.Destination, "CV01"));
         c.Add(25, EffectKinds.CommandCompleted, "WCS", (FieldKinds.Command, "C-A00"));
         c.Normal("C-A01", 100, to: "Z-99"); // 目的地沒有登錄在 Layout
@@ -282,7 +282,7 @@ public sealed class NormalFlowTests
 
         var dock = Assert.Single(file.Samples, s => s.Command == "C-A00");
         Assert.Equal(["B-01 受入可"], dock.Signals.Select(s => $"{s.Station} {s.Signal}"));
-        Assert.Equal("STV 站點 → Conv", Assert.Single(kinds).Kind);
+        Assert.Equal("STV Conv → EQ", Assert.Single(kinds).Kind);
         Assert.Equal(1, unmapped);
         Assert.Equal(["目的地 Z-99 對應不到 Layout：1 段"], reasons);
     }
@@ -298,7 +298,7 @@ public sealed class NormalFlowTests
         foreach (var x in new[] { c, d }) file = NormalFlows.Add(file, Plant, 3, Layout, NormalFlows.CollectNormal(x.Build(), Layout, 3, Now), Now).File;
 
         var row = Assert.Single(NormalFlows.Progress(file, Layout).Kinds);
-        Assert.Equal((FlowStatus.NotSupported, "RM 站點 → 站點"), (row.Status, row.Kind));
+        Assert.Equal((FlowStatus.NotSupported, "RM Conv → Conv"), (row.Status, row.Kind));
         Assert.Contains("RM 的訊號對應規則待確認", row.Note);
     }
 
@@ -313,7 +313,7 @@ public sealed class NormalFlowTests
         Assert.Null(preview.Error);
         Assert.Equal((2, 3), (preview.Added, preview.Duplicates));
         Assert.Equal(5, preview.Merged!.Samples.Count);
-        Assert.Equal(["STV 站點 → 站點：收集中 → 可以判斷"], preview.StatusChanges);
+        Assert.Equal(["STV Conv → Conv：收集中 → 可以判斷"], preview.StatusChanges);
         Assert.Null(preview.RevisionNotice);
     }
 
@@ -331,7 +331,7 @@ public sealed class NormalFlowTests
     [Fact]
     public void 設定版本不同時_提示並以本機設定重新分類與檢驗()
     {
-        // 對方的電腦：目的站點的編號 X-02 是別名（本機的 Layout 沒有這個別名）
+        // 對方的電腦：目的 Conv 的編號 X-02 是別名（本機的 Layout 沒有這個別名）
         var other = Learned();
         other = other with { PlantRevision = 7, Samples = other.Samples.Select(s => s with { To = "X-02", Signals = s.Signals.Select(x => x.Station == "A-02" ? x with { Station = "X-02" } : x).ToList() }).ToList() };
 

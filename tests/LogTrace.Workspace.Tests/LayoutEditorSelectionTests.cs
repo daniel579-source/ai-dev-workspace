@@ -34,9 +34,9 @@ public sealed class LayoutEditorSelectionTests : IDisposable
     /// <summary>站點 st-1 (1,1)、st-2 (6,1)、st-3 (1,10)，各 2 × 2；輸送線 cv-1：st-1 → st-2，cv-2：st-2 → st-3。</summary>
     (LayoutElementViewModel A, LayoutElementViewModel B, LayoutElementViewModel C, LayoutElementViewModel AB, LayoutElementViewModel BC) Sample()
     {
-        var a = Add(LayoutElementType.Station, 1, 1);
-        var b = Add(LayoutElementType.Station, 6, 1);
-        var c = Add(LayoutElementType.Station, 1, 10);
+        var a = Add(LayoutElementType.Conv, 1, 1);
+        var b = Add(LayoutElementType.Conv, 6, 1);
+        var c = Add(LayoutElementType.Conv, 1, 10);
         return (a, b, c, Conveyor(a, b), Conveyor(b, c));
     }
 
@@ -148,7 +148,7 @@ public sealed class LayoutEditorSelectionTests : IDisposable
     [Fact]
     public void 貼上_滑鼠不在畫布上時放在原位置往右下1公尺_交接點隨搬送機平移()
     {
-        var st = Add(LayoutElementType.Station, 1, 1);
+        var st = Add(LayoutElementType.Conv, 1, 1);
         var vh = Add(LayoutElementType.Vehicle, 10, 1);
         var cv = Conveyor(st, vh);
         var point = cv.ToPoint!;
@@ -176,7 +176,7 @@ public sealed class LayoutEditorSelectionTests : IDisposable
     public void 復原_新增移動屬性修改各一步_同一欄位連續輸入合併_存檔後清空()
     {
         Assert.False(_vm.UndoCommand.CanExecute(null));
-        _vm.AddElementCommand.Execute(LayoutElementType.Station);
+        _vm.AddElementCommand.Execute(LayoutElementType.Conv);
         var st = _vm.SelectedElement!;
         var (x0, y0) = (st.X, st.Y);
 
@@ -194,7 +194,7 @@ public sealed class LayoutEditorSelectionTests : IDisposable
         Assert.Equal((0, "入庫站"), (st.Rotation, st.Name));
         _vm.UndoCommand.Execute(null);
         st = _vm.Elements.Single();
-        Assert.Equal("新站點 1", st.Name); // 連續輸入一次復原
+        Assert.Equal("新 Conv 1", st.Name); // 連續輸入一次復原
         _vm.UndoCommand.Execute(null);
         st = _vm.Elements.Single();
         Assert.Equal((x0, y0), (st.X, st.Y)); // 整個拖曳一次復原
@@ -202,7 +202,7 @@ public sealed class LayoutEditorSelectionTests : IDisposable
         Assert.Empty(_vm.Elements);
         Assert.False(_vm.UndoCommand.CanExecute(null));
 
-        _vm.AddElementCommand.Execute(LayoutElementType.Station);
+        _vm.AddElementCommand.Execute(LayoutElementType.Conv);
         _vm.PlantName = "範例廠";
         _vm.SaveCommand.Execute(null);
         Assert.False(_vm.UndoCommand.CanExecute(null)); // 存檔後不能再復原
@@ -211,7 +211,7 @@ public sealed class LayoutEditorSelectionTests : IDisposable
     [Fact]
     public void 復原最多50步()
     {
-        Add(LayoutElementType.Station, 0, 0);
+        Add(LayoutElementType.Conv, 0, 0);
         for (var i = 1; i <= 60; i++)
         {
             _vm.SelectedElement = null; // 換選取：下一次修改另算一步

@@ -6,7 +6,7 @@ namespace LogTrace.Engine.Tests;
 public sealed class FloorTests
 {
     static LayoutElement Station(string id, string? floor, double x = 1) =>
-        new() { Id = id, Type = LayoutElementType.Station, Name = id, Floor = floor, X = x, Y = 1, W = 2, H = 2, Rotation = 0 };
+        new() { Id = id, Type = LayoutElementType.Conv, Name = id, Floor = floor, X = x, Y = 1, W = 2, H = 2, Rotation = 0 };
 
     [Fact]
     public void 舊設定檔沒有樓層_視為只有1F_存檔時一律寫出樓層_格式版本不變()
@@ -25,7 +25,7 @@ public sealed class FloorTests
         Assert.Contains("\"floors\": [", json);
         var back = PlantConfigFile.Deserialize(json).Layout;
         Assert.Equal(["1F"], back.Floors);
-        Assert.All(back.Elements.Where(e => e.Type == LayoutElementType.Station), e => Assert.Equal("1F", e.Floor));
+        Assert.All(back.Elements.Where(e => e.Type == LayoutElementType.Conv), e => Assert.Equal("1F", e.Floor));
         Assert.Null(back.Elements.Single(e => e.Id == "cv-1").Floor); // 輸送線不存樓層
     }
 

@@ -33,9 +33,9 @@ public sealed class FireDoorEditorTests : IDisposable
     /// <summary>st-1 (1,1)、st-2 (10,1)、st-3 (1,10)；cv-1：st-1 → st-2（y = 2），cv-2：st-1 → st-3；防火門 fd-1 在 (6, 1.75) 跨過 cv-1。</summary>
     (LayoutElementViewModel Door, LayoutElementViewModel AB, LayoutElementViewModel AC) Sample()
     {
-        var a = Add(LayoutElementType.Station, 1, 1);
-        var b = Add(LayoutElementType.Station, 10, 1);
-        var c = Add(LayoutElementType.Station, 1, 10);
+        var a = Add(LayoutElementType.Conv, 1, 1);
+        var b = Add(LayoutElementType.Conv, 10, 1);
+        var c = Add(LayoutElementType.Conv, 1, 10);
         _vm.AddElementCommand.Execute(LayoutElementType.Conveyor);
         var ab = _vm.SelectedElement!;
         (ab.From, ab.To) = (a.Id, b.Id);
@@ -125,8 +125,8 @@ public sealed class FireDoorPlaybackTests
     {
         Elements =
         [
-            new() { Id = "st-1", Type = LayoutElementType.Station, Name = "站點 1", Aliases = ["A-01"], X = 1, Y = 1, W = 2, H = 2 },
-            new() { Id = "st-2", Type = LayoutElementType.Station, Name = "站點 2", Aliases = ["A-02"], X = 10, Y = 1, W = 2, H = 2 },
+            new() { Id = "st-1", Type = LayoutElementType.Conv, Name = "站點 1", Aliases = ["A-01"], X = 1, Y = 1, W = 2, H = 2 },
+            new() { Id = "st-2", Type = LayoutElementType.Conv, Name = "站點 2", Aliases = ["A-02"], X = 10, Y = 1, W = 2, H = 2 },
             new() { Id = "cv-1", Type = LayoutElementType.Conveyor, Name = "輸送線 1", From = "st-1", To = "st-2" },
             new() { Id = "cv-2", Type = LayoutElementType.Conveyor, Name = "輸送線 2", From = "st-2", To = "st-1" },
             new() { Id = "fd-1", Type = LayoutElementType.FireDoor, Name = "防火門 1", Aliases = ["FD-01"], X = 6, Y = 1.75, W = 0.5, H = 0.5, DoorState = usual, Conveyors = ["cv-1"] },
@@ -146,8 +146,8 @@ public sealed class FireDoorPlaybackTests
 
     static readonly EventEffect[] Effects =
     [
-        E(1, EffectKinds.PalletRead, (FieldKinds.Station, "A-01"), (FieldKinds.Pallet, "P-001")),
-        E(2, EffectKinds.PalletRead, (FieldKinds.Station, "A-02"), (FieldKinds.Pallet, "P-001")), // 穿過（門關著時）
+        E(1, EffectKinds.PalletRead, (FieldKinds.Conv, "A-01"), (FieldKinds.Pallet, "P-001")),
+        E(2, EffectKinds.PalletRead, (FieldKinds.Conv, "A-02"), (FieldKinds.Pallet, "P-001")), // 穿過（門關著時）
         E(3, EffectKinds.FireDoorOpened, (FieldKinds.FireDoor, "FD-01")),
         E(4, EffectKinds.FireDoorClosed, (FieldKinds.FireDoor, "FD-01")),
     ];

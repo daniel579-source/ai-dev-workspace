@@ -163,7 +163,7 @@ public sealed class CommandsEquipmentTests : IDisposable
 
         _vm.SeekTime(At(100)); // 前後 30 秒（70～130 秒）：A-09 心跳在 88.3 與 117.3 秒
         var a09 = Assert.Single(_vm.UnmappedNearby);
-        Assert.Equal(("站點", "A-09", 2L, 12L), (a09.KindLabel, a09.Value, a09.NearbyCount, a09.TotalCount));
+        Assert.Equal(("Conv", "A-09", 2L, 12L), (a09.KindLabel, a09.Value, a09.NearbyCount, a09.TotalCount));
 
         _vm.SeekTime(At(360)); // 結尾附近：SSCA03 只在 360 秒出現
         Assert.Contains(_vm.UnmappedNearby, u => u.Value == "SSCA03" && u.NearbyCount == 1 && u.TotalCount == 1 && u.KindLabel == "搬送機");

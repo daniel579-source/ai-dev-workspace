@@ -18,8 +18,8 @@ public sealed class VehicleMotionTests
             new() { Id = "rl-1", Type = LayoutElementType.Rail, Points = closed ? RailPath.LoopTemplate(0, 5) : RailPath.StraightTemplate(0, 5), Closed = closed ? true : null },
             new() { Id = "vh-1", Type = LayoutElementType.Vehicle, Aliases = ["V1"], X = 8, Y = 30, W = 2, H = 1, Rotation = 0, Rail = "rl-1" },
             new() { Id = "vh-2", Type = LayoutElementType.Vehicle, Aliases = ["V2"], X = 30, Y = 30, W = 2, H = 1, Rotation = 0 }, // 沒有導軌
-            new() { Id = "st-a", Type = LayoutElementType.Station, Aliases = ["A"], X = 1, Y = 7, W = 2, H = 2, Rotation = 0 },
-            new() { Id = "st-b", Type = LayoutElementType.Station, Aliases = ["B"], X = 17, Y = 7, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "st-a", Type = LayoutElementType.Conv, Aliases = ["A"], X = 1, Y = 7, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "st-b", Type = LayoutElementType.Conv, Aliases = ["B"], X = 17, Y = 7, W = 2, H = 2, Rotation = 0 },
             new() { Id = "rk-1", Type = LayoutElementType.Rack, Row = "01", ColFrom = 1, ColTo = 10, Levels = 3, X = 0, Y = 1, W = 20, H = 2, Rotation = 0 },
         ],
     };

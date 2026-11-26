@@ -101,8 +101,8 @@ public sealed class ElevatorPlaybackTests
             Floors = ["1F", "2F"],
             Elements =
             [
-                new() { Id = "st-1", Type = LayoutElementType.Station, Name = "1F 出入口", Aliases = ["A-01"], Floor = "1F", X = 1, Y = 1, W = 2, H = 2 },
-                new() { Id = "st-2", Type = LayoutElementType.Station, Name = "2F 出入口", Aliases = ["B-01"], Floor = "2F", X = 1, Y = 1, W = 2, H = 2 },
+                new() { Id = "st-1", Type = LayoutElementType.Conv, Name = "1F 出入口", Aliases = ["A-01"], Floor = "1F", X = 1, Y = 1, W = 2, H = 2 },
+                new() { Id = "st-2", Type = LayoutElementType.Conv, Name = "2F 出入口", Aliases = ["B-01"], Floor = "2F", X = 1, Y = 1, W = 2, H = 2 },
                 new() { Id = "ev-1", Type = LayoutElementType.Elevator, Name = "電梯 1", Aliases = ["L1"], ServedFloors = ["1F", "2F"], X = 4, Y = 1, W = 2, H = 2 },
             ],
         };

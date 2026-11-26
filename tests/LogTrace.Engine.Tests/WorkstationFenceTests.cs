@@ -35,7 +35,7 @@ public sealed class WorkstationFenceTests
     {
         var doc = new PlantConfigDocument { Plant = "虛構廠" };
         doc.Layout.Elements = [Fence("fc-1", (0, 0)), Ws("ws-1", "W-01", 0, 0),
-            new() { Id = "st-1", Type = LayoutElementType.Station, Name = "st", Aliases = ["A-01"], X = 4, Y = 0, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "st-1", Type = LayoutElementType.Conv, Name = "st", Aliases = ["A-01"], X = 4, Y = 0, W = 2, H = 2, Rotation = 0 },
             new() { Id = "cv-1", Type = LayoutElementType.Conveyor, From = "ws-1", To = "st-1" }];
 
         var issues = PlantConfigFile.Validate(doc);
@@ -55,9 +55,9 @@ public sealed class WorkstationFenceTests
             new(seq, effect, p.ToDictionary(x => x.Kind, x => (IReadOnlyList<string>)[x.Value]));
         var model = new WorldModel(
         [
-            E(1, EffectKinds.Signal, (FieldKinds.Station, "W-01"), (FieldKinds.Signal, "在席"), (FieldKinds.SignalValue, "OFF")),
-            E(2, EffectKinds.PalletRead, (FieldKinds.Station, "W-01"), (FieldKinds.Pallet, "P-001")),
-            E(3, EffectKinds.StationStatus, (FieldKinds.Station, "W-01"), (FieldKinds.StationStatus, "手動")),
+            E(1, EffectKinds.Signal, (FieldKinds.Conv, "W-01"), (FieldKinds.Signal, "在席"), (FieldKinds.SignalValue, "OFF")),
+            E(2, EffectKinds.PalletRead, (FieldKinds.Conv, "W-01"), (FieldKinds.Pallet, "P-001")),
+            E(3, EffectKinds.StationStatus, (FieldKinds.Conv, "W-01"), (FieldKinds.StationStatus, "手動")),
         ], layout, "在席");
 
         var w = model.StateAt(3);
@@ -82,10 +82,10 @@ public sealed class WorkstationFenceTests
     public void 電梯閘門_緊鄰的Conv站點工站點那一側有閘門_兩側都對接時兩側都有_不在服務樓層或離太遠的不算()
     {
         var layout = ElevatorLayout(
-            new() { Id = "eq-1", Type = LayoutElementType.Dock, Name = "左", Aliases = ["EQ1"], X = 8, Y = 10, W = 2, H = 2, Rotation = 0, Floor = "1F" },
+            new() { Id = "eq-1", Type = LayoutElementType.Conv, Name = "左", Aliases = ["EQ1"], X = 8, Y = 10, W = 2, H = 2, Rotation = 0, Floor = "1F" },
             Ws("ws-1", "W-01", 12.2, 10),                                                                                    // 右側，相距 0.2 公尺
-            new() { Id = "st-9", Type = LayoutElementType.Station, Name = "遠", Aliases = ["A-09"], X = 10, Y = 14, W = 2, H = 2, Rotation = 0 }, // 下方 2 公尺
-            new() { Id = "st-3", Type = LayoutElementType.Station, Name = "3F", Aliases = ["A-03"], X = 10, Y = 7.9, W = 2, H = 2, Rotation = 0, Floor = "3F" });
+            new() { Id = "st-9", Type = LayoutElementType.Conv, Name = "遠", Aliases = ["A-09"], X = 10, Y = 14, W = 2, H = 2, Rotation = 0 }, // 下方 2 公尺
+            new() { Id = "st-3", Type = LayoutElementType.Conv, Name = "3F", Aliases = ["A-03"], X = 10, Y = 7.9, W = 2, H = 2, Rotation = 0, Floor = "3F" });
 
         Assert.Equal([ElevatorGates.XMin, ElevatorGates.XMax], ElevatorGates.SidesOf(layout.Elements[0], layout));
     }
@@ -93,7 +93,7 @@ public sealed class WorkstationFenceTests
     [Fact]
     public void 電梯旋轉90度時_側面以電梯自己的座標表示()
     {
-        var layout = ElevatorLayout(new LayoutElement { Id = "st-1", Type = LayoutElementType.Station, Name = "上", Aliases = ["A-01"], X = 10, Y = 8, W = 2, H = 2, Rotation = 0 });
+        var layout = ElevatorLayout(new LayoutElement { Id = "st-1", Type = LayoutElementType.Conv, Name = "上", Aliases = ["A-01"], X = 10, Y = 8, W = 2, H = 2, Rotation = 0 });
         layout.Elements[0].Rotation = 90;
 
         // 旋轉 90 度後，樓層座標的上方（y 較小）是電梯自己的 -x 方向
@@ -102,17 +102,17 @@ public sealed class WorkstationFenceTests
     }
 
     [Fact]
-    public void EQ_門朝緊鄰最近的Conv_沒有時朝前方_用到EQ時格式版本9_沒有別名()
+    public void EQ_門朝緊鄰最近的Conv_沒有時朝前方_可以有別名()
     {
         var eq = new LayoutElement { Id = "eqp-1", Type = LayoutElementType.Eq, Name = "EQ", X = 10, Y = 10, W = 1.5, H = 1.5, Rotation = 0 };
-        var near = new LayoutElement { Id = "eq-1", Type = LayoutElementType.Dock, Name = "Conv", Aliases = ["EQ1"], X = 11.6, Y = 10, W = 2, H = 1.5, Rotation = 0 };
-        var far = new LayoutElement { Id = "eq-2", Type = LayoutElementType.Dock, Name = "遠", Aliases = ["EQ2"], X = 10, Y = 13, W = 2, H = 2, Rotation = 0 };
+        var near = new LayoutElement { Id = "eq-1", Type = LayoutElementType.Conv, Name = "Conv", Aliases = ["EQ1"], X = 11.6, Y = 10, W = 2, H = 1.5, Rotation = 0 };
+        var far = new LayoutElement { Id = "eq-2", Type = LayoutElementType.Conv, Name = "遠", Aliases = ["EQ2"], X = 10, Y = 13, W = 2, H = 2, Rotation = 0 };
         var doc = new PlantConfigDocument { Plant = "虛構廠" };
         doc.Layout.Elements = [eq, near, far];
 
         Assert.Equal((ElevatorGates.XMax, "eq-1"), EqDoors.Of(eq, doc.Layout));
-        Assert.Equal(9, doc.RequiredFormatVersion());
-        Assert.False(LayoutElement.CanHaveAliases(LayoutElementType.Eq));
+        Assert.Equal(11, doc.RequiredFormatVersion()); // 有 Conv（ADR-0026）
+        Assert.True(LayoutElement.CanHaveAliases(LayoutElementType.Eq)); // EQ 對應 LOG 中的 EQxxx（ADR-0026）
         Assert.Empty(PlantConfigFile.Validate(doc));
 
         doc.Layout.Elements = [eq, far];

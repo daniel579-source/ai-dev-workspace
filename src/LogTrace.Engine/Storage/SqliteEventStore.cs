@@ -478,7 +478,7 @@ public sealed class SqliteEventStore : IEventStore
         if (q.Levels.Count > 0) where.Add($"e.level IN ({In(q.Levels)})");
         if (q.Flags != EventFlags.None) where.Add($"(e.flags & {P((int)q.Flags)}) != 0");
         if (q.FieldKinds.Count > 0 && q.FieldValues.Count > 0)
-            where.Add($"e.seq IN (SELECT seq FROM event_fields WHERE kind IN ({In(q.FieldKinds)}) AND value IN ({In(q.FieldValues)}))");
+            where.Add($"e.seq IN (SELECT seq FROM event_fields WHERE kind IN ({In([.. Parsing.FieldKinds.WithLegacy(q.FieldKinds)])}) AND value IN ({In(q.FieldValues)}))");
         if (where.Count == 0) where.Add("1");
 
         bool checkText = q.Regex || q.CaseSensitive;
@@ -548,8 +548,10 @@ public sealed class SqliteEventStore : IEventStore
         while (r.Read())
         {
             var p = JsonSerializer.Deserialize<Dictionary<string, string[]>>(r.GetString(2)) ?? [];
+            // 舊案件的參數可能是舊的欄位種類名稱（ADR-0026）：讀取時對應到新名稱
             list.Add(new EventEffect(r.GetInt64(0), r.GetString(1),
-                p.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value, StringComparer.Ordinal)));
+                p.GroupBy(kv => Parsing.FieldKinds.Canonical(kv.Key), StringComparer.Ordinal)
+                    .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)[.. g.SelectMany(kv => kv.Value).Distinct()], StringComparer.Ordinal)));
         }
         return list;
     }
@@ -561,12 +563,13 @@ public sealed class SqliteEventStore : IEventStore
         cmd.Parameters.AddWithValue("$s", sequence);
         using var r = cmd.ExecuteReader();
         var list = new List<EventField>();
-        while (r.Read()) list.Add(new EventField(r.GetInt64(0), r.GetString(1), r.GetString(2)));
+        while (r.Read()) list.Add(new EventField(r.GetInt64(0), Parsing.FieldKinds.Canonical(r.GetString(1)), r.GetString(2)));
         return list;
     }
 
     public IReadOnlyList<(string Kind, string Value, long Count)> GetFieldValueCounts(IReadOnlyList<string> kinds)
     {
+        kinds = [.. Parsing.FieldKinds.WithLegacy(kinds)]; // 舊案件的欄位種類名稱（ADR-0026）
         using var cmd = _conn.CreateCommand();
         var names = kinds.Select((k, i) => "$k" + i).ToList();
         cmd.CommandText = $"""
@@ -577,11 +580,12 @@ public sealed class SqliteEventStore : IEventStore
         using var r = cmd.ExecuteReader();
         var list = new List<(string, string, long)>();
         while (r.Read()) list.Add((r.GetString(0), r.GetString(1), r.GetInt64(2)));
-        return list;
+        return MergeLegacyKinds(list);
     }
 
     public IReadOnlyList<(string Kind, string Value, long Count)> GetFieldValueCounts(IReadOnlyList<string> kinds, long fromSequence, long toSequence)
     {
+        kinds = [.. Parsing.FieldKinds.WithLegacy(kinds)]; // 舊案件的欄位種類名稱（ADR-0026）
         using var cmd = _conn.CreateCommand();
         var names = kinds.Select((k, i) => "$k" + i).ToList();
         cmd.CommandText = $"""
@@ -595,12 +599,32 @@ public sealed class SqliteEventStore : IEventStore
         using var r = cmd.ExecuteReader();
         var list = new List<(string, string, long)>();
         while (r.Read()) list.Add((r.GetString(0), r.GetString(1), r.GetInt64(2)));
-        return list;
+        return MergeLegacyKinds(list);
+    }
+
+    /// <summary>舊的欄位種類名稱對應到新名稱，同一個（種類、值）合併筆數；保持原本的排列順序。</summary>
+    static List<(string Kind, string Value, long Count)> MergeLegacyKinds(List<(string Kind, string Value, long Count)> rows)
+    {
+        if (!rows.Any(x => Parsing.FieldKinds.Legacy.ContainsKey(x.Kind))) return rows;
+        var merged = new List<(string Kind, string Value, long Count)>();
+        var at = new Dictionary<(string, string), int>();
+        foreach (var (kind, value, count) in rows)
+        {
+            var key = (Parsing.FieldKinds.Canonical(kind), value.ToUpperInvariant());
+            if (at.TryGetValue(key, out var i)) merged[i] = (merged[i].Kind, merged[i].Value, merged[i].Count + count);
+            else
+            {
+                at[key] = merged.Count;
+                merged.Add((key.Item1, value, count));
+            }
+        }
+        return merged;
     }
 
     public IReadOnlyList<long> FindSequences(IReadOnlyList<string> kinds, IReadOnlyList<string> values)
     {
         if (kinds.Count == 0 || values.Count == 0) return [];
+        kinds = [.. Parsing.FieldKinds.WithLegacy(kinds)]; // 舊案件的欄位種類名稱（ADR-0026）
         using var cmd = _conn.CreateCommand();
         var kn = kinds.Select((_, i) => "$k" + i).ToList();
         var vn = values.Select((_, i) => "$v" + i).ToList();

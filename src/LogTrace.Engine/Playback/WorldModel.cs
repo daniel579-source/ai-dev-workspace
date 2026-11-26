@@ -139,7 +139,7 @@ public sealed class WorldModel
         foreach (var x in _effects)
         {
             if (x.Effect is not (EffectKinds.AlarmRaised or EffectKinds.AlarmCleared)) continue;
-            var target = Resolve(x.Get(FieldKinds.Vehicle)) ?? Resolve(x.Get(FieldKinds.Station)) ?? Resolve(x.Get(FieldKinds.Dock))
+            var target = Resolve(x.Get(FieldKinds.Vehicle)) ?? Resolve(x.Get(FieldKinds.Conv)) ?? Resolve(x.Get(FieldKinds.Eq))
                 ?? Resolve(x.Get(FieldKinds.Elevator)) ?? Resolve(x.Get(FieldKinds.Rm));
             if (target is null) continue;
             if (open.Remove(target.Id, out var o)) list.Add((target.Id, o.Code, o.Start, x.Sequence));
@@ -170,9 +170,9 @@ public sealed class WorldModel
         if (Resolve(code) is { } e)
             return e.Type switch
             {
-                LayoutElementType.Station or LayoutElementType.Workstation => (LocationKind.Station, e.Id), // 工站點比照站點（ADR-0020）
+                LayoutElementType.Conv or LayoutElementType.Workstation => (LocationKind.Station, e.Id), // 工站點比照站點（ADR-0020）
                 LayoutElementType.Vehicle or LayoutElementType.Rm => (LocationKind.Vehicle, e.Id),
-                LayoutElementType.Dock => (LocationKind.AtDock, e.Id),
+                LayoutElementType.Eq => (LocationKind.AtEq, e.Id), // 交給 EQ（ADR-0026）
                 _ => (LocationKind.Unknown, code),
             };
         return StorageCode.TryParse(_storageRule, code, out _) ? (LocationKind.Storage, code) : (LocationKind.Unknown, code);
@@ -209,7 +209,7 @@ public sealed class WorldModel
 
     /// <summary>位置對應到的 Layout 元素 id（站點、搬送機、已交出的對接設備）；儲位與不明為 null。</summary>
     static string? ElementAt(LocationKind kind, string? id) =>
-        kind is LocationKind.Station or LocationKind.Vehicle or LocationKind.AtDock or LocationKind.Delivered ? id : null;
+        kind is LocationKind.Station or LocationKind.Vehicle or LocationKind.AtEq or LocationKind.Delivered ? id : null;
 
     /// <summary>防火門在此刻是否關著：LOG 確定的狀態優先，沒有 LOG 事件時用平時狀態（推估）。</summary>
     public static bool IsClosed(WorldState w, string doorId, DoorState? usual) =>
@@ -255,7 +255,7 @@ public sealed class WorldModel
         w.Sequence = seq;
         string? Element(string kind, LayoutElementType type) => Resolve(x.Get(kind)) is { } e && e.Type == type ? e.Id : null;
         // 站點欄位：站點或工站點（ADR-0020，工站點的狀態推導比照站點）
-        string? Station() => Resolve(x.Get(FieldKinds.Station)) is { } e && LayoutElement.IsStationLike(e.Type) ? e.Id : null;
+        string? Station() => Resolve(x.Get(FieldKinds.Conv)) is { } e && LayoutElement.IsStationLike(e.Type) ? e.Id : null;
         // 執行命令一段的設備：RM 欄位對應到 RM 元素（ADR-0019，#123），或搬送機欄位對應到搬送機（STV）
         string? Carrier() => Element(FieldKinds.Rm, LayoutElementType.Rm) ?? Element(FieldKinds.Vehicle, LayoutElementType.Vehicle);
 
@@ -278,7 +278,7 @@ public sealed class WorldModel
 
             case EffectKinds.PalletRead when x.Get(FieldKinds.Pallet) is { } id:
             {
-                var (kind, at) = Locate(x.Get(FieldKinds.Station) ?? "");
+                var (kind, at) = Locate(x.Get(FieldKinds.Conv) ?? "");
                 if (!w.Pallets.TryGetValue(id, out var p)) w.Pallets[id] = p = new PalletState { Id = id };
                 if (x.GetAll(FieldKinds.Bin) is { Count: > 0 } bins) p.Bins = bins;
                 MovePallet(w, p, kind, at, seq);
@@ -337,8 +337,8 @@ public sealed class WorldModel
                     : c.Pallet is { } pid && w.Pallets.TryGetValue(pid, out var known) ? known : null;
                 if (p is not null) MovePallet(w, p, kind, at, seq);
                 if (kind == LocationKind.Station) StationOf(w, at);
-                (c.Status, c.StatusCause, c.Segment, c.ArrivedDock) = (CommandStatus.SegmentArrived, seq,
-                    ParseInt(x.Get(FieldKinds.Segment)) ?? c.Segment, kind == LocationKind.AtDock ? at : null);
+                (c.Status, c.StatusCause, c.Segment, c.ArrivedEq) = (CommandStatus.SegmentArrived, seq,
+                    ParseInt(x.Get(FieldKinds.Segment)) ?? c.Segment, kind == LocationKind.AtEq ? at : null);
                 var vh = Carrier() ?? c.Vehicle;
                 if (vh is not null)
                 {
@@ -381,10 +381,10 @@ public sealed class WorldModel
             {
                 // 交給對接設備並收到完成回報時，才標示「已交出」（ADR-0005 第 2 點）
                 var c = CommandOf(w, id, seq);
-                if (c.Status == CommandStatus.SegmentArrived && c.ArrivedDock is { } dock)
+                if (c.Status == CommandStatus.SegmentArrived && c.ArrivedEq is { } dock)
                 {
                     (c.Status, c.StatusCause) = (CommandStatus.Delivered, seq);
-                    if (c.Pallet is { } pid && w.Pallets.TryGetValue(pid, out var p) && p.Location == LocationKind.AtDock && p.LocationId == dock)
+                    if (c.Pallet is { } pid && w.Pallets.TryGetValue(pid, out var p) && p.Location == LocationKind.AtEq && p.LocationId == dock)
                         MovePallet(w, p, LocationKind.Delivered, dock, seq);
                 }
                 else if (c.Status != CommandStatus.Delivered) (c.Status, c.StatusCause) = (CommandStatus.Completed, seq);
@@ -419,8 +419,8 @@ public sealed class WorldModel
                 var (kind, at) = Locate(dest);
                 if (c.Pallet is { } pid && w.Pallets.TryGetValue(pid, out var p)) MovePallet(w, p, kind, at, seq);
                 if (kind == LocationKind.Station) StationOf(w, at);
-                (c.Status, c.StatusCause, c.Segment, c.ArrivedDock) = (CommandStatus.SegmentArrived, seq,
-                    ParseInt(x.Get(FieldKinds.Segment)) ?? c.Segment, kind == LocationKind.AtDock ? at : null);
+                (c.Status, c.StatusCause, c.Segment, c.ArrivedEq) = (CommandStatus.SegmentArrived, seq,
+                    ParseInt(x.Get(FieldKinds.Segment)) ?? c.Segment, kind == LocationKind.AtEq ? at : null);
                 if (ev is not null)
                 {
                     var e = ElevatorOf(w, ev);
@@ -446,7 +446,7 @@ public sealed class WorldModel
             }
             case EffectKinds.AlarmRaised or EffectKinds.AlarmCleared:
             {
-                var target = Resolve(x.Get(FieldKinds.Vehicle)) ?? Resolve(x.Get(FieldKinds.Station)) ?? Resolve(x.Get(FieldKinds.Dock))
+                var target = Resolve(x.Get(FieldKinds.Vehicle)) ?? Resolve(x.Get(FieldKinds.Conv)) ?? Resolve(x.Get(FieldKinds.Eq))
                     ?? Resolve(x.Get(FieldKinds.Elevator)) ?? Resolve(x.Get(FieldKinds.Rm));
                 if (target is null) break;
                 if (x.Effect == EffectKinds.AlarmRaised) w.Alarms[target.Id] = new AlarmState(x.Get(FieldKinds.AlarmCode), seq);

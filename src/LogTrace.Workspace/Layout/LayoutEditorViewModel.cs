@@ -53,6 +53,9 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
 
     public IReadOnlyList<LayoutElementType> AddableTypes => LayoutElementTypes.Addable;
 
+    /// <summary>新增按鈕的分組（ADR-0026 第 6 點）。</summary>
+    public IReadOnlyList<LayoutElementTypeGroup> AddableGroups => LayoutElementTypes.Groups;
+
     /// <summary>存放位置下的廠別設定檔。</summary>
     public ObservableCollection<string> Configs { get; } = [];
 
@@ -473,7 +476,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             var ends = Elements.Where(e => LayoutElement.CanBeConveyorEnd(e.Type)).ToList(); // 依加入的順序，不受清單排序影響
             if (ends.Count < 2)
             {
-                Status = "輸送線需要至少兩個站點、工站點、Conv 或搬送機。";
+                Status = "輸送線需要至少兩個 Conv、工站點、EQ 或搬送機。";
                 return;
             }
             model = new LayoutElement { Id = id, Type = type, Name = $"輸送線 {id[(id.IndexOf('-') + 1)..]}", From = ends[0].Id, To = ends[1].Id };
@@ -494,7 +497,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
                 : (1, SnapTo(Elements.Where(e => !e.IsConveyor && OnFloor(e, CurrentFloor)).Select(e => BoundsOf(e).Bottom).DefaultIfEmpty(0).Max() + 1));
             model = new LayoutElement
             {
-                Id = id, Type = type, Name = $"新{LayoutElementTypes.Label(type)} {id[(id.IndexOf('-') + 1)..]}",
+                Id = id, Type = type, Name = $"新{(LayoutElementTypes.Label(type) is var l && char.IsAscii(l[0]) ? " " + l : l)} {id[(id.IndexOf('-') + 1)..]}", // Conv、RM 等英文名稱前加空格
                 X = x, Y = y, W = w, H = h, Rotation = 0, Height = height,
                 Floor = type == LayoutElementType.Elevator ? null : CurrentFloor,
                 Deck = type != LayoutElementType.Elevator && CurrentDeck == LayoutDeck.Upper ? LayoutDeck.Upper : null,
@@ -967,7 +970,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         if (alias.Length == 0) return false;
         if (!e.CanHaveAliases)
         {
-            Status = $"「{e.TypeLabel}」不能加別名；只有站點、搬送機、Conv、防火門、電梯可以。";
+            Status = $"「{e.TypeLabel}」不能加別名；只有 Conv、工站點、搬送機、RM、EQ、防火門、電梯可以。";
             return false;
         }
         var owner = AliasOwner(alias);

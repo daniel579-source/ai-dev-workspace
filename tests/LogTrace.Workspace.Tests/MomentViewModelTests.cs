@@ -66,7 +66,7 @@ public sealed class MomentViewModelTests : IDisposable
         _vm.SeekTime(At(2.5)); // A-01 站點模式代號 -> 1 之後
         _vm.Playback.SelectElementCommand.Execute(_vm.Playback.Elements.Single(e => e.Id == "st-1"));
 
-        var mode = _vm.Playback.Detail.Single(d => d.Label == "站點模式");
+        var mode = _vm.Playback.Detail.Single(d => d.Label == "Conv 模式");
         Assert.Equal("虛構模式甲", mode.Value);
         Assert.NotNull(mode.Cause); // 仍可追溯到原始事件
         Assert.Equal("7", _vm.Playback.StationModeText("7")); // 沒填的代號

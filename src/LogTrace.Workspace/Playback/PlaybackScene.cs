@@ -59,15 +59,14 @@ public static class PlaybackScene
 {
     /// <summary>
     /// 元素沒有填高度時的預設高度（公尺）。外觀以簡化的幾何表現（#113 使用者確認）：
-    /// 站點為低平台、搬送機為低矮的軌道車、對接設備中等高度、防火門為門板；料架依層數 × 每層高度。
+    /// Conv 為低平台、搬送機為低矮的軌道車、EQ 中等高度、防火門為門板；料架依層數 × 每層高度。
     /// </summary>
     public static double DefaultHeight(LayoutElementType type) => type switch
     {
         // 除了料架、電梯、RM 之外的設備預設 0.8 公尺（ADR-0020 第 2 點）
-        LayoutElementType.Station or LayoutElementType.Workstation => 0.8,
+        LayoutElementType.Conv or LayoutElementType.Workstation => 0.8,
         LayoutElementType.Vehicle => 0.8,
         LayoutElementType.Rm => 10, // 立柱的高度；載貨台依儲位的層移動（ADR-0019）
-        LayoutElementType.Dock => 0.8,
         LayoutElementType.Fence or LayoutElementType.FenceGate => 2.5, // 黃色網狀圍欄（ADR-0020）
         LayoutElementType.Eq => 1.8, // EQ（ADR-0020 補充）
         LayoutElementType.FireDoor => 3,
@@ -198,7 +197,7 @@ public static class PlaybackScene
                         SelectedColumn: selectedCell is not null && e.Cells.Contains(selectedCell) ? selectedCell.Column : null));
                     break;
                 }
-                case LayoutElementType.Station or LayoutElementType.Workstation:
+                case LayoutElementType.Conv or LayoutElementType.Workstation:
                     list.Add(new SceneElementState(e.Id, look, isSelected, Presence: e.PresenceLight switch { "●" => "on", "○" => "off", _ => "unknown" },
                         Badge: e.StatusBadge, Inconsistent: e.IsInconsistent, Loaded: e.Look == ElementLook.Occupied || world.PalletsAt(LocationKind.Station, e.Id).Any(),
                         Summary: e.Summary));

@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 9,
   "plant": "範例廠（虛構）",
   "revision": 1,
   "layout": {
@@ -111,7 +111,7 @@
       },
       {
         "id": "eq-1",
-        "type": "dock",
+        "type": "eq",
         "name": "EQ901",
         "aliases": [
           "EQ901"

@@ -25,8 +25,8 @@ public sealed class StallPlaybackTests
     {
         Elements =
         [
-            new() { Id = "st-a", Type = LayoutElementType.Station, Name = "A", Aliases = ["A"], X = 1, Y = 1, W = 2, H = 2, Rotation = 0 },
-            new() { Id = "st-b", Type = LayoutElementType.Station, Name = "B", Aliases = ["B"], X = 9, Y = 1, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "st-a", Type = LayoutElementType.Conv, Name = "A", Aliases = ["A"], X = 1, Y = 1, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "st-b", Type = LayoutElementType.Conv, Name = "B", Aliases = ["B"], X = 9, Y = 1, W = 2, H = 2, Rotation = 0 },
             new() { Id = "vh-1", Type = LayoutElementType.Vehicle, Name = "搬送機 1", Aliases = ["V1"], X = 5, Y = 4, W = 1, H = 1, Rotation = 0 },
         ],
     };
@@ -35,7 +35,7 @@ public sealed class StallPlaybackTests
     {
         var effects = new List<EventEffect>
         {
-            E(1, EffectKinds.PalletRead, (FieldKinds.Station, "A"), (FieldKinds.Pallet, "P-001")),
+            E(1, EffectKinds.PalletRead, (FieldKinds.Conv, "A"), (FieldKinds.Pallet, "P-001")),
             E(2, EffectKinds.CommandCreated, (FieldKinds.Command, "C-001"), (FieldKinds.Pallet, "P-001")),
             E(3, EffectKinds.SegmentDispatched, (FieldKinds.Command, "C-001"), (FieldKinds.Vehicle, "V1"), (FieldKinds.Destination, "B")),
             E(4, EffectKinds.SegmentArrived, (FieldKinds.Command, "C-001"), (FieldKinds.Destination, "B")),

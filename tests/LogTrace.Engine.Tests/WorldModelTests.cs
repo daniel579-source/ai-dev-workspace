@@ -145,7 +145,7 @@ public sealed class WorldModelTests : IDisposable
     {
         var w = At("00040002 第2段 抵達 EQ901");
 
-        Assert.Equal((LocationKind.AtDock, "eq-1"), (w.Pallets["PLT-EX-0002"].Location, w.Pallets["PLT-EX-0002"].LocationId));
+        Assert.Equal((LocationKind.AtEq, "eq-1"), (w.Pallets["PLT-EX-0002"].Location, w.Pallets["PLT-EX-0002"].LocationId));
         Assert.Equal(CommandStatus.SegmentArrived, w.Commands["00040002"].Status);
         Assert.False(w.Commands["00040002"].IsFinished);
     }

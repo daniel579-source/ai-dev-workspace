@@ -42,7 +42,7 @@ public static class PlantConfigFile
         WriteIndented = true,
         // 中文與正規表示式中的 <、> 直接寫出，方便閱讀與比對（設定檔不會嵌入 HTML）
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false), new PropsConverter(), new GapThresholdsConverter() },
+        Converters = { new LayoutElementTypeConverter(), new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false), new PropsConverter(), new GapThresholdsConverter() },
     };
 
     /// <summary>寫出 JSON；格式版本依內容決定（用到新功能時才升版，ADR-0006 第 7 點）。</summary>
@@ -156,10 +156,10 @@ public static class PlantConfigFile
 
         foreach (var (code, name) in doc.StationModeNames)
             if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(name))
-                issues.Add(new($"站點模式名稱中有沒有填代號或名稱的列（代號「{code}」）。", []));
+                issues.Add(new($"Conv 模式名稱中有沒有填代號或名稱的列（代號「{code}」）。", []));
         foreach (var g in doc.StationModeNames.Where(p => !string.IsNullOrWhiteSpace(p.Key))
                      .GroupBy(p => p.Key.Trim(), StringComparer.Ordinal).Where(g => g.Count() > 1))
-            issues.Add(new($"站點模式代號「{g.Key}」重複。", []));
+            issues.Add(new($"Conv 模式代號「{g.Key}」重複。", []));
 
         foreach (var (module, seconds) in doc.GapThresholds)
         {
@@ -246,7 +246,7 @@ public static class PlantConfigFile
         foreach (var e in elements)
         {
             if (e.Aliases is { Count: > 0 } && !LayoutElement.CanHaveAliases(e.Type))
-                issues.Add(new($"「{Label(e)}」不能有別名；只有站點、搬送機、Conv、防火門、電梯可以。", [e.Id]));
+                issues.Add(new($"「{Label(e)}」不能有別名；只有 Conv、工站點、搬送機、RM、EQ、防火門、電梯可以。", [e.Id]));
             if (e.Aliases?.Any(string.IsNullOrWhiteSpace) == true)
                 issues.Add(new($"「{Label(e)}」有空白的別名。", [e.Id]));
             if (e.Rotation is { } r && !AllowedRotations.Contains(r))
@@ -256,7 +256,7 @@ public static class PlantConfigFile
                 LayoutElement? End(string? id) => elements.FirstOrDefault(x => x.Id == id && LayoutElement.CanBeConveyorEnd(x.Type));
                 var (from, to) = (End(e.From), End(e.To));
                 if (from is null || to is null)
-                    issues.Add(new($"輸送線「{Label(e)}」的兩端必須是站點、工站點、Conv 或搬送機。", [e.Id]));
+                    issues.Add(new($"輸送線「{Label(e)}」的兩端必須是 Conv、工站點、EQ 或搬送機。", [e.Id]));
                 else if ((from.Type == LayoutElementType.Vehicle && e.FromPoint is null) || (to.Type == LayoutElementType.Vehicle && e.ToPoint is null))
                     issues.Add(new($"輸送線「{Label(e)}」連到搬送機的那一端沒有交接點。", [e.Id]));
                 else if (!LayoutFloors.NameComparer.Equals(LayoutFloors.FloorOf(from, floors, _ => null), LayoutFloors.FloorOf(to, floors, _ => null)))

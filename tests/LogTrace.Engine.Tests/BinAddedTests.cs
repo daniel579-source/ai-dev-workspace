@@ -9,7 +9,7 @@ public sealed class BinAddedTests
 {
     static readonly LayoutSection Layout = new()
     {
-        Elements = [new() { Id = "st-1", Type = LayoutElementType.Station, Aliases = ["A-01"], X = 1, Y = 1, W = 2, H = 2, Rotation = 0 }],
+        Elements = [new() { Id = "st-1", Type = LayoutElementType.Conv, Aliases = ["A-01"], X = 1, Y = 1, W = 2, H = 2, Rotation = 0 }],
     };
 
     static EventEffect E(long seq, string effect, params (string Kind, string Value)[] p) =>
@@ -20,7 +20,7 @@ public sealed class BinAddedTests
     {
         var model = new WorldModel(
         [
-            E(1, EffectKinds.PalletRead, (FieldKinds.Station, "A-01"), (FieldKinds.Pallet, "P-001")),
+            E(1, EffectKinds.PalletRead, (FieldKinds.Conv, "A-01"), (FieldKinds.Pallet, "P-001")),
             E(2, EffectKinds.BinAdded, (FieldKinds.Pallet, "P-001"), (FieldKinds.Bin, "B-01")),
             E(3, EffectKinds.BinAdded, (FieldKinds.Pallet, "P-001"), (FieldKinds.Bin, "B-02")),
             E(4, EffectKinds.BinAdded, (FieldKinds.Pallet, "P-001"), (FieldKinds.Bin, "B-01")), // 重複

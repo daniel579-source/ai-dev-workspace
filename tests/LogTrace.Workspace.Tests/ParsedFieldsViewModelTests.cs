@@ -38,7 +38,7 @@ public sealed class ParsedFieldsViewModelTests : IDisposable
             {
                 Elements =
                 [
-                    new() { Id = "st-1", Type = LayoutElementType.Station, Name = "入庫口1", Aliases = ["A-01", "1001"], X = 1, Y = 1, W = 2, H = 2, Rotation = 0 },
+                    new() { Id = "st-1", Type = LayoutElementType.Conv, Name = "入庫口1", Aliases = ["A-01", "1001"], X = 1, Y = 1, W = 2, H = 2, Rotation = 0 },
                     new() { Id = "vh-1", Type = LayoutElementType.Vehicle, Name = "搬送機1", Aliases = ["SRCA01"], X = 5, Y = 1, W = 2, H = 1, Rotation = 0 },
                 ],
             },
@@ -67,7 +67,7 @@ public sealed class ParsedFieldsViewModelTests : IDisposable
 
         _vm.SelectedEvent = _vm.Events.Single(e => e.Event.Message.Contains("卸貨完成"));
 
-        Assert.Contains("解析欄位：命令 00030001、站點 A-02、棧板 123456789", _vm.SelectedDetail);
+        Assert.Contains("解析欄位：命令 00030001、Conv A-02、棧板 123456789", _vm.SelectedDetail);
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public sealed class ParsedFieldsViewModelTests : IDisposable
         editor.OpenConfigCommand.Execute(Path.Combine(_plantsRoot, "範例廠.json"));
         var vehicle = editor.Elements.Single(e => e.Name == "搬送機1");
 
-        Assert.False(editor.AssignUnmapped(new UnmappedIdViewModel(FieldKinds.Station, "a-01", 1), vehicle));
+        Assert.False(editor.AssignUnmapped(new UnmappedIdViewModel(FieldKinds.Conv, "a-01", 1), vehicle));
         Assert.Contains("已經屬於「入庫口1」", editor.Status);
     }
 

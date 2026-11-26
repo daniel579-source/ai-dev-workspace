@@ -73,17 +73,27 @@
                         HorizontalAlignment="Left" Padding="8,1" Margin="0,4,0,0" AutomationProperties.AutomationId="OpenSelectedConfig" />
 
                 <TextBlock DockPanel.Dock="Top" Text="新增元素" FontWeight="SemiBold" Margin="0,12,0,4" />
-                <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding AddableTypes}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
+                <!-- 依類別分組（ADR-0026 第 6 點）：本公司設備、其他公司、輔助 -->
+                <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding AddableGroups}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Button Content="{Binding Converter={StaticResource TypeLabel}}" Padding="8,2" Margin="0,0,4,4"
-                                    Command="{Binding DataContext.AddElementCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                    CommandParameter="{Binding}" AutomationProperties.AutomationId="{Binding StringFormat=Add_{0}}" />
+                            <StackPanel>
+                                <TextBlock Text="{Binding Title}" Foreground="Gray" Margin="0,2,0,2" />
+                                <ItemsControl ItemsSource="{Binding Types}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Content="{Binding Converter={StaticResource TypeLabel}}" Padding="8,2" Margin="0,0,4,4"
+                                                    Command="{Binding DataContext.AddElementCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}" AutomationProperties.AutomationId="{Binding StringFormat=Add_{0}}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
@@ -122,7 +132,7 @@
                         <Button Content="設為選取元素的別名" Command="{Binding AssignSelectedUnmappedCommand}" Padding="8,1" Margin="12,0,0,0"
                                 AutomationProperties.AutomationId="AssignUnmapped" />
                     </StackPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="案件 LOG 中出現、但還沒有元素以它為別名的編號。先在 3D 畫布上選取站點、搬送機、Conv、防火門或電梯，再雙擊編號（或選編號後按「設為選取元素的別名」），即可加為別名。"
+                    <TextBlock DockPanel.Dock="Top" Text="案件 LOG 中出現、但還沒有元素以它為別名的編號。先在 3D 畫布上選取 Conv、工站點、搬送機、RM、EQ、防火門或電梯，再雙擊編號（或選編號後按「設為選取元素的別名」），即可加為別名。"
                                Foreground="#777" Margin="0,4,0,4" TextWrapping="Wrap" />
                     <ListBox x:Name="UnmappedList" ItemsSource="{Binding Unmapped}" SelectedItem="{Binding SelectedUnmapped}" AutomationProperties.AutomationId="UnmappedList"
                              MouseDoubleClick="Unmapped_MouseDoubleClick">
@@ -601,11 +611,11 @@
                                 Command="{Binding AddEncodingRuleCommand}" AutomationProperties.AutomationId="AddEncodingRule" />
 
                         <TextBlock Text="在席訊號" FontWeight="SemiBold" Margin="0,16,0,0" />
-                        <TextBlock Text="效果為 signal 的規則抽到這個訊號名稱時，決定站點的在席指示燈。" Foreground="#777" TextWrapping="Wrap" />
+                        <TextBlock Text="效果為 signal 的規則抽到這個訊號名稱時，決定 Conv 的在席指示燈。" Foreground="#777" TextWrapping="Wrap" />
                         <TextBox Text="{Binding PresenceSignal, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,4,0,0" />
 
                         <!-- ADR-0005 第 3 點：站點模式代號的名稱 -->
-                        <TextBlock Text="站點模式名稱" FontWeight="SemiBold" Margin="0,16,0,0" />
+                        <TextBlock Text="Conv 模式名稱" FontWeight="SemiBold" Margin="0,16,0,0" />
                         <TextBlock Text="效果為 stationMode 的規則抽到的代號，回放時顯示為這裡的名稱；沒填的代號直接顯示。" Foreground="#777" TextWrapping="Wrap" />
                         <Grid Margin="0,4,0,2">
                             <Grid.ColumnDefinitions>
@@ -634,7 +644,7 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                        <Button Content="＋ 新增站點模式名稱" HorizontalAlignment="Left" Padding="8,1" Margin="0,4,0,0"
+                        <Button Content="＋ 新增 Conv 模式名稱" HorizontalAlignment="Left" Padding="8,1" Margin="0,4,0,0"
                                 Command="{Binding AddStationModeNameCommand}" AutomationProperties.AutomationId="AddStationModeName" />
 
                         <!-- ADR-0006、ADR-0008 第 3 點（#84）：沒有 LOG 的門檻 -->
@@ -673,7 +683,7 @@
 
                         <!-- ADR-0005 第 5 點 2026-11-16 補充（#142）：可能卡住的門檻 -->
                         <TextBlock Text="可能卡住的門檻（秒）" FontWeight="SemiBold" Margin="0,16,0,0" />
-                        <TextBlock Text="命令某一段派送、抵達或作業完成之後，或棧板在站點被讀到之後，超過這麼多秒沒有下一步時，標示「可能卡住（推估）」。預設 300 秒；0 表示不判定。與「這段時間沒有 LOG」重疊時不判定，只提示重疊。修改後，開啟案件時套用新版才生效。" Foreground="#777" TextWrapping="Wrap" />
+                        <TextBlock Text="命令某一段派送、抵達或作業完成之後，或棧板在 Conv 被讀到之後，超過這麼多秒沒有下一步時，標示「可能卡住（推估）」。預設 300 秒；0 表示不判定。與「這段時間沒有 LOG」重疊時不判定，只提示重疊。修改後，開啟案件時套用新版才生效。" Foreground="#777" TextWrapping="Wrap" />
                         <TextBox Text="{Binding StallThreshold, UpdateSourceTrigger=PropertyChanged}" Width="80" HorizontalAlignment="Left" Margin="0,4,0,0"
                                  AutomationProperties.AutomationId="StallThreshold" />
 

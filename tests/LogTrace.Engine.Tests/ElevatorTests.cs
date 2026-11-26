@@ -13,9 +13,9 @@ public sealed class ElevatorTests
         Floors = ["1F", "2F", "3F"],
         Elements =
         [
-            new() { Id = "st-1", Type = LayoutElementType.Station, Name = "1F 出入口", Aliases = ["A-01"], Floor = "1F", X = 1, Y = 1, W = 2, H = 2, Rotation = 0 },
-            new() { Id = "st-2", Type = LayoutElementType.Station, Name = "2F 出入口", Aliases = ["B-01"], Floor = "2F", X = 1, Y = 1, W = 2, H = 2, Rotation = 0 },
-            new() { Id = "st-3", Type = LayoutElementType.Station, Name = "3F 出入口", Aliases = ["C-01"], Floor = "3F", X = 1, Y = 1, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "st-1", Type = LayoutElementType.Conv, Name = "1F 出入口", Aliases = ["A-01"], Floor = "1F", X = 1, Y = 1, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "st-2", Type = LayoutElementType.Conv, Name = "2F 出入口", Aliases = ["B-01"], Floor = "2F", X = 1, Y = 1, W = 2, H = 2, Rotation = 0 },
+            new() { Id = "st-3", Type = LayoutElementType.Conv, Name = "3F 出入口", Aliases = ["C-01"], Floor = "3F", X = 1, Y = 1, W = 2, H = 2, Rotation = 0 },
             new() { Id = "ev-1", Type = LayoutElementType.Elevator, Name = "電梯 1", Aliases = ["L1"], ServedFloors = ["1F", "2F", "3F"], X = 4, Y = 1, W = 2, H = 2, Rotation = 0 },
         ],
     };
@@ -98,7 +98,7 @@ public sealed class ElevatorTests
         var doc = new PlantConfigDocument { Plant = "範例廠", Layout = Layout() };
 
         var json = PlantConfigFile.Serialize(doc);
-        Assert.Contains("\"formatVersion\": 5", json);
+        Assert.Contains("\"formatVersion\": 11", json);
         Assert.Contains("\"type\": \"elevator\"", json);
         var ev = PlantConfigFile.Deserialize(json).Layout.Elements.Single(e => e.Id == "ev-1");
         Assert.Equal(["1F", "2F", "3F"], ev.ServedFloors);
@@ -114,7 +114,7 @@ public sealed class ElevatorTests
         var issues = PlantConfigFile.Validate(new PlantConfigDocument { Plant = "範例廠", Layout = bad });
         Assert.Contains(issues, i => i.Message.Contains("「9F」不在樓層清單中") && i.ElementIds.SequenceEqual(["ev-1"]));
         Assert.Contains(issues, i => i.Message.Contains("至少要服務兩個樓層") && i.ElementIds.SequenceEqual(["ev-2"]));
-        Assert.Contains(issues, i => i.Message.Contains("兩端必須是站點、工站點、Conv 或搬送機") && i.ElementIds.SequenceEqual(["cv-1"]));
+        Assert.Contains(issues, i => i.Message.Contains("兩端必須是 Conv、工站點、EQ 或搬送機") && i.ElementIds.SequenceEqual(["cv-1"]));
     }
 
     [Fact]

@@ -47,7 +47,14 @@ public static class FlowStore
                 if (version < 1) throw new FormatException("不是正常流程樣板檔（缺少格式版本）");
                 if (version > FlowFile.CurrentFormatVersion) throw new FormatException($"格式版本 {version} 較新，請更新程式");
             }
-            return JsonSerializer.Deserialize<FlowFile>(bytes, Options) ?? throw new FormatException("內容是空的");
+            var file = JsonSerializer.Deserialize<FlowFile>(bytes, Options) ?? throw new FormatException("內容是空的");
+            // 段落種類的名稱：「站點」改稱 Conv（ADR-0026）；原本的 Conv（dock）也讀成 Conv，所以只改「站點」
+            if (!file.Kinds.Any(k => k.Kind.Contains("站點", StringComparison.Ordinal))) return file;
+            return file with
+            {
+                Kinds = [.. file.Kinds.Select(k => k with { Kind = k.Kind.Replace("站點", "Conv", StringComparison.Ordinal) })
+                    .GroupBy(k => k.Kind, StringComparer.Ordinal).Select(g => g.First())],
+            };
         }
         catch (JsonException ex)
         {

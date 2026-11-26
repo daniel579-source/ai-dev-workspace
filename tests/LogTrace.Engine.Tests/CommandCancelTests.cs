@@ -14,7 +14,7 @@ public sealed class CommandCancelTests
         [
             new() { Id = "vh-1", Type = LayoutElementType.Vehicle, Name = "SRCA01", Aliases = ["SRCA01"] },
             new() { Id = "vh-2", Type = LayoutElementType.Vehicle, Name = "SRCA02", Aliases = ["SRCA02"] },
-            new() { Id = "st-1", Type = LayoutElementType.Station, Name = "入庫口1", Aliases = ["A-01"] },
+            new() { Id = "st-1", Type = LayoutElementType.Conv, Name = "入庫口1", Aliases = ["A-01"] },
         ],
     };
 
@@ -26,7 +26,7 @@ public sealed class CommandCancelTests
     {
         var world = new WorldModel(
         [
-            E(1, EffectKinds.PalletRead, (FieldKinds.Station, "A-01"), (FieldKinds.Pallet, "PLT-X")),
+            E(1, EffectKinds.PalletRead, (FieldKinds.Conv, "A-01"), (FieldKinds.Pallet, "PLT-X")),
             E(2, EffectKinds.CommandCreated, (FieldKinds.Command, "00090001"), (FieldKinds.Pallet, "PLT-X"), (FieldKinds.Source, "A-01")),
             E(3, EffectKinds.SegmentDispatched, (FieldKinds.Command, "00090001"), (FieldKinds.Vehicle, "SRCA01"), (FieldKinds.Destination, "0100101")),
             E(4, EffectKinds.CommandCancelled, (FieldKinds.Command, "00090001")),

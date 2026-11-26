@@ -89,7 +89,7 @@ public sealed class SearchIndexTests : IDisposable
         Assert.Equal((0, 2), Route(new SearchQuery { NoneOf = "heartbeat" }));    // 只有「不包含」
         Assert.Equal((0, 2), Route(new SearchQuery { AllOf = "bcr.1", Regex = true }));
         Assert.Equal((2, 0), Route(new SearchQuery { AllOf = "卸貨 heartbeat" })); // 選可以用索引的那一個
-        Assert.True(_case.Search(new SearchQuery { AllOf = "heartbeat", FieldKinds = [FieldKinds.Station], FieldValues = ["A-01"] },
+        Assert.True(_case.Search(new SearchQuery { AllOf = "heartbeat", FieldKinds = [FieldKinds.Conv], FieldValues = ["A-01"] },
             SearchPath.Auto, null).ByFields); // 有精確篩選：先用參照表
     }
 

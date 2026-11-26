@@ -129,7 +129,7 @@ public enum LocationKind
     /// <summary>在電梯上（ADR-0005 第 11 點）。</summary>
     Elevator,
     /// <summary>已抵達對接設備，還沒有收到完成回報（ADR-0005 第 2 點：收到完成回報才算已交出）。</summary>
-    AtDock,
+    AtEq,
 }
 
 /// <summary>貨物（棧板與桶清單，ADR-0005 第 1、2 點）。</summary>
@@ -191,7 +191,7 @@ public sealed class CommandState
     public string? Vehicle { get; set; }
     public string? SegmentDestination { get; set; }
     /// <summary>最後一段抵達的對接設備（元素 id）；收到完成回報時據此標示「已交出」。</summary>
-    public string? ArrivedDock { get; set; }
+    public string? ArrivedEq { get; set; }
 
     public bool IsFinished => Status is CommandStatus.Completed or CommandStatus.Delivered or CommandStatus.Cancelled;
 

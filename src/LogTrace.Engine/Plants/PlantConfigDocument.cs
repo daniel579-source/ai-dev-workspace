@@ -4,17 +4,19 @@ using System.Text.Json.Serialization;
 namespace LogTrace.Engine.Plants;
 
 /// <summary>Layout 元素的種類（ADR-0006 第 1 點）。JSON 中以小寫英文字串保存。</summary>
+[JsonConverter(typeof(LayoutElementTypeConverter))]
 public enum LayoutElementType
 {
-    /// <summary>站點（有 LOG 意義，可以有別名）。</summary>
-    Station,
+    /// <summary>
+    /// Conv（有 LOG 意義，可以有別名，ADR-0026）：本公司的輸送設備；原本的站點（station）與原本的 Conv（dock）合併而成。
+    /// 設定檔寫 conv；讀到 station、dock 時都視為 Conv。
+    /// </summary>
+    Conv,
     /// <summary>料架（含儲位；有 LOG 意義）。</summary>
     Rack,
     /// <summary>搬送機（有 LOG 意義，可以有別名）。</summary>
     Vehicle,
-    /// <summary>對接設備（有 LOG 意義，可以有別名）。</summary>
-    Dock,
-    /// <summary>輸送線（輔助）：表示兩個站點、對接設備或搬送機之間的貨物流向，單向或雙向（ADR-0006 第 1 點）。</summary>
+    /// <summary>輸送線（輔助）：表示兩個 Conv、工站點、EQ 或搬送機之間的貨物流向，單向或雙向（ADR-0006 第 1 點）。</summary>
     Conveyor,
     /// <summary>區域（輔助）。</summary>
     Area,
@@ -34,8 +36,28 @@ public enum LayoutElementType
     Fence,
     /// <summary>圍欄門（輔助，ADR-0020）：放在圍欄缺口的門；LOG 沒有記錄開關與模式，不推導狀態。</summary>
     FenceGate,
-    /// <summary>EQ（輔助，ADR-0020 補充）：其他公司的對接設備外觀；不推導狀態，門朝緊鄰的 Conv。</summary>
+    /// <summary>EQ（有 LOG 意義，可以有別名，ADR-0026）：其他公司的設備（LOG 中的 EQxxx）；貨物在這裡交出。門朝緊鄰的 Conv（ADR-0020 補充）。</summary>
     Eq,
+}
+
+/// <summary>
+/// 元素種類的 JSON 字串（ADR-0026）：寫出 camelCase；讀取時 station 與 dock 都讀成 Conv。
+/// 要排在 JsonStringEnumConverter 之前（設定的 Converters 優先於型別上的屬性）。
+/// </summary>
+public sealed class LayoutElementTypeConverter : JsonConverter<LayoutElementType>
+{
+    public override LayoutElementType Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType != JsonTokenType.String) throw new JsonException("元素種類必須是文字");
+        var text = reader.GetString() ?? "";
+        if (text is "station" or "dock") return LayoutElementType.Conv;
+        foreach (var t in Enum.GetValues<LayoutElementType>())
+            if (string.Equals(JsonNamingPolicy.CamelCase.ConvertName(t.ToString()), text, StringComparison.Ordinal)) return t;
+        throw new JsonException($"不認得的元素種類：{text}");
+    }
+
+    public override void Write(Utf8JsonWriter writer, LayoutElementType value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(JsonNamingPolicy.CamelCase.ConvertName(value.ToString()));
 }
 
 /// <summary>雙深料架的深淺（ADR-0019）：離所屬 RM 近的為淺。JSON 中為 shallow、deep。</summary>
@@ -143,15 +165,15 @@ public sealed class LayoutElement
     public Dictionary<string, JsonElement>? Extra { get; set; }
 
     public static bool CanHaveAliases(LayoutElementType type) =>
-        type is LayoutElementType.Station or LayoutElementType.Vehicle or LayoutElementType.Dock or LayoutElementType.FireDoor or LayoutElementType.Elevator
+        type is LayoutElementType.Conv or LayoutElementType.Vehicle or LayoutElementType.Eq or LayoutElementType.FireDoor or LayoutElementType.Elevator
             or LayoutElementType.Rm or LayoutElementType.Workstation;
 
-    /// <summary>可以當作輸送線兩端的元素：站點、工站點（ADR-0020）、對接設備、搬送機。電梯不接輸送線（ADR-0006）。</summary>
+    /// <summary>可以當作輸送線兩端的元素：Conv、工站點（ADR-0020）、EQ（ADR-0026）、搬送機。電梯不接輸送線（ADR-0006）。</summary>
     public static bool CanBeConveyorEnd(LayoutElementType type) =>
-        type is LayoutElementType.Station or LayoutElementType.Workstation or LayoutElementType.Dock or LayoutElementType.Vehicle;
+        type is LayoutElementType.Conv or LayoutElementType.Workstation or LayoutElementType.Eq or LayoutElementType.Vehicle;
 
-    /// <summary>狀態推導比照站點的種類：站點與工站點（ADR-0020）。</summary>
-    public static bool IsStationLike(LayoutElementType type) => type is LayoutElementType.Station or LayoutElementType.Workstation;
+    /// <summary>狀態推導比照 Conv（原本的站點）的種類：Conv 與工站點（ADR-0020、ADR-0026）。</summary>
+    public static bool IsStationLike(LayoutElementType type) => type is LayoutElementType.Conv or LayoutElementType.Workstation;
 
     /// <summary>以折線（points）表示的種類：導軌與圍欄（ADR-0020）。</summary>
     public static bool HasPath(LayoutElementType type) => type is LayoutElementType.Rail or LayoutElementType.Fence;
@@ -433,15 +455,17 @@ public sealed class PlantConfigDocument
     /// 4：導軌（#100，舊版程式不認得 rail 這個種類）。5：電梯（#102）。6：樓板高度（#113，樓層寫成物件，舊版程式讀不了）。
     /// 7：RM 與排的配置表（#123，ADR-0019）。8：工站點、圍欄、圍欄門（ADR-0020）。9：EQ（ADR-0020 補充）。
     /// 10：同一樓層的上層與下層（元素的 deck、樓層的 upperHeight；舊版程式會把上層元素畫在下層、存檔時遺失上層高度）。
+    /// 11：站點與原本的 Conv（dock）合併為 Conv，type 寫 conv（ADR-0026；舊版程式不認得 conv 這個種類）。
     /// 存檔時只寫實際用到的最低版本，讓舊版程式照常開啟（ADR-0006 第 7 點）。
     /// </summary>
-    public const int CurrentFormatVersion = 10;
+    public const int CurrentFormatVersion = 11;
 
     /// <summary>
-    /// 這份設定需要的格式版本：有上層元素或填了上層高度時為 10；有 EQ 時為 9；有工站點、圍欄、圍欄門時為 8；有 RM 或排的配置表時為 7；有填樓板高度時為 6；有電梯時為 5；有導軌時為 4；有防火門時為 3；有雙向或連到搬送機（有交接點）的輸送線時為 2；否則為 1。
+    /// 這份設定需要的格式版本：有 Conv 時為 11；有上層元素或填了上層高度時為 10；有 EQ 時為 9；有工站點、圍欄、圍欄門時為 8；有 RM 或排的配置表時為 7；有填樓板高度時為 6；有電梯時為 5；有導軌時為 4；有防火門時為 3；有雙向或連到搬送機（有交接點）的輸送線時為 2；否則為 1。
     /// </summary>
     public int RequiredFormatVersion() =>
-        Layout.Elements.Any(e => e.Deck == LayoutDeck.Upper) || Layout.Floors?.Any(f => f.UpperHeight is not null) == true ? 10
+        Layout.Elements.Any(e => e.Type == LayoutElementType.Conv) ? 11
+        : Layout.Elements.Any(e => e.Deck == LayoutDeck.Upper) || Layout.Floors?.Any(f => f.UpperHeight is not null) == true ? 10
         : Layout.Elements.Any(e => e.Type == LayoutElementType.Eq) ? 9
         : Layout.Elements.Any(e => e.Type is LayoutElementType.Workstation or LayoutElementType.Fence or LayoutElementType.FenceGate) ? 8
         : Layout.Elements.Any(e => e.Type == LayoutElementType.Rm) || Layout.Rows is { Count: > 0 } ? 7

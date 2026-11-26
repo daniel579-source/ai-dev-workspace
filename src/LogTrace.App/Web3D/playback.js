@@ -103,6 +103,7 @@ function applyState(state) {
       l.div.classList.toggle('reading', !!s.reading);
       l.div.classList.toggle('ok', s.look === 'readOk');
       l.div.classList.toggle('manual', s.look === 'manual');
+      l.div.classList.toggle('stale', !!s.stale); // 結果超過 2 分鐘變淡（#209）
       l.div.classList.toggle('stalled', !!s.stalled);
       l.div.classList.toggle('estimated', !!s.estimated);
     }

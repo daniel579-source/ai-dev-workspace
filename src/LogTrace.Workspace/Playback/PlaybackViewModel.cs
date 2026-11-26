@@ -188,6 +188,13 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsDeviceAbnormal { get; set; }
 
+    /// <summary>
+    /// BCR、磅秤的結果超過 <see cref="PlaybackViewModel.StaleSeconds"/> 秒（#209）：標籤變淡；異常也一樣。
+    /// 讀取中、等待中與選取中的元素不變淡。
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsStale { get; set; }
+
     /// <summary>防火門的狀態是推估（還沒有 LOG 事件，用 Layout 的平時狀態）；畫面以虛線框表示。</summary>
     [ObservableProperty]
     public partial bool IsEstimated { get; set; }
@@ -348,6 +355,9 @@ public sealed partial class PlaybackViewModel : ObservableObject
         if (oldValue is not null) oldValue.IsSelected = false;
         if (newValue is not null) newValue.IsSelected = true;
         if (newValue is null || !newValue.IsRack) SelectRackCell(null);
+        // 選取中的 BCR、磅秤不變淡（#209）：選取改變時重新計算這兩個元素
+        foreach (var el in new[] { oldValue, newValue })
+            if (el is { Type: LayoutElementType.Bcr or LayoutElementType.Scale }) Update(el);
         UpdateDetail();
         RefreshSceneState();
     }
@@ -419,6 +429,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
                 el.IsReading = b?.ReadingSince is not null;
                 el.IsDeviceAbnormal = b?.IsFailed == true;
                 el.Summary = BcrSummary(el, b);
+                el.IsStale = !el.IsReading && !el.IsSelected && SecondsSince(b?.ResultCause) > StaleSeconds;
                 el.Look = b is null ? ElementLook.Unknown
                     : el.IsReading ? ElementLook.Reading
                     : b.Result switch { BcrResult.Read => ElementLook.ReadOk, BcrResult.Manual => ElementLook.Manual, BcrResult.Failed => ElementLook.Alarm, _ => ElementLook.Unknown };
@@ -432,6 +443,7 @@ public sealed partial class PlaybackViewModel : ObservableObject
                 el.IsEstimated = el.IsReading; // 等待中是推估（LOG 沒有記錄磅秤要求）
                 el.IsDeviceAbnormal = judgement is WeightJudgement.Over or WeightJudgement.Under;
                 el.Summary = ScaleSummary(s, judgement);
+                el.IsStale = !el.IsReading && !el.IsSelected && SecondsSince(s?.WeightCause) > StaleSeconds;
                 el.Look = s is null ? ElementLook.Unknown
                     : el.IsReading ? ElementLook.Reading
                     : el.IsDeviceAbnormal ? ElementLook.Alarm
@@ -475,6 +487,9 @@ public sealed partial class PlaybackViewModel : ObservableObject
     }
 
     // ---- BCR 與磅秤（ADR-0027） ----
+
+    /// <summary>結果超過這麼多秒時標籤變淡（#209，使用者決定 2 分鐘）。</summary>
+    public const double StaleSeconds = 120;
 
     /// <summary>事件 sequence 到目前時刻經過的秒數；時間不明時為 null。</summary>
     double? SecondsSince(long? sequence) =>

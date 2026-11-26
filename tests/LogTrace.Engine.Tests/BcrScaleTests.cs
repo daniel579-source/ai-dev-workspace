@@ -129,6 +129,18 @@ public sealed class BcrScaleTests
         Assert.Equal(expected, w.Judge(w.Scales["sc-1"]));
     }
 
+    [Theory]
+    [InlineData("86]4", 864.0)]
+    [InlineData("512", 512.0)]
+    [InlineData("-1.5", -1.5)]
+    public void 磅秤回傳值_括號外的數字接起來(string raw, double expected)
+    {
+        var m = Model(E(1, EffectKinds.ScaleRead, (FieldKinds.Conv, "A-01"), (FieldKinds.Weight, raw)));
+
+        Assert.Equal(expected, m.StateAt(1).Scales["sc-1"].Weight);
+        Assert.DoesNotContain("]", m.StateAt(1).Scales["sc-1"].WeightText);
+    }
+
     [Fact]
     public void 沒有上下限資料時不判定_上下限之後才到也會比對()
     {
@@ -198,7 +210,8 @@ public sealed class BcrScaleTests
     [InlineData("BCR_LOG", "BCR_TCPIP_Socket.OnCommandArrived,MachineName=A-01,IpAssress=192.0.2.1,IpPortNo=9000,result=ERROR  ", EffectKinds.BcrFailed, FieldKinds.Bcr, "A-01")]
     [InlineData("PLCLOG", "[A-01][Station_Storage_Request_BCR] => 棧板讀取異常:BCR條碼讀取逾時(E901),清除磅秤  ", EffectKinds.BcrFailed, FieldKinds.ErrorCode, "E901")]
     [InlineData("PLCLOG", "[A-01][Station_Storage_Request_BCR] => 手動輸入的條碼,STATION_NO=A-01,SCANTYPE=BCR,PALLET=PLT-EX-0002,DRUM=DR-01", EffectKinds.BcrManual, FieldKinds.Barcode, "PLT-EX-0002")]
-    [InlineData("PLCLOG", "[A-01][Station_Storage_Request_BCR] => 磅秤回傳值[512]  ", EffectKinds.ScaleRead, FieldKinds.Weight, "512")]
+    [InlineData("PLCLOG", "[A-01][Station_Storage_Request_BCR] => 磅秤回傳值[512]  ", EffectKinds.ScaleRead, FieldKinds.Weight, "512]")] // 連同括號抽出，推導時去掉（#209）
+    [InlineData("PLCLOG", "[A-01][Station_Storage_Request_BCR] => 磅秤回傳值[86]4  ", EffectKinds.ScaleRead, FieldKinds.Weight, "86]4")] // 一部分寫在括號外（#209）
     public void 初始規則_讀取器與PLC的紀錄產生對應的效果(string logger, string message, string effect, string kind, string value)
     {
         Assert.All(PlantConfig.DefaultParseRules, r => Assert.Null(FieldExtractor.Check(r)));

@@ -125,6 +125,40 @@ public sealed class BcrScalePlaybackTests
     }
 
     [Fact]
+    public void 結果超過2分鐘的標籤變淡_讀取中與選取中不變淡()
+    {
+        var p = Load();
+
+        p.SetMoment(3, T0.AddSeconds(9 + 120)); // 讀到後剛好 2 分鐘：不變淡
+        var bcr = El(p, "bc-1");
+        Assert.False(bcr.IsStale);
+        p.SetMoment(3, T0.AddSeconds(9 + 121));
+        Assert.True(bcr.IsStale);
+        Assert.True(Assert.Single(p.SceneNow.Elements, s => s.Id == "bc-1").Stale);
+
+        p.SelectedElement = bcr; // 選取中不變淡
+        Assert.False(bcr.IsStale);
+        Assert.False(Assert.Single(p.SceneNow.Elements, s => s.Id == "bc-1").Stale);
+        p.SelectedElement = null;
+        Assert.True(bcr.IsStale);
+
+        p.SetMoment(2, T0.AddSeconds(5 + 300)); // 讀取中很久：不變淡
+        Assert.True(bcr.IsReading);
+        Assert.False(bcr.IsStale);
+        Assert.False(El(p, "sc-1").IsStale); // 等待中（推估）也不變淡
+    }
+
+    [Fact]
+    public void 異常的標籤超過2分鐘也變淡()
+    {
+        var p = Load();
+        p.SetMoment(7, T0.AddSeconds(40 + 200));
+
+        Assert.True(El(p, "bc-1").IsDeviceAbnormal);
+        Assert.True(El(p, "bc-1").IsStale);
+    }
+
+    [Fact]
     public void 場景資料_BCR帶有所屬Conv台面中心的對準位置()
     {
         var scene = PlaybackScene.LayoutOf(Layout);

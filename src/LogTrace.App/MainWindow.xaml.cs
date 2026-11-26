@@ -233,12 +233,32 @@ public partial class MainWindow : Window
         }
     }
 
-    void PlaybackLayout_Click(object sender, RoutedEventArgs e) => _layouts?.ApplyPreset(DockLayouts.Playback);
+    // 切換回放／搜尋：只重新排列顯示中的面板，使用者關掉的維持關閉（ADR-0029 第 5 點）
+    void PlaybackLayout_Click(object sender, RoutedEventArgs e) => _layouts?.ApplyPreset(DockLayouts.Playback, keepClosed: true);
 
-    void SearchLayout_Click(object sender, RoutedEventArgs e) => _layouts?.ApplyPreset(DockLayouts.Search);
+    void SearchLayout_Click(object sender, RoutedEventArgs e) => _layouts?.ApplyPreset(DockLayouts.Search, keepClosed: true);
 
-    /// <summary>還原預設：與初次啟動的版面（回放）相同。</summary>
+    /// <summary>還原預設：與初次啟動的版面（回放）相同，所有面板都顯示。</summary>
     void ResetLayout_Click(object sender, RoutedEventArgs e) => _layouts?.ApplyPreset(DockLayouts.Playback);
+
+    /// <summary>「視窗」選單（ADR-0029）：13 個面板（勾選＝顯示中），點一下開啟或關閉；最後是「全部顯示」。</summary>
+    void WindowMenu_SubmenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem menu || !ReferenceEquals(e.OriginalSource, menu) || _layouts is not { } layouts) return;
+        menu.Items.Clear();
+        foreach (var id in DockLayouts.MenuOrder)
+        {
+            var item = new MenuItem { Header = layouts.TitleOf(id), IsCheckable = true, IsChecked = layouts.IsShown(id) };
+            System.Windows.Automation.AutomationProperties.SetAutomationId(item, "Window_" + id);
+            item.Click += (_, _) => layouts.SetShown(id, item.IsChecked);
+            menu.Items.Add(item);
+        }
+        menu.Items.Add(new Separator());
+        var all = new MenuItem { Header = "全部顯示" };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(all, "WindowShowAll");
+        all.Click += (_, _) => { foreach (var id in DockLayouts.MenuOrder) layouts.SetShown(id, true); };
+        menu.Items.Add(all);
+    }
 
     /// <summary>回到主畫面時（例如關閉 Layout 編輯器後）重新列出廠別設定。</summary>
     void Window_Activated(object? sender, EventArgs e) => _vm?.RefreshPlants();

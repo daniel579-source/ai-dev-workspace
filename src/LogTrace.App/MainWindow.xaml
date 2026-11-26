@@ -34,6 +34,10 @@
                 <Separator />
                 <MenuItem Header="還原預設版面" Click="ResetLayout_Click" AutomationProperties.AutomationId="LayoutReset" />
             </MenuItem>
+            <!-- 視窗（ADR-0029）：開啟或關閉各面板；項目在展開時依目前的版面建立 -->
+            <MenuItem Header="視窗(_W)" SubmenuOpened="WindowMenu_SubmenuOpened" AutomationProperties.AutomationId="WindowMenu">
+                <MenuItem Header="（載入中）" IsEnabled="False" />
+            </MenuItem>
         </Menu>
         </DockPanel>
 

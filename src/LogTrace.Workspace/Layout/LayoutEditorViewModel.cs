@@ -470,6 +470,8 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             return;
         }
         var id = NextId(type);
+        // BCR 與磅秤（ADR-0027）：選取中的 Conv（或工站點）就是所屬 Conv，元件放在它的旁邊
+        var owner = LayoutElement.HasOwner(type) && SelectedElement is { } sel && LayoutElement.IsStationLike(sel.Type) ? sel : null;
         LayoutElement model;
         if (type == LayoutElementType.Conveyor)
         {
@@ -493,14 +495,17 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         {
             var (w, h, height) = LayoutElementTypes.DefaultSize(type);
             // 放在目前畫面的正中央（2026-11-16 使用者要求）；還不知道畫面時放在現有元素的下方，避免疊在一起
-            var (x, y) = ViewCenter is { } c ? (SnapTo(c.X - w / 2), SnapTo(c.Y - h / 2))
+            var (x, y) = owner is not null ? (BoundsOf(owner).Right + 0.1, BoundsOf(owner).Top)
+                : ViewCenter is { } c ? (SnapTo(c.X - w / 2), SnapTo(c.Y - h / 2))
                 : (1, SnapTo(Elements.Where(e => !e.IsConveyor && OnFloor(e, CurrentFloor)).Select(e => BoundsOf(e).Bottom).DefaultIfEmpty(0).Max() + 1));
             model = new LayoutElement
             {
                 Id = id, Type = type, Name = $"新{(LayoutElementTypes.Label(type) is var l && char.IsAscii(l[0]) ? " " + l : l)} {id[(id.IndexOf('-') + 1)..]}", // Conv、RM 等英文名稱前加空格
                 X = x, Y = y, W = w, H = h, Rotation = 0, Height = height,
-                Floor = type == LayoutElementType.Elevator ? null : CurrentFloor,
-                Deck = type != LayoutElementType.Elevator && CurrentDeck == LayoutDeck.Upper ? LayoutDeck.Upper : null,
+                Floor = type == LayoutElementType.Elevator ? null : owner is not null && !string.IsNullOrWhiteSpace(owner.Floor) ? owner.Floor : CurrentFloor,
+                Deck = owner is not null ? (owner.IsUpperDeck ? LayoutDeck.Upper : null)
+                    : type != LayoutElementType.Elevator && CurrentDeck == LayoutDeck.Upper ? LayoutDeck.Upper : null,
+                Owner = owner?.Id,
                 ServedFloors = type == LayoutElementType.Elevator ? [.. FloorList] : null, // 電梯預設服務所有樓層（使用者決定）
                 Aliases = LayoutElement.CanHaveAliases(type) ? [] : null,
             };
@@ -540,6 +545,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
             foreach (var door in Elements.Where(x => x.IsFireDoor))
                 foreach (var id in door.Conveyors.Where(removedIds.Contains).ToList()) door.Conveyors.Remove(id);
             clearedVehicles = ClearRailsOf(removedIds); // 刪除的導軌：指定它的搬送機清除指定（ADR-0006 第 14 點）
+            foreach (var x in Elements.Where(x => x.HasOwner && x.Owner is { } o && removedIds.Contains(o))) x.Owner = null; // 刪除的 Conv：BCR、磅秤的所屬清除（ADR-0027）
             RemoveRowsOf(removedIds); // 刪除的 RM：它的排從配置表移除（ADR-0019）
         });
         IsDirty = true;
@@ -970,7 +976,7 @@ public sealed partial class LayoutEditorViewModel : ObservableObject
         if (alias.Length == 0) return false;
         if (!e.CanHaveAliases)
         {
-            Status = $"「{e.TypeLabel}」不能加別名；只有 Conv、工站點、搬送機、RM、EQ、防火門、電梯可以。";
+            Status = $"「{e.TypeLabel}」不能加別名；只有 Conv、工站點、搬送機、RM、EQ、防火門、電梯、BCR、磅秤可以。";
             return false;
         }
         var owner = AliasOwner(alias);

@@ -113,6 +113,76 @@ public sealed class ElevatorState
     public ElevatorState Clone() => (ElevatorState)MemberwiseClone();
 }
 
+/// <summary>BCR 最近一次的結果（ADR-0027）。</summary>
+public enum BcrResult
+{
+    /// <summary>讀取器讀到條碼。</summary>
+    Read,
+    /// <summary>手動輸入條碼（解除讀取失敗的異常，11a）。</summary>
+    Manual,
+    /// <summary>讀取失敗或逾時：算異常，直到下一次讀到或手動輸入。</summary>
+    Failed,
+}
+
+/// <summary>BCR（條碼讀取器）的狀態（ADR-0027）。沒有任何 LOG 事件的 BCR 不在 WorldState.Bcrs 中。</summary>
+public sealed class BcrState
+{
+    /// <summary>讀取中：第一次開始讀取的事件序號；收到回傳、失敗或停止讀取時清除。null＝不在讀取中。</summary>
+    public long? ReadingSince { get; set; }
+
+    /// <summary>最近一次的結果；null＝還沒有結果。停止讀取但沒有回傳時保留上一次的結果（12a）。</summary>
+    public BcrResult? Result { get; set; }
+    public long? ResultCause { get; set; }
+
+    /// <summary>讀到或手動輸入的條碼（逗號分隔的拆開）。</summary>
+    public IReadOnlyList<string> Barcodes { get; set; } = [];
+
+    /// <summary>讀取失敗的錯誤代碼；沒有記錄時為 null。</summary>
+    public string? ErrorCode { get; set; }
+
+    /// <summary>桶 BCR 讀到的桶加入了哪個棧板（所屬 Conv 上只有一個棧板時）；沒有加入時為 null。</summary>
+    public string? BinsPallet { get; set; }
+
+    public bool IsFailed => Result == BcrResult.Failed;
+
+    public BcrState Clone() => (BcrState)MemberwiseClone();
+}
+
+/// <summary>磅秤的狀態（ADR-0027）。沒有任何 LOG 事件的磅秤不在 WorldState.Scales 中。</summary>
+public sealed class ScaleState
+{
+    /// <summary>等待中（推估）：所屬 Conv 的棧板 BCR 開始讀取的事件序號；收到讀值或該 Conv 讀取失敗時清除。</summary>
+    public long? WaitingSince { get; set; }
+
+    /// <summary>讀值（單位視為 kg，假設）；LOG 的文字不是數字時為 null，畫面改顯示原文。</summary>
+    public double? Weight { get; set; }
+    public string? WeightText { get; set; }
+    public long? WeightCause { get; set; }
+
+    /// <summary>讀值的棧板：規則有抽出棧板時用它，否則為當時所屬 Conv 上唯一的棧板；都沒有時為 null。</summary>
+    public string? Pallet { get; set; }
+
+    public ScaleState Clone() => (ScaleState)MemberwiseClone();
+}
+
+/// <summary>棧板的重量上下限（ADR-0027）：0 或沒有寫表示沒有那一端的限制。</summary>
+public sealed record WeightLimitState(double? Max, double? Min, long Cause)
+{
+    public bool HasLimits => Max is > 0 || Min is > 0;
+}
+
+/// <summary>磅秤讀值與上下限比對的結果（ADR-0027 第 4 點）。</summary>
+public enum WeightJudgement
+{
+    /// <summary>還沒有讀值，或讀值不是數字。</summary>
+    NoReading,
+    /// <summary>沒有上下限（沒有資料，或上下限為 0）：不判定。</summary>
+    NoLimits,
+    Within,
+    Over,
+    Under,
+}
+
 /// <summary>未復歸的警報（ADR-0005 第 5 點）。</summary>
 public sealed record AlarmState(string? Code, long Cause);
 
@@ -220,6 +290,29 @@ public sealed class WorldState
     /// <summary>防火門的元素 id → 狀態；沒有的門＝還沒有 LOG 事件。</summary>
     public SortedDictionary<string, FireDoorState> Doors { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>BCR 的元素 id → 狀態（ADR-0027）。</summary>
+    public SortedDictionary<string, BcrState> Bcrs { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>磅秤的元素 id → 狀態（ADR-0027）。</summary>
+    public SortedDictionary<string, ScaleState> Scales { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>棧板 → 最近一次的重量上下限（ADR-0027）。</summary>
+    public SortedDictionary<string, WeightLimitState> WeightLimits { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>磅秤讀值當時所用的上下限（讀值的棧板最近一次的上下限）；沒有時為 null。</summary>
+    public WeightLimitState? LimitsOf(ScaleState? s) =>
+        s?.Pallet is { } pallet && WeightLimits.TryGetValue(pallet, out var limits) ? limits : null;
+
+    /// <summary>磅秤讀值與上下限的比對；上下限為 0 或空白時不判定（ADR-0027 第 4 點）。</summary>
+    public WeightJudgement Judge(ScaleState? s)
+    {
+        if (s?.Weight is not { } weight) return WeightJudgement.NoReading;
+        if (LimitsOf(s) is not { HasLimits: true } limits) return WeightJudgement.NoLimits;
+        if (limits.Max is > 0 && weight > limits.Max) return WeightJudgement.Over;
+        if (limits.Min is > 0 && weight < limits.Min) return WeightJudgement.Under;
+        return WeightJudgement.Within;
+    }
+
     public WorldState Clone()
     {
         var c = new WorldState { Sequence = Sequence };
@@ -231,6 +324,9 @@ public sealed class WorldState
         foreach (var (k, v) in Commands) c.Commands[k] = v.Clone();
         foreach (var (k, v) in Doors) c.Doors[k] = v.Clone();
         foreach (var (k, v) in Elevators) c.Elevators[k] = v.Clone();
+        foreach (var (k, v) in Bcrs) c.Bcrs[k] = v.Clone();
+        foreach (var (k, v) in Scales) c.Scales[k] = v.Clone();
+        foreach (var (k, v) in WeightLimits) c.WeightLimits[k] = v;
         return c;
     }
 
@@ -260,6 +356,10 @@ public sealed class WorldState
             sb.Append($"ev {k} w={v.Work}@{v.WorkCause} {v.Command}->{v.Destination} f={v.Floor}@{v.FloorCause}:{v.FloorBasis} {v.FromFloor}->{v.ToFloor}\n");
         foreach (var (k, d) in Doors)
             sb.Append($"fd {k} {d.State}@{d.StateCause} x={d.LastCrossing}\n");
+        foreach (var (k, b) in Bcrs)
+            sb.Append($"bc {k} r={b.ReadingSince} {b.Result}@{b.ResultCause} [{string.Join(",", b.Barcodes)}] e={b.ErrorCode} bins={b.BinsPallet}\n");
+        foreach (var (k, s) in Scales) sb.Append($"sc {k} w={s.WaitingSince} {s.WeightText}@{s.WeightCause} p={s.Pallet}\n");
+        foreach (var (k, l) in WeightLimits) sb.Append($"wl {k} {l.Min}~{l.Max}@{l.Cause}\n");
         return sb.ToString();
     }
 }

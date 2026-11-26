@@ -53,6 +53,8 @@ public sealed partial class LayoutElementViewModel : ObservableObject
         RailPoints = e.Points ?? [];
         Closed = e.Closed == true;
         Rail = e.Rail;
+        Owner = e.Owner;
+        IsBinBcr = e.Reads == BcrReads.Bin;
         ServedFloors = e.ServedFloors ?? [];
         Conveyors = new ObservableCollection<string>(e.Conveyors ?? []);
         Conveyors.CollectionChanged += (_, _) => OnPropertyChanged(nameof(Conveyors));
@@ -86,6 +88,18 @@ public sealed partial class LayoutElementViewModel : ObservableObject
     /// <summary>可以指定所走的導軌：搬送機（STV）與 RM（ADR-0019）。</summary>
     public bool CanHaveRail => Type is LayoutElementType.Vehicle or LayoutElementType.Rm;
     public bool IsElevator => Type == LayoutElementType.Elevator;
+
+    /// <summary>以「所屬 Conv」指定位置意義的元素：BCR 與磅秤（ADR-0027）。</summary>
+    public bool HasOwner => LayoutElement.HasOwner(Type);
+    public bool IsBcr => Type == LayoutElementType.Bcr;
+
+    /// <summary>BCR 與磅秤所屬的 Conv（元素 id）；沒有指定時為 null。</summary>
+    [ObservableProperty]
+    public partial string? Owner { get; set; }
+
+    /// <summary>BCR 讀桶的條碼（桶 BCR）；false＝棧板 BCR。</summary>
+    [ObservableProperty]
+    public partial bool IsBinBcr { get; set; }
 
     /// <summary>電梯服務的樓層（ADR-0006 第 15 點）；每次修改整個換掉。電梯不使用 Floor。</summary>
     [ObservableProperty]
@@ -315,6 +329,8 @@ public sealed partial class LayoutElementViewModel : ObservableObject
             LevelHeight = IsRack ? LevelHeight : null,
             DoorState = IsFireDoor ? DoorState : null,
             Rail = CanHaveRail && !string.IsNullOrEmpty(Rail) ? Rail : null,
+            Owner = HasOwner && !string.IsNullOrEmpty(Owner) ? Owner : null,
+            Reads = IsBcr && IsBinBcr ? BcrReads.Bin : null,
             Conveyors = IsFireDoor && Conveyors.Count > 0 ? [.. Conveyors] : null,
             Props = PropsModel(),
             Extra = _extra,
@@ -332,7 +348,7 @@ public static class LayoutElementTypes
     public static IReadOnlyList<LayoutElementTypeGroup> Groups { get; } =
     [
         new("本公司設備", [LayoutElementType.Conv, LayoutElementType.Workstation, LayoutElementType.Vehicle, LayoutElementType.Rm, LayoutElementType.Elevator,
-            LayoutElementType.Rack, LayoutElementType.FireDoor]),
+            LayoutElementType.Rack, LayoutElementType.FireDoor, LayoutElementType.Bcr, LayoutElementType.Scale]),
         new("其他公司", [LayoutElementType.Eq]),
         new("輔助", [LayoutElementType.Conveyor, LayoutElementType.Rail, LayoutElementType.Fence, LayoutElementType.FenceGate, LayoutElementType.Area, LayoutElementType.Label]),
     ];
@@ -399,6 +415,8 @@ public static class LayoutElementTypes
         LayoutElementType.Fence => "圍欄",
         LayoutElementType.FenceGate => "圍欄門",
         LayoutElementType.Eq => "EQ",
+        LayoutElementType.Bcr => "BCR",
+        LayoutElementType.Scale => "磅秤",
         _ => type.ToString(),
     };
 
@@ -418,6 +436,8 @@ public static class LayoutElementTypes
         LayoutElementType.Fence => "fc",
         LayoutElementType.FenceGate => "fg",
         LayoutElementType.Eq => "eqp", // 舊設定檔中原本的 Conv（dock）是 eq 開頭
+        LayoutElementType.Bcr => "bc",
+        LayoutElementType.Scale => "sc",
         _ => "el",
     };
 
@@ -435,6 +455,8 @@ public static class LayoutElementTypes
         LayoutElementType.Elevator => (2, 2, 3),
         LayoutElementType.Area => (6, 4, 0),
         LayoutElementType.Label => (3, 1, 0),
+        LayoutElementType.Bcr => (0.5, 0.5, 1.2),
+        LayoutElementType.Scale => (1.5, 1.5, 0.1),
         _ => (0, 0, 0),
     };
 }

@@ -73,6 +73,21 @@ public sealed partial class LayoutEditorViewModel
             ? Elements.Where(e => e.IsRail && SameFloor(FloorOf(e), FloorOf(v))).Order(LayoutElementTypes.ListOrder).ToList()
             : [];
         SyncOrder(RailChoices, choices);
+        // BCR 與磅秤的所屬 Conv（ADR-0027）：同一樓層的 Conv 與工站點
+        var owners = SelectedElement is { HasOwner: true } d
+            ? Elements.Where(e => LayoutElement.IsStationLike(e.Type) && SameFloor(FloorOf(e), FloorOf(d))).Order(LayoutElementTypes.ListOrder).ToList()
+            : [];
+        SyncOrder(OwnerChoices, owners);
+    }
+
+    /// <summary>BCR 與磅秤「所屬 Conv」下拉選單的選項（ADR-0027）。</summary>
+    public ObservableCollection<LayoutElementViewModel> OwnerChoices { get; } = [];
+
+    /// <summary>清除 BCR 或磅秤的所屬 Conv。</summary>
+    [RelayCommand]
+    void ClearOwner()
+    {
+        if (SelectedElement is { HasOwner: true } e) e.Owner = null;
     }
 
     partial void OnSelectedRailPointChanged(int? value)

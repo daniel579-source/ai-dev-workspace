@@ -27,6 +27,12 @@ public enum ElementLook
     DoorOpen,
     /// <summary>防火門關（LOG 確定或推估；推估時 IsEstimated）。</summary>
     DoorClosed,
+    /// <summary>BCR 讀取中、磅秤等待中（ADR-0027）。</summary>
+    Reading,
+    /// <summary>BCR 讀到條碼、磅秤有讀值且沒有超出上下限（ADR-0027）。</summary>
+    ReadOk,
+    /// <summary>手動輸入條碼（ADR-0027）。</summary>
+    Manual,
 }
 
 /// <summary>設備狀態表的排序欄位。</summary>
@@ -173,6 +179,14 @@ public sealed partial class PlaybackElementViewModel : ObservableObject
     /// <summary>可能卡住（推估，ADR-0005 第 5 點 2026-11-16 補充，#142）：貨物在這個元素上卡住（命令沒有下一步或站點沒有派送）。</summary>
     [ObservableProperty]
     public partial bool IsStalled { get; set; }
+
+    /// <summary>BCR 讀取中或磅秤等待中（ADR-0027）：3D 畫出掃描光束；其他元素為 false。</summary>
+    [ObservableProperty]
+    public partial bool IsReading { get; set; }
+
+    /// <summary>BCR 讀取失敗、磅秤超出上下限（ADR-0027）：設備狀態表的「只看異常」也包含。</summary>
+    [ObservableProperty]
+    public partial bool IsDeviceAbnormal { get; set; }
 
     /// <summary>防火門的狀態是推估（還沒有 LOG 事件，用 Layout 的平時狀態）；畫面以虛線框表示。</summary>
     [ObservableProperty]
@@ -399,6 +413,31 @@ public sealed partial class PlaybackViewModel : ObservableObject
                 el.IsEstimated = el.IsDoorOpen;
                 break;
             }
+            case LayoutElementType.Bcr:
+            {
+                w.Bcrs.TryGetValue(el.Id, out var b);
+                el.IsReading = b?.ReadingSince is not null;
+                el.IsDeviceAbnormal = b?.IsFailed == true;
+                el.Summary = BcrSummary(el, b);
+                el.Look = b is null ? ElementLook.Unknown
+                    : el.IsReading ? ElementLook.Reading
+                    : b.Result switch { BcrResult.Read => ElementLook.ReadOk, BcrResult.Manual => ElementLook.Manual, BcrResult.Failed => ElementLook.Alarm, _ => ElementLook.Unknown };
+                break;
+            }
+            case LayoutElementType.Scale:
+            {
+                w.Scales.TryGetValue(el.Id, out var s);
+                var judgement = w.Judge(s);
+                el.IsReading = s?.WaitingSince is not null;
+                el.IsEstimated = el.IsReading; // 等待中是推估（LOG 沒有記錄磅秤要求）
+                el.IsDeviceAbnormal = judgement is WeightJudgement.Over or WeightJudgement.Under;
+                el.Summary = ScaleSummary(s, judgement);
+                el.Look = s is null ? ElementLook.Unknown
+                    : el.IsReading ? ElementLook.Reading
+                    : el.IsDeviceAbnormal ? ElementLook.Alarm
+                    : s.WeightText is not null ? ElementLook.ReadOk : ElementLook.Unknown;
+                break;
+            }
             case LayoutElementType.FireDoor:
             {
                 var (state, _, estimated) = DoorStateOf(el);
@@ -434,6 +473,55 @@ public sealed partial class PlaybackViewModel : ObservableObject
             }
         }
     }
+
+    // ---- BCR 與磅秤（ADR-0027） ----
+
+    /// <summary>事件 sequence 到目前時刻經過的秒數；時間不明時為 null。</summary>
+    double? SecondsSince(long? sequence) =>
+        sequence is { } s && _momentTime is { } now && _events.TryGetValue(s, out var e) ? Math.Max(0, (now - e.Timestamp).TotalSeconds) : null;
+
+    static string Ago(double? seconds) => seconds is { } s ? $"（{Math.Floor(s):0} 秒前）" : "";
+
+    /// <summary>條碼的簡短顯示：超過 8 個字時只顯示末 6 碼（9a）。</summary>
+    public static string ShortCode(string code) => code.Length > 8 ? "…" + code[^6..] : code;
+
+    /// <summary>BCR 的標籤：讀取中 n 秒、讀到的簡短結果、手動、失敗與錯誤代碼；結果註明幾秒前（ADR-0027 第 3 點）。</summary>
+    string? BcrSummary(PlaybackElementViewModel el, BcrState? b)
+    {
+        if (b is null) return null;
+        if (b.ReadingSince is { } since) return SecondsSince(since) is { } s ? $"讀取中 {Math.Floor(s):0} 秒" : "讀取中";
+        var ago = Ago(SecondsSince(b.ResultCause));
+        var codes = el.Model.Reads == BcrReads.Bin ? $"桶 {b.Barcodes.Count} 個" : string.Join("、", b.Barcodes.Select(ShortCode));
+        return b.Result switch
+        {
+            BcrResult.Read => codes + ago,
+            BcrResult.Manual => $"手動 {codes}{ago}",
+            BcrResult.Failed => $"讀取失敗{(b.ErrorCode is { } code ? " " + code : "")}{ago}",
+            _ => null,
+        };
+    }
+
+    /// <summary>磅秤的標籤：等待中（推估）、讀值（kg，假設）與上下限比對（ADR-0027 第 4 點）。</summary>
+    string? ScaleSummary(ScaleState? s, WeightJudgement judgement)
+    {
+        if (s is null) return null;
+        if (s.WaitingSince is { } since) return "等待中（推估）" + (SecondsSince(since) is { } sec ? $" {Math.Floor(sec):0} 秒" : "");
+        if (s.WeightText is not { } text) return null;
+        var value = s.Weight is { } kg ? $"{Num(kg)} kg" : text;
+        return value + judgement switch
+        {
+            WeightJudgement.Over => " 超重",
+            WeightJudgement.Under => " 過輕",
+            WeightJudgement.NoLimits => " 無上下限",
+            _ => "",
+        } + Ago(SecondsSince(s.WeightCause));
+    }
+
+    static string Num(double? v) => v is { } d ? d.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : "—";
+
+    static string LimitsText(WeightLimitState? l) => l is null ? "無上下限（沒有資料）"
+        : !l.HasLimits ? "無上下限（上下限為 0 或空白，不判定）"
+        : $"下限 {Num(l.Min is > 0 ? l.Min : null)} kg～上限 {Num(l.Max is > 0 ? l.Max : null)} kg";
 
     Dictionary<string, string> _stationModeNames = [];
     Dictionary<string, IReadOnlyList<string>> _gates = new(StringComparer.Ordinal);
@@ -591,6 +679,50 @@ public sealed partial class PlaybackViewModel : ObservableObject
                 Detail.Add(Line("門", el.IsDoorOpen ? "開著（推估：有棧板等待完成回報；LOG 沒有記錄門）" : "關著（推估：沒有等待完成回報的棧板）", null));
                 break;
             }
+            case LayoutElementType.Bcr:
+            {
+                w.Bcrs.TryGetValue(el.Id, out var b);
+                Detail.Add(Line("所屬 Conv", el.Model.Owner is { } owner ? NameOf(owner) ?? owner : "未指定", null));
+                Detail.Add(Line("讀取對象", el.Model.Reads == BcrReads.Bin ? "桶" : "棧板", null));
+                Detail.Add(Line("讀取", b?.ReadingSince is { } since ? $"讀取中（{Math.Floor(SecondsSince(since) ?? 0):0} 秒）" : b is null ? "未取得資訊" : "閒置", b?.ReadingSince));
+                if (b?.Result is { } result)
+                {
+                    Detail.Add(Line("最近一次", result switch
+                    {
+                        BcrResult.Read => "讀到條碼",
+                        BcrResult.Manual => "手動輸入",
+                        _ => "讀取失敗" + (b.ErrorCode is { } code ? $"（{code}）" : "") + "：異常中，直到下一次讀到或手動輸入",
+                    } + Ago(SecondsSince(b.ResultCause)), b.ResultCause));
+                    foreach (var code in b.Barcodes) Detail.Add(Line("條碼", code, b.ResultCause));
+                    if (b.BinsPallet is { } pallet) Detail.Add(Line("加入棧板", $"{pallet}（所屬 Conv 上只有這個棧板）", b.ResultCause));
+                    else if (el.Model.Reads == BcrReads.Bin && result == BcrResult.Read)
+                        Detail.Add(Line("加入棧板", "沒有加入（所屬 Conv 上沒有或不只一個棧板）", b.ResultCause));
+                }
+                break;
+            }
+            case LayoutElementType.Scale:
+            {
+                w.Scales.TryGetValue(el.Id, out var s);
+                Detail.Add(Line("所屬 Conv", el.Model.Owner is { } owner ? NameOf(owner) ?? owner : "未指定", null));
+                if (s?.WaitingSince is { } since)
+                    Detail.Add(Line("等待中", "推估：所屬 Conv 開始讀取棧板 BCR，還沒有收到磅秤值（LOG 沒有記錄磅秤要求）", since));
+                Detail.Add(Line("重量", s?.WeightText is null ? "未取得資訊"
+                    : (s.Weight is { } kg ? $"{Num(kg)} kg（單位為假設）" : $"{s.WeightText}（不是數字）") + Ago(SecondsSince(s.WeightCause)), s?.WeightCause));
+                if (s?.WeightText is not null)
+                {
+                    Detail.Add(Line("棧板", s.Pallet ?? "未取得資訊（所屬 Conv 上沒有或不只一個棧板）", s.WeightCause));
+                    var limits = w.LimitsOf(s);
+                    Detail.Add(Line("上下限", LimitsText(limits), limits?.Cause));
+                    Detail.Add(Line("判定", w.Judge(s) switch
+                    {
+                        WeightJudgement.Over => "超重（異常）",
+                        WeightJudgement.Under => "過輕（異常）",
+                        WeightJudgement.Within => "在上下限內",
+                        _ => "不判定（沒有上下限）",
+                    }, limits?.Cause));
+                }
+                break;
+            }
             case LayoutElementType.FireDoor:
             {
                 var (state, cause, estimated) = DoorStateOf(el);
@@ -698,8 +830,9 @@ public sealed partial class PlaybackViewModel : ObservableObject
 
     void UpdateEquipment()
     {
-        var rows = Elements.Where(e => e.Type is LayoutElementType.Conv or LayoutElementType.Workstation or LayoutElementType.Vehicle or LayoutElementType.Rm or LayoutElementType.Eq or LayoutElementType.FireDoor or LayoutElementType.Elevator)
-            .Select(e => new EquipmentRowViewModel(e.Id, e.Name, e.TypeLabel, e.Aliases, EquipmentState(e), _state.Alarms.ContainsKey(e.Id) || e.IsInconsistent || e.IsStalled, e.Look,
+        var rows = Elements.Where(e => e.Type is LayoutElementType.Conv or LayoutElementType.Workstation or LayoutElementType.Vehicle or LayoutElementType.Rm or LayoutElementType.Eq or LayoutElementType.FireDoor or LayoutElementType.Elevator
+                or LayoutElementType.Bcr or LayoutElementType.Scale)
+            .Select(e => new EquipmentRowViewModel(e.Id, e.Name, e.TypeLabel, e.Aliases, EquipmentState(e), _state.Alarms.ContainsKey(e.Id) || e.IsInconsistent || e.IsStalled || e.IsDeviceAbnormal, e.Look,
                 e.IsElevator ? e.CurrentFloorText ?? "—" : e.Floor))
             .Where(r => !OnlyAbnormal || r.IsAbnormal);
         Func<EquipmentRowViewModel, string> key = SortBy switch
@@ -755,6 +888,9 @@ public sealed partial class PlaybackViewModel : ObservableObject
                 parts.Add(ev?.IsMoving == true ? $"執行中 {ev.Command}（{ev.FromFloor ?? "?"} → {ev.ToFloor ?? "?"}）" : ev is null ? "作業未知" : "閒置");
                 var load = w.PalletsAt(LocationKind.Elevator, e.Id).Select(p => p.Id).ToList();
                 if (load.Count > 0) parts.Add("載著 " + string.Join("、", load));
+                break;
+            case LayoutElementType.Bcr or LayoutElementType.Scale:
+                parts.Add(e.Summary ?? "未取得資訊");
                 break;
             case LayoutElementType.FireDoor:
                 var (state, _, estimated) = DoorStateOf(e);

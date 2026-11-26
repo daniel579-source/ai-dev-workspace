@@ -157,6 +157,55 @@ public sealed class LayoutEditorSmokeTests : IDisposable
     }
 
     [Fact]
+    public void BCR與磅秤_選取Conv後新增_自動指定所屬_設為桶BCR後存檔()
+    {
+        var dataRoot = Path.Combine(_tmp.Path, "AppData");
+        using var app = FlaUI.Core.Application.Launch(new ProcessStartInfo(ImportSmokeTests.AppExe(), $"--data-root \"{dataRoot}\""));
+        using var automation = new UIA3Automation();
+        try
+        {
+            var main = app.GetMainWindow(automation, TimeSpan.FromSeconds(30));
+            Assert.NotNull(main);
+            var cf = main.ConditionFactory;
+            var desktop = automation.GetDesktop();
+            AutomationElement In(AutomationElement root, string id) =>
+                Retry.WhileNull(() => root.FindFirstDescendant(cf.ByAutomationId(id)), TimeSpan.FromSeconds(10)).Result
+                ?? throw new InvalidOperationException($"找不到 {id}");
+            In(main, "OpenLayoutEditor").AsButton().Invoke();
+            var editor = Retry.WhileNull(
+                () => main.FindFirstChild(cf.ByAutomationId("LayoutEditor")) ?? desktop.FindFirstChild(cf.ByAutomationId("LayoutEditor")),
+                TimeSpan.FromSeconds(10)).Result ?? throw new InvalidOperationException("找不到 Layout 編輯器視窗");
+
+            In(editor, "PlantName").AsTextBox().Text = "BCR測試廠";
+            In(editor, "Add_Conv").AsButton().Invoke(); // 新增後選取中：接著新增的 BCR、磅秤以它為所屬
+            In(editor, "Add_Bcr").AsButton().Invoke();
+            Assert.True(Retry.WhileFalse(() => In(editor, "ElementOwner").AsComboBox().SelectedItem is not null, TimeSpan.FromSeconds(5)).Result, "BCR 沒有自動指定所屬 Conv");
+            In(editor, "NewAlias").AsTextBox().Text = "A-01_DRUM"; // 虛構的讀取器名稱
+            In(editor, "AddAlias").AsButton().Invoke();
+            In(editor, "BcrReadsBin").AsCheckBox().IsChecked = true;
+            In(editor, "Add_Scale").AsButton().Invoke();
+            // 3D 畫出 BCR（讀取頭與光束）與磅秤，沒有網頁錯誤
+            Assert.True(Retry.WhileFalse(() => In(editor, "Editor3DStatus").Name.StartsWith("3D 已載入：3 個元素", StringComparison.Ordinal), TimeSpan.FromSeconds(30)).Result,
+                In(editor, "Editor3DStatus").Name + " " + editor.FindFirstDescendant(cf.ByAutomationId("Editor3DError"))?.Name);
+            In(editor, "SaveConfig").AsButton().Invoke();
+            Assert.True(Retry.WhileFalse(() => In(editor, "EditorStatus").Name.Contains("修訂 1"), TimeSpan.FromSeconds(10)).Result,
+                In(editor, "EditorStatus").Name);
+
+            var json = File.ReadAllText(Path.Combine(dataRoot, "Plants", "BCR測試廠.json"));
+            Assert.Contains("\"formatVersion\": 12", json);
+            Assert.Contains("\"type\": \"bcr\"", json);
+            Assert.Contains("\"owner\": \"st-1\"", json);
+            Assert.Contains("\"reads\": \"bin\"", json);
+            editor.AsWindow().Close();
+        }
+        finally
+        {
+            app.Close();
+            if (!app.HasExited) app.Kill();
+        }
+    }
+
+    [Fact]
     public void 樓層_新增樓層與元素_只顯示目前樓層_存檔後寫出樓層()
     {
         var dataRoot = Path.Combine(_tmp.Path, "AppData");

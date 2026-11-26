@@ -765,7 +765,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var hasStateRules = c.Info.Plant.ParseRules.Any(r => r.Effect is { } e && e != EffectKinds.Signal);
         Playback.Load(model, doc.Layout, rows.Select(r => r.Event).ToList(), hasStateRules, doc.StationModeNames, stalls);
         var names = doc.Layout.Elements.ToDictionary(e => e.Id, e => e.Name ?? e.Id);
-        LoadMoment(changes, model.AlarmPeriods().Select(a => ($"{names.GetValueOrDefault(a.ElementId, a.ElementId)} {a.Code}", a.StartSequence, a.EndSequence)), gaps, stalls);
+        // 時間軸的異常時段：警報，以及 BCR 讀取失敗（到下一次讀到或手動輸入，ADR-0027）
+        var periods = model.AlarmPeriods().Select(a => ($"{names.GetValueOrDefault(a.ElementId, a.ElementId)} {a.Code}", a.StartSequence, a.EndSequence))
+            .Concat(model.BcrFailurePeriods().Select(b => ($"{names.GetValueOrDefault(b.ElementId, b.ElementId)} 讀取失敗{(b.Code is null ? "" : " " + b.Code)}", b.StartSequence, b.EndSequence)))
+            .OrderBy(p => p.Item2).ToList();
+        LoadMoment(changes, periods, gaps, stalls);
     }
 
     static (List<string> Modules, List<EventRowViewModel> Rows) LoadAll(Case c, TextMasker masker)

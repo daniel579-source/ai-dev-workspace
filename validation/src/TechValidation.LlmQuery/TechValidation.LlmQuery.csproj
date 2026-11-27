@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    #55 技術驗證（ADR-0013）：本機 LLM 把自然語言問題轉成搜尋條件的正確率與速度。只用虛構資料（llm-query\）。
+    模型放在 repo 以外（例如 D:\_case\models\），以 ONNX Runtime GenAI 在 CPU 執行。
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI" Version="0.20.0" />
+  </ItemGroup>
+
+</Project>

@@ -49,8 +49,54 @@ public static class Prompt
         return sb.ToString();
     }
 
+    /// <summary>混合做法的系統提示詞：時間與編號已由程式換成佔位符，LLM 只處理關鍵字、模組、等級與 unsupported。</summary>
+    public static string HybridSystem()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("你負責把倉儲設備 LOG 回溯工具使用者的問題，轉成搜尋條件。只輸出一個 JSON 物件，不要任何說明。");
+        sb.AppendLine($"問題中的 {Rules.TimeMark} 與 {Rules.IdMark} 是程式已經處理好的時間與設備編號，不要放進任何欄位。");
+        sb.AppendLine("JSON 的欄位（問題沒有明確提到的欄位不要寫；什麼都沒有就輸出 {}）：");
+        sb.AppendLine("- allOf：每一個都要出現的關鍵字（字串陣列）。「而且」「同時」「有」的關鍵字放這裡。");
+        sb.AppendLine("- anyOf：出現其中一個就可以的關鍵字（字串陣列）。「或」「其中之一」放這裡。");
+        sb.AppendLine("- noneOf：不能出現的關鍵字（字串陣列）。問題用「不要」「排除」「不包含」「不是」表示，這些詞本身不是關鍵字。");
+        sb.AppendLine($"- modules：問題中有寫出模組名稱（{string.Join("、", Modules)}）時，只寫出現的那幾個；沒寫就不要這個欄位。");
+        sb.AppendLine($"- levels：問題中有寫出等級（{string.Join("、", Levels)}）時，只寫出現的那幾個；沒寫就不要這個欄位。");
+        sb.AppendLine("規則：");
+        sb.AppendLine("1. 關鍵字照使用者的原文抄寫，不要翻譯、不要自己加同義詞；模組與等級的名稱不要放進關鍵字。「事件」「紀錄」「訊息」這類一般用語不是關鍵字。");
+        sb.AppendLine("2. 只要是在找某些設備、某段時間或某些關鍵字的 LOG 事件，就照上面轉換。");
+        sb.AppendLine("3. 問題如果不是在找 LOG 事件（例如問原因、怎麼處理、是不是壞了、要寫報告、問目前的數量），只輸出 {\"unsupported\": true}，不要編造條件。");
+        return sb.ToString();
+    }
+
+    /// <summary>混合做法的 JSON schema：關鍵字三框、模組、等級，或 {"unsupported": true}。</summary>
+    public static string HybridSchema()
+    {
+        JsonObject StrArray() => new() { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" } };
+        JsonObject EnumArray(IEnumerable<string> values) =>
+            new() { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray(values.Select(v => (JsonNode)v).ToArray()) } };
+        var query = new JsonObject
+        {
+            ["type"] = "object",
+            ["properties"] = new JsonObject
+            {
+                ["allOf"] = StrArray(), ["anyOf"] = StrArray(), ["noneOf"] = StrArray(),
+                ["modules"] = EnumArray(Modules), ["levels"] = EnumArray(Levels),
+            },
+            ["additionalProperties"] = false,
+        };
+        var unsupported = new JsonObject
+        {
+            ["type"] = "object",
+            ["properties"] = new JsonObject { ["unsupported"] = new JsonObject { ["type"] = "boolean", ["const"] = true } },
+            ["required"] = new JsonArray("unsupported"),
+            ["additionalProperties"] = false,
+        };
+        return new JsonObject { ["anyOf"] = new JsonArray(unsupported, query) }.ToJsonString();
+    }
+
     public static string Answer(JsonNode? expect) =>
-        expect is JsonValue v && v.TryGetValue<string>(out var s) && s == "unsupported" ? "{\"unsupported\": true}" : expect!.ToJsonString();
+        expect is JsonValue v && v.TryGetValue<string>(out var s) && s == "unsupported" ? "{\"unsupported\": true}"
+        : expect!.ToJsonString(new global::System.Text.Json.JsonSerializerOptions { Encoder = global::System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }); // 中文不跳脫，否則模型會照抄跳脫碼
 
     /// <summary>以模型的對話格式組出提示詞（few-shot 範例當作前面的對話）。</summary>
     public static string Build(ModelFamily family, string system, IReadOnlyList<(string Question, string Answer)> examples, string question)

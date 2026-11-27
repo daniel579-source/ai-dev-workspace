@@ -22,13 +22,17 @@ public static class Report
         sb.AppendLine("# 本機 LLM：自然語言轉搜尋條件（#55，ADR-0013）");
         sb.AppendLine();
         var first = results[0];
+        var firstItems = first["runs"]![0]!["items"]!.AsArray();
+        int nSup = firstItems.Count(i => !i!["expectUnsupported"]!.GetValue<bool>()), nUns = firstItems.Count - nSup;
+        var hybrid = first["hybrid"]?.GetValue<bool>() == true;
         sb.AppendLine($"- 量測：{first["date"]}，開發電腦（{first["processorCount"]} 執行緒），裝置 {first["device"]}，ONNX Runtime GenAI 0.20.0，貪婪解碼。");
-        sb.AppendLine("- 題目：`llm-query/questions.json`（虛構）；可轉換 50 題、不能轉換（應回答 unsupported）6 題；有範例時附 4 個不在測試題中的範例。");
+        sb.AppendLine($"- 題目：虛構；可轉換 {nSup} 題、不能轉換（應回答 unsupported）{nUns} 題；有範例時附 {(hybrid ? 6 : 4)} 個不在測試題中的範例（`llm-query/questions.json`）。");
+        if (hybrid) sb.AppendLine("- 混合做法：時間與設備編號由規則抽出並換成佔位符，LLM 只處理關鍵字、模組、等級與 unsupported；from、to、fields 是規則的結果（模型回答 unsupported 時整題算 unsupported）。");
         sb.AppendLine("- 「完全正確」：關鍵字三框、時間起訖、模組、等級、解析欄位、unsupported 全部與預期相同（關鍵字不分大小寫、不計順序）。");
         sb.AppendLine();
         sb.AppendLine("## 正確率");
         sb.AppendLine();
-        sb.AppendLine("| 模型 | 組合 | 完全正確（可轉換 50） | 不能轉換時回答 unsupported（6） | 可轉換卻回答 unsupported | 輸出不是有效 JSON | " + string.Join(" | ", Scoring.Parts.Skip(1)) + " |");
+        sb.AppendLine($"| 模型 | 組合 | 完全正確（可轉換 {nSup}） | 不能轉換時回答 unsupported（{nUns}） | 可轉換卻回答 unsupported | 輸出不是有效 JSON | " + string.Join(" | ", Scoring.Parts.Skip(1)) + " |");
         sb.AppendLine("|---|---|---|---|---|---|" + string.Concat(Enumerable.Repeat("---|", Scoring.Parts.Length - 1)));
         foreach (var r in results)
             foreach (var run in r["runs"]!.AsArray())
@@ -43,7 +47,7 @@ public static class Report
                     $"{sup.Count(i => i["actualUnsupported"]?.GetValue<bool>() == true)} | {items.Count(i => !i["valid"]!.GetValue<bool>())} | {string.Join(" | ", parts)} |");
             }
         sb.AppendLine();
-        sb.AppendLine("各部分的比例只算可轉換的 50 題。");
+        sb.AppendLine($"各部分的比例只算可轉換的 {nSup} 題。");
         sb.AppendLine();
         sb.AppendLine("## 速度與記憶體");
         sb.AppendLine();

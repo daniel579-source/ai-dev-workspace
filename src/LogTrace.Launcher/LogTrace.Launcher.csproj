@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    啟動程式（ADR-0030 第 4 點）：C# + Native AOT，編譯成單一原生 exe，不需要 .NET 執行環境。
+    放在程式根資料夾，檔名與主程式相同（LogTrace.exe），捷徑一直指向它。
+    畫面只用 Win32 MessageBox 與進度視窗（Native AOT 不能用 WPF、WinForms）。
+    發佈：dotnet publish src/LogTrace.Launcher -c Release -r win-x64（scripts/package.ps1 會呼叫）。
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyName>LogTrace</AssemblyName>
+    <RootNamespace>LogTrace.Launcher</RootNamespace>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationIcon>..\LogTrace.App\LogTrace.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- 與主程式（也叫 LogTrace.exe）分開輸出，避免互相覆蓋 -->
+    <BaseOutputPath>bin\</BaseOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LogTrace.Update\LogTrace.Update.csproj" />
+  </ItemGroup>
+
+</Project>

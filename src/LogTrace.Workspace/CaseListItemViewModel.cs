@@ -10,6 +10,11 @@ public sealed class CaseListItemViewModel(CaseSummary summary, int? recentRank)
     public CaseSummary Summary { get; } = summary;
     public string Folder => Summary.Folder;
     public string Name => Summary.Name;
+
+    /// <summary>格式較舊的案件在名稱後面標示「（需要重建）」（ADR-0030 第 6 點）。</summary>
+    public bool NeedsRebuild => Summary.NeedsRebuild;
+
+    public string DisplayName => NeedsRebuild ? Name + "（需要重建）" : Name;
     public string PlantName => Summary.PlantName;
     public string CreatedAt => Summary.CreatedAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
     public int? RecentRank { get; } = recentRank;

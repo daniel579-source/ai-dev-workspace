@@ -34,9 +34,11 @@ $env:LOGTRACE_PERF_SOURCE = "D:/_case/tv-data/logs/20300107"; $env:LOGTRACE_PERF
 $env:LOGTRACE_PERF_SEARCH_SOURCE = "D:/_case/tv-data/logs"
 dotnet test tests/LogTrace.Engine.Tests -c Release --filter "Category=Perf" --logger "console;verbosity=detailed"
 
-# 打包：self-contained 單一資料夾＋zip（ADR-0007），目標電腦不需要安裝 .NET；
-# 含使用說明（docs/user-guide.md）、第三方元件清單（THIRD-PARTY-NOTICES.md）與授權全文（licenses/）
-pwsh scripts/package.ps1                                     # → publish/LogTrace-<版本>-win-x64.zip
+# 打包（ADR-0007、ADR-0030）：self-contained，目標電腦不需要安裝 .NET；含使用說明、更新紀錄（CHANGELOG.md）、
+# 第三方元件清單（THIRD-PARTY-NOTICES.md）與授權全文（licenses/）。啟動程式以 Native AOT 編譯，需要 Visual Studio 的 C++ 工具
+pwsh scripts/package.ps1   # → publish/LogTrace-<版本>-win-x64.zip（完整包，首次安裝）、LogTrace-<版本>-app.zip（程式包）、
+                           #   LogTrace-webview2-<Runtime 版本>-runtime.zip（Runtime 包，已存在時不重做；-RuntimePackage 強制重做）
+# 發佈前把 CHANGELOG.md 的「## 未發佈」改成「## <版本>」：程式包只帶這一節的說明
 
 # 以冒煙測試驗證發佈版（zip 解壓後的 LogTrace.exe）；LOGTRACE_E2E_SOURCE 另以一天份資料在畫面上走主要流程
 $env:LOGTRACE_APP_EXE = "D:/temp/LogTrace/LogTrace.exe"; $env:LOGTRACE_E2E_SOURCE = "D:/_case/tv-data/logs/20300107"
@@ -62,7 +64,9 @@ Layout 回放與 Layout 編輯器以 WebView2 內嵌 three.js 繪製 3D；程式
 | `src/LogTrace.Engine` | 案件引擎：無畫面的函式庫（案件管理、匯入資料夾／7z／zip、解析、排序與事件序號、儲存、廠別設定檔的讀寫與檢查）。7z 使用 7-Zip 的 `7za.dll`（LGPL，隨程式放在 `7z\`） |
 | `src/LogTrace.Workspace` | ViewModel（主畫面、Layout 編輯器）：不依賴 WPF 控制項 |
 | `src/LogTrace.App` | WPF 畫面（AvalonDock）；Layout 回放與 Layout 編輯器的 3D 網頁在 `Web3D/`（WebView2 + three.js，ADR-0017、ADR-0018） |
-| `tests/` | 引擎測試、ViewModel 測試、FlaUI 冒煙測試；測試用 LOG 在 `tests/fixtures`（虛構） |
+| `src/LogTrace.Update` | 升級（ADR-0030）：掃描 `updates\`、檢查升級包、規劃與套用；沒有畫面，相容 Native AOT |
+| `src/LogTrace.Launcher` | 啟動程式（ADR-0030）：Native AOT 單一 exe，確認畫面用 Win32 MessageBox，解開時顯示進度視窗 |
+| `tests/` | 引擎測試、ViewModel 測試、升級測試、FlaUI 冒煙測試；測試用 LOG 在 `tests/fixtures`（虛構） |
 
 ## 文件導覽
 

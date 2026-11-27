@@ -194,7 +194,14 @@ public partial class MainWindow : Window
             _layouts.ApplyPreset(DockLayouts.Playback);
             if (DeleteOldLayout()) _vm?.ShowStatus("版面已更新為新版的預設版面（知識庫移到主要區域）。可以從「版面」選單切換。");
         }
-        else if (!_layouts.TryRestore(saved)) _vm?.ShowStatus("保存的版面無法使用（檔案損壞或來自其他版本的程式），已改用預設版面。");
+        else if (!_layouts.TryRestore(saved))
+        {
+            // 較新版本的程式寫的版面讀不了：改用預設版面，結束時不儲存，不覆寫原檔（ADR-0030 第 5 點，2026-11-27 使用者選 6a）
+            _keepSavedLayout = LayoutWriterVersion() is { } writer && writer > AppVersion;
+            _vm?.ShowStatus(_keepSavedLayout
+                ? "保存的版面來自較新版本的程式，這個版本無法使用，已改用預設版面（不覆寫原本的版面檔，這次的版面調整不會保留）。"
+                : "保存的版面無法使用（檔案損壞或來自其他版本的程式），已改用預設版面。");
+        }
         _watchdog = new BusyWatchdog(this);
         UpdateBusy();
     }
@@ -219,14 +226,33 @@ public partial class MainWindow : Window
         Playback3D.Shutdown();
     }
 
-    /// <summary>關閉程式時保存目前的版面；保存失敗不阻擋關閉。</summary>
+    bool _keepSavedLayout;
+
+    static Version AppVersion => typeof(MainWindow).Assembly.GetName().Version is { } v ? new Version(v.Major, v.Minor, Math.Max(0, v.Build)) : new Version(0, 0, 0);
+
+    /// <summary>寫入版面檔的程式版本（記在旁邊的 .version 檔）；沒有記錄（較舊的程式）時為 null。</summary>
+    Version? LayoutWriterVersion()
+    {
+        try
+        {
+            return LayoutFile is not null && File.Exists(LayoutFile + ".version") && Version.TryParse(File.ReadAllText(LayoutFile + ".version").Trim(), out var v)
+                ? v : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>關閉程式時保存目前的版面與程式版本；保存失敗不阻擋關閉。</summary>
     void Window_Closing(object? sender, CancelEventArgs e)
     {
-        if (_layouts is null || LayoutFile is null) return;
+        if (_layouts is null || LayoutFile is null || _keepSavedLayout) return;
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(LayoutFile)!);
             File.WriteAllText(LayoutFile, _layouts.Save());
+            File.WriteAllText(LayoutFile + ".version", AppVersion.ToString(3));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

@@ -18,6 +18,7 @@
   <!-- 發佈資料夾附上使用說明、第三方元件清單與授權全文（#29） -->
   <ItemGroup>
     <None Include="..\..\docs\user-guide.md" Link="使用說明.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
+    <None Include="..\..\CHANGELOG.md" Link="CHANGELOG.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
     <None Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
     <None Include="..\..\licenses\*.txt" Link="licenses\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
   </ItemGroup>
@@ -48,6 +49,11 @@
     <WebView2RuntimeVersion>157.0.4341.60</WebView2RuntimeVersion>
     <WebView2RuntimeSource>$(MSBuildThisFileDirectory)..\..\third_party\webview2\runtime\Microsoft.WebView2.FixedVersionRuntime.$(WebView2RuntimeVersion).x64\</WebView2RuntimeSource>
   </PropertyGroup>
+  <!-- 程式包註明需要的 Runtime 版本；執行時依版本找 ..
+untimes\webview2-<版本>\（ADR-0030） -->
+  <ItemGroup>
+    <AssemblyMetadata Include="WebView2RuntimeVersion" Value="$(WebView2RuntimeVersion)" />
+  </ItemGroup>
   <ItemGroup Condition="Exists('$(WebView2RuntimeSource)')">
     <None Include="$(WebView2RuntimeSource)**\*" Link="WebView2Runtime\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
   </ItemGroup>

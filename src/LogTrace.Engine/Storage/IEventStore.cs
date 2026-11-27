@@ -46,7 +46,7 @@ public sealed record CaseInfo(string Name, LogTrace.Engine.Plants.PlantConfig Pl
 public interface IEventStore : IDisposable
 {
     void SaveInfo(CaseInfo info);
-    CaseInfo LoadInfo();
+    CaseInfo LoadInfo(bool requireCurrentSchema = true);
 
     long NextImportId();
 

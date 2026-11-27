@@ -17,25 +17,29 @@ using TechValidation.LlmQuery;
 var opts = Args.Parse(args);
 if (opts.TryGetValue("summarize", out var summarizeList))
 {
-    Report.Write(summarizeList.Split(';', StringSplitOptions.RemoveEmptyEntries), opts["report"]);
+    Report.Write(summarizeList.Split(';', StringSplitOptions.RemoveEmptyEntries), opts["report"], opts.TryGetValue("note", out var note) ? note : null);
     return 0;
 }
 
 var questionsDoc = JsonNode.Parse(File.ReadAllText(opts["questions"]))!;
 var caseDate = questionsDoc["caseDate"]!.GetValue<string>();
-var hybrid = opts.ContainsKey("hybrid");
+// 第三輪：--expand（隱含 --hybrid）：延伸詞＋程式檢查，只跑有範例的組合；--case-log 為虛構案件 LOG
+var expand = opts.ContainsKey("expand");
+var hybrid = expand || opts.ContainsKey("hybrid");
+var caseLog = expand ? new CaseLog(opts.TryGetValue("case-log", out var caseLogPath) ? caseLogPath : "llm-query/case-log.json") : null;
 var examplesDoc = opts.TryGetValue("examples", out var examplesPath) ? JsonNode.Parse(File.ReadAllText(examplesPath))! : questionsDoc;
 var examples = hybrid
-    ? examplesDoc["hybridExamples"]!.AsArray()
+    ? examplesDoc[expand ? "expandExamples" : "hybridExamples"]!.AsArray()
         .Select(e => (Rules.Extract(e!["question"]!.GetValue<string>(), caseDate).Remainder, Prompt.Answer(e["answer"]))).ToList()
     : examplesDoc["examples"]!.AsArray()
         .Select(e => (e!["question"]!.GetValue<string>(), Prompt.Answer(e["expect"]))).ToList();
 var questions = questionsDoc["questions"]!.AsArray()
-    .Select(q => (Id: q!["id"]!.GetValue<string>(), Text: q["question"]!.GetValue<string>(), Expect: Query.Parse(q["expect"]))).ToList();
+    .Select(q => (Id: q!["id"]!.GetValue<string>(), Text: q["question"]!.GetValue<string>(), Expect: Query.Parse(q["expect"]),
+        ExpectSuggest: q["expectSuggest"] is JsonArray es ? es.Select(x => x!.GetValue<string>()).ToList() : null)).ToList();
 if (opts.TryGetValue("limit", out var limit)) questions = questions.Take(int.Parse(limit, CultureInfo.InvariantCulture)).ToList();
 var family = opts["family"].Equals("qwen", StringComparison.OrdinalIgnoreCase) ? ModelFamily.Qwen : ModelFamily.Phi;
-var system = hybrid ? Prompt.HybridSystem() : Prompt.System(caseDate);
-var schema = hybrid ? Prompt.HybridSchema() : Prompt.Schema(caseDate);
+var system = hybrid ? Prompt.HybridSystem(expand) : Prompt.System(caseDate);
+var schema = hybrid ? Prompt.HybridSchema(expand) : Prompt.Schema(caseDate);
 
 if (opts.ContainsKey("check-rules"))
 {
@@ -65,7 +69,7 @@ Console.WriteLine($"載入 {opts["name"]}：{load.Elapsed.TotalSeconds:N1} 秒")
 
 var runs = new JsonArray();
 foreach (var guided in new[] { false, true })
-foreach (var fewShot in new[] { true, false })
+foreach (var fewShot in expand ? new[] { true } : new[] { true, false }) // 第三輪只跑有範例（使用者決定 2026-11-27）
 {
     var label = $"{(guided ? "schema 限制" : "只用提示詞")}／{(fewShot ? "有範例" : "沒有範例")}";
     var items = new JsonArray();
@@ -99,10 +103,12 @@ foreach (var fewShot in new[] { true, false })
         var raw = text.ToString();
         string? error = null;
         Query? actual = null;
+        JsonNode? parsed = null;
         try
         {
             var json = Scoring.ExtractJson(raw) ?? throw new FormatException("輸出中沒有完整的 JSON 物件");
-            actual = Query.Parse(JsonNode.Parse(json));
+            parsed = JsonNode.Parse(json);
+            actual = Query.Parse(parsed);
             if (ext is not null && !actual.Unsupported)
             {
                 // 混合做法：時間與編號用規則的結果；含佔位符的關鍵字丟掉
@@ -110,12 +116,46 @@ foreach (var fewShot in new[] { true, false })
                 actual = actual with { AllOf = Clean(actual.AllOf), AnyOf = Clean(actual.AnyOf), NoneOf = Clean(actual.NoneOf), From = ext.From, To = ext.To, Fields = ext.Fields };
             }
         }
-        catch (Exception ex) when (ex is FormatException or JsonException or InvalidOperationException)
+        catch (Exception ex) when (ex is FormatException or JsonException or InvalidOperationException or ArgumentException) // ArgumentException：模型輸出重複的欄位名稱
         {
             error = ex.Message;
+            actual = null; parsed = null; // 格式錯誤時整題算錯，也不讀延伸詞
         }
         var parts = actual is null ? Scoring.Parts.ToDictionary(p => p, _ => false) : Scoring.Compare(q.Expect, actual);
         var exact = actual is not null && parts.Values.All(x => x);
+        var extra = new JsonObject();
+        if (expand)
+        {
+            // 檢查前的結果另外記錄；exact／parts 改為程式檢查後的結果
+            extra["exactRaw"] = exact;
+            extra["partsRaw"] = new JsonObject(parts.Select(p => KeyValuePair.Create(p.Key, (JsonNode?)p.Value)));
+            var hints = new List<string>();
+            if (actual is not null)
+            {
+                var checkedResult = Checks.Apply(actual, q.Text);
+                actual = checkedResult.Query;
+                hints = checkedResult.Hints.ToList();
+                parts = Scoring.Compare(q.Expect, actual);
+                exact = parts.Values.All(x => x);
+            }
+            // 延伸詞：去掉與原文關鍵字相同的，再到案件 LOG 查次數，有出現才當建議
+            var expansions = parsed is JsonObject po && po["expansions"] is JsonArray ea
+                ? ea.Select(x => x?.ToString() ?? "").Where(x => x.Trim().Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList() : new List<string>();
+            var keywords = actual is null ? new HashSet<string>() : actual.AllOf.Concat(actual.AnyOf).Concat(actual.NoneOf).Select(Checks.Norm).ToHashSet();
+            var suggestions = expansions.Where(x => !keywords.Contains(Checks.Norm(x)))
+                .Select(x => (Term: x, Count: caseLog!.Count(x))).Where(x => x.Count > 0).OrderByDescending(x => x.Count).ToList();
+            extra["hints"] = new JsonArray(hints.Select(h => (JsonNode)h).ToArray());
+            extra["expansions"] = new JsonArray(expansions.Select(x => (JsonNode)x).ToArray());
+            extra["suggestions"] = new JsonArray(suggestions.Select(x => (JsonNode)new JsonObject { ["term"] = x.Term, ["count"] = x.Count }).ToArray());
+            if (q.ExpectSuggest is { } want)
+            {
+                var wantNorm = want.Select(Checks.Norm).ToHashSet();
+                var good = suggestions.Count(x => wantNorm.Contains(Checks.Norm(x.Term)));
+                extra["expectSuggest"] = new JsonArray(want.Select(x => (JsonNode)x).ToArray());
+                extra["suggestHit"] = good > 0;
+                extra["suggestGood"] = good;
+            }
+        }
         var decode = firstToken is { } ft && outTokens > 1 ? (outTokens - 1) / Math.Max(0.001, sw.Elapsed.TotalSeconds - ft) : 0;
         items.Add(new JsonObject
         {
@@ -127,6 +167,7 @@ foreach (var fewShot in new[] { true, false })
             ["output"] = raw.Length > 600 ? raw[..600] : raw,
             ["llmInput"] = ext?.Remainder,
         });
+        foreach (var kv in extra.ToList()) { extra.Remove(kv.Key); items[^1]!.AsObject()[kv.Key] = kv.Value; }
         Console.WriteLine($"  [{label}] {q.Id} {(exact ? "OK " : "NG ")} {sw.Elapsed.TotalSeconds,5:N1}s {raw.ReplaceLineEndings(" ")[..Math.Min(raw.Length, 120)]}");
     }
     runs.Add(new JsonObject { ["guided"] = guided, ["fewShot"] = fewShot, ["label"] = label, ["items"] = items });
@@ -137,7 +178,7 @@ self.Refresh();
 var result = new JsonObject
 {
     ["model"] = opts["name"], ["modelPath"] = Path.GetFileName(opts["model"].TrimEnd('\\', '/')), ["family"] = family.ToString(),
-    ["device"] = "CPU", ["hybrid"] = hybrid, ["processorCount"] = Environment.ProcessorCount,
+    ["device"] = "CPU", ["hybrid"] = hybrid, ["expand"] = expand, ["processorCount"] = Environment.ProcessorCount,
     ["loadSeconds"] = load.Elapsed.TotalSeconds, ["peakWorkingSetMB"] = self.PeakWorkingSet64 / (1024.0 * 1024),
     ["date"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), ["runs"] = runs,
 };

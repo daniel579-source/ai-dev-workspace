@@ -1,0 +1,26 @@
+{
+  "_說明": "#55 第三輪：延伸詞題目（範例／虛構）。工程師用中文或口語問，虛構案件 LOG（case-log.json）用英文。expect 是原文關鍵字等搜尋條件；expectSuggest 是案件 LOG 中對應的用語（建議中出現其中任何一個就算命中）。案件日期固定為 2030-01-07。",
+  "caseDate": "2030-01-07",
+  "questions": [
+    { "id": "e01", "question": "PLC 斷線的紀錄", "expect": { "allOf": ["斷線"], "modules": ["PLC"] }, "expectSuggest": ["disconnect", "link disconnect"] },
+    { "id": "e02", "question": "有逾時的事件", "expect": { "allOf": ["逾時"] }, "expectSuggest": ["timeout"] },
+    { "id": "e03", "question": "命令 CMD-0300 有重試的紀錄", "expect": { "allOf": ["重試"], "fields": [{ "kind": "command", "value": "CMD-0300" }] }, "expectSuggest": ["retry"] },
+    { "id": "e04", "question": "有「過載」的紀錄", "expect": { "allOf": ["過載"] }, "expectSuggest": ["overload"] },
+    { "id": "e05", "question": "緊急停止的紀錄", "expect": { "allOf": ["緊急停止"] }, "expectSuggest": ["emergency stop", "E-STOP", "emergency"] },
+    { "id": "e06", "question": "有「讀取失敗」的紀錄", "expect": { "allOf": ["讀取失敗"] }, "expectSuggest": ["NoRead"] },
+    { "id": "e07", "question": "有「超重」的事件", "expect": { "allOf": ["超重"] }, "expectSuggest": ["over limit", "weight over limit", "weight"] },
+    { "id": "e08", "question": "有「開門」的紀錄", "expect": { "allOf": ["開門"] }, "expectSuggest": ["door open", "open"] },
+    { "id": "e09", "question": "有「電量低」的紀錄", "expect": { "allOf": ["電量低"] }, "expectSuggest": ["low battery", "battery"] },
+    { "id": "e10", "question": "有「位置不符」的事件", "expect": { "allOf": ["位置不符"] }, "expectSuggest": ["position mismatch", "mismatch"] },
+    { "id": "e11", "question": "碰撞的紀錄", "expect": { "allOf": ["碰撞"] }, "expectSuggest": ["collision"] },
+    { "id": "e12", "question": "有「過熱」的紀錄", "expect": { "allOf": ["過熱"] }, "expectSuggest": ["overheat"] },
+    { "id": "e13", "question": "EXE 通訊異常的 ERROR", "expect": { "allOf": ["通訊異常"], "modules": ["EXE"], "levels": ["ERROR"] }, "expectSuggest": ["communication error", "communication"] },
+    { "id": "e14", "question": "交握失敗的紀錄", "expect": { "allOf": ["交握失敗"] }, "expectSuggest": ["handshake failed", "handshake"] },
+    { "id": "e15", "question": "Server 有「死結」的紀錄", "expect": { "allOf": ["死結"], "modules": ["Server"] }, "expectSuggest": ["deadlock"] },
+    { "id": "e16", "question": "手動模式的紀錄", "expect": { "allOf": ["手動模式"] }, "expectSuggest": ["manual mode", "manual"] },
+    { "id": "e17", "question": "有「停電」的事件", "expect": { "allOf": ["停電"] }, "expectSuggest": ["power failure"] },
+    { "id": "e18", "question": "有「重複」的紀錄", "expect": { "allOf": ["重複"] }, "expectSuggest": ["duplicate"] },
+    { "id": "e19", "question": "PLC 斷線或逾時，不要 heartbeat", "expect": { "anyOf": ["斷線", "逾時"], "noneOf": ["heartbeat"], "modules": ["PLC"] }, "expectSuggest": ["disconnect", "link disconnect", "timeout"] },
+    { "id": "e20", "question": "有「重新連線」的紀錄", "expect": { "allOf": ["重新連線"] }, "expectSuggest": ["reconnect"] }
+  ]
+}

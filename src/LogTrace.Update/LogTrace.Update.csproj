@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 升級（ADR-0030）：掃描 updates\、檢查升級包、規劃與套用。沒有畫面；啟動程式（Native AOT）與測試共用，所以要相容 AOT。 -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+</Project>

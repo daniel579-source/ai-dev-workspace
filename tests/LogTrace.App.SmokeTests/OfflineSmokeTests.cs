@@ -29,15 +29,19 @@ public sealed class OfflineSmokeTests : IDisposable
             .ToList();
     }
 
-    /// <summary>3D 回放的瀏覽器程序（程式資料夾內的 WebView2 Runtime，ADR-0017）。</summary>
+    /// <summary>
+    /// 3D 回放的瀏覽器程序：程式資料夾內的 WebView2 Runtime（開發時，ADR-0017），
+    /// 或程式根資料夾共用的 ..\runtimes\（安裝後，ADR-0030）。
+    /// </summary>
     static List<int> WebViewProcesses()
     {
-        var runtime = Path.Combine(Path.GetDirectoryName(ImportSmokeTests.AppExe())!, "WebView2Runtime");
+        var appFolder = Path.GetDirectoryName(ImportSmokeTests.AppExe())!;
+        var roots = new[] { Path.Combine(appFolder, "WebView2Runtime"), Path.Combine(Path.GetDirectoryName(appFolder)!, "runtimes") };
         var pids = new List<int>();
         foreach (var p in Process.GetProcessesByName("msedgewebview2"))
             try
             {
-                if (p.MainModule?.FileName.StartsWith(runtime, StringComparison.OrdinalIgnoreCase) == true) pids.Add(p.Id);
+                if (p.MainModule?.FileName is { } file && roots.Any(r => file.StartsWith(r + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))) pids.Add(p.Id);
             }
             catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
             {
@@ -79,7 +83,7 @@ public sealed class OfflineSmokeTests : IDisposable
             Assert.True(Retry.WhileFalse(() => In("Status").Name.Contains("筆事件"), TimeSpan.FromSeconds(30)).Result);
             Assert.True(Retry.WhileFalse(() => In("Playback3DStatus").Name.StartsWith("3D 已載入", StringComparison.Ordinal), TimeSpan.FromSeconds(30)).Result);
             Assert.DoesNotContain("已封鎖", In("Playback3DStatus").Name); // 網頁沒有發出任何網路請求
-            Assert.NotEmpty(WebViewProcesses()); // 使用程式資料夾內的 Runtime
+            Assert.NotEmpty(WebViewProcesses()); // 使用固定版本的 Runtime（程式資料夾內或 ..\runtimes\）
             Check(); // 匯入、建立索引、3D 回放
 
             ImportSmokeTests.OpenTab(main, "搜尋");

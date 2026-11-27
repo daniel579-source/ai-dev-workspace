@@ -4,8 +4,8 @@ using LogTrace.Engine.Storage;
 
 namespace LogTrace.Engine.Cases;
 
-/// <summary>案件清單中的一個案件。</summary>
-public sealed record CaseSummary(string Folder, string Name, string PlantName, DateTimeOffset CreatedAt, DateTime LastWriteTime);
+/// <summary>案件清單中的一個案件。NeedsRebuild：案件資料庫的結構版本與程式不同，開啟時要以原始 LOG 重建（ADR-0030 第 6 點）。</summary>
+public sealed record CaseSummary(string Folder, string Name, string PlantName, DateTimeOffset CreatedAt, DateTime LastWriteTime, bool NeedsRebuild = false);
 
 /// <summary>
 /// 案件存放位置（ADR-0011 第 3 點）：預設 D:\LogTrace\Cases（2026-10-19 #57 修改，原為 %LOCALAPPDATA%\LogTrace\Cases），可以修改。
@@ -43,7 +43,10 @@ public sealed class CaseLibrary(string root)
         return c;
     }
 
-    /// <summary>存放位置下的所有案件（含 case.db 的子資料夾）；打不開的資料夾略過。</summary>
+    /// <summary>重建案件資料庫前的備份位置（ADR-0030 第 6 點）。</summary>
+    public string BackupsRoot => CaseUpgrade.BackupsRoot(Root);
+
+    /// <summary>存放位置下的所有案件（含 case.db 的子資料夾）；格式較舊的案件標示需要重建；打不開的資料夾略過。</summary>
     public IReadOnlyList<CaseSummary> List()
     {
         if (!Directory.Exists(Root)) return [];
@@ -54,13 +57,14 @@ public sealed class CaseLibrary(string root)
             if (!File.Exists(db)) continue;
             try
             {
+                var needsRebuild = CaseUpgrade.NeedsRebuild(dir);
                 using var store = new SqliteEventStore(db, readOnly: true);
-                var info = store.LoadInfo();
-                list.Add(new CaseSummary(dir, info.Name, info.Plant.Name, info.CreatedAt, File.GetLastWriteTime(db)));
+                var info = store.LoadInfo(requireCurrentSchema: !needsRebuild);
+                list.Add(new CaseSummary(dir, info.Name, info.Plant.Name, info.CreatedAt, File.GetLastWriteTime(db), needsRebuild));
             }
             catch (Exception ex) when (ex is InvalidDataException or IOException or Microsoft.Data.Sqlite.SqliteException)
             {
-                // 版本不符或損壞的案件不列出；資料夾保留，不自動刪除（ADR-0009 第 6 點）
+                // 損壞的案件不列出；資料夾保留，不自動刪除（ADR-0009 第 6 點）
             }
         }
         return list.OrderBy(c => c.Name, StringComparer.CurrentCulture).ToList();

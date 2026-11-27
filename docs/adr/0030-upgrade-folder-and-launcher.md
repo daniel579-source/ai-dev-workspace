@@ -81,6 +81,23 @@ D:\LogTrace\Program\           ← 以啟動程式所在位置為準，建議放
 - 第一個含啟動程式的版本，以含 Runtime 的完整 zip **手動安裝一次**（解到 `D:\LogTrace\Program\`），之後走升級資料夾（Jev 0.90）。
 - `scripts/package.ps1` 改為產生三種輸出：完整 zip（首次安裝）、程式包、Runtime 包。
 
+### 8. 實作確認（2026-11-27，#218）
+
+使用者裁決（Jev 信心度偏低的項目）：1a、2a、3a、4b、5a、6a、7b。
+
+- **確認畫面**：Win32 MessageBox（1a；Jev 0.35），「是」＝套用、「否」＝稍後；更新說明超過 1200 字時截斷並註明完整內容在 `CHANGELOG.md`。
+- **進度**：解開時另外顯示只有說明文字與進度列的 Win32 視窗，不能關閉（4b；與 1a 並存）。
+- **預設版本**記在 `Program\launcher.json`；不見或指向不完整的版本時改用最新且完整的版本（Jev 0.80）。版本資料夾與 Runtime 資料夾解開完成後才寫入 `installed.json`，沒有的視為不完整。
+- **辨識升級包**：只看 `updates\` 下的 `.zip`，讀根目錄的 `update.json`（kind、version、runtimeVersion、files、notes），不靠檔名（Jev 0.66）。程式包內容在 `app\`，Runtime 包在 `runtime\`。
+- **CRC**：解開時逐一核對，不符就刪除解開一半的 `<目的>.partial` 並移到 `rejected\`；不安全的路徑整包拒絕。磁碟空間需要「解開後大小＋200 MB」。
+- **案件重建**：在 `case.db.rebuilding` 建立新的資料庫，複製 meta、imports、files、audit 中兩邊都有的欄位，再以 `CaseImporter.Rebuild` 重新解析；成功後才取代 `case.db`，失敗或中途中斷時 `case.db` 完全不動（2a）。格式較舊的案件在清單中標示「（需要重建）」（3a）。備份位置為案件存放位置的上一層下的 `Backups\`（預設 `D:\LogTrace\Backups\`）。
+- **WebView2 Runtime**：主程式先找自己資料夾的 `WebView2Runtime\`，再找 `..\runtimes\webview2-<版本>\`；版本由建置時寫入組件中繼資料（5a）。
+- **版面**：結束時在版面檔旁寫 `.version`（寫入的程式版本）；讀不了而且寫入版本比自己新時，結束時不儲存（6a）。舊版沒有 `.version` 的版面不受影響。
+- **啟動程式替換**：啟動時若預設版本的 `app-<版本>\launcher\LogTrace.exe` 與自己內容不同，把自己改名成 `LogTrace.old.exe` 再複製新版，下次啟動生效並刪除舊檔（7b）。
+- **Native AOT** 啟動程式約 3.1 MB；打包需要 Visual Studio 的 C++ 工具，`package.ps1` 在 `vswhere.exe` 不在 PATH 時自動加上。
+- **.NET 弱點**：AOT 編譯時發現 SDK 10.0.402 附帶的執行環境 10.0.13 有 CVE-2026-111497（GHSA-p3jp-9v83-76w9，高嚴重性，10.0.14 修正）；0.19.0 以前發佈的主程式（self-contained）也帶 10.0.13。使用者決定升級開發電腦的 SDK 到 10.0.404（執行環境 10.0.15，2026-11-27），之後發佈的主程式與啟動程式都使用 10.0.15。
+- 開發電腦以虛構升級包實測：0.19.0 完整包 → 放入 0.20.0 程式包 → 確認畫面 → 進度視窗 → 從 `app-0.20.0\` 啟動、`launcher.json` 更新、升級包刪除、啟動程式替換；第二次啟動不詢問並刪除 `LogTrace.old.exe`。輸出大小：完整包 372 MB、程式包 64 MB、Runtime 包 306 MB。
+
 ## 理由
 
 - 版本並存不覆蓋執行中的檔案，避開檔案被鎖住的問題；新版有問題時舊版仍在，可以直接退回（方案 B，Jev 0.86）。

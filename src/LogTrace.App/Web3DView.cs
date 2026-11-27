@@ -13,7 +13,8 @@ namespace LogTrace.App;
 /// <summary>
 /// 3D 畫面的共用部分（ADR-0017、ADR-0018）：WebView2 內嵌 three.js。Layout 回放與 Layout 編輯器各自繼承。
 /// <list type="bullet">
-/// <item>只使用程式資料夾內的固定版本 Runtime（WebView2Runtime\），不改用電腦上安裝的版本。</item>
+/// <item>只使用固定版本的 Runtime，不改用電腦上安裝的版本：先找程式資料夾內的 WebView2Runtime\（開發時），
+/// 再找程式根資料夾共用的 ..\runtimes\webview2-&lt;版本&gt;\（ADR-0030 第 1 點，2026-11-27 使用者選 5a）。</item>
 /// <item>只載入程式資料夾內的網頁（web3d\，以虛擬主機名稱對應）；其他所有網路請求與外部導覽一律封鎖。</item>
 /// <item>WebView2 或 WebGL 不能使用時顯示原因，其他功能照常。</item>
 /// </list>
@@ -102,7 +103,7 @@ public abstract class Web3DView : Grid
     /// <summary>網頁傳來的其他訊息（ready、loaded、error 以外）。</summary>
     protected abstract void OnPageMessage(string kind, JsonElement message);
 
-    static string RuntimeFolder => Path.Combine(AppContext.BaseDirectory, "WebView2Runtime");
+    static string RuntimeFolder => RuntimeLocator.Find(AppContext.BaseDirectory, RuntimeLocator.RequiredVersion);
 
     static string PageFolder => Path.Combine(AppContext.BaseDirectory, "web3d");
 
@@ -111,7 +112,7 @@ public abstract class Web3DView : Grid
         if (_web is not null) return;
         if (!File.Exists(Path.Combine(RuntimeFolder, "msedgewebview2.exe")))
         {
-            ShowError($"找不到程式資料夾內的 WebView2 Runtime（{RuntimeFolder}），無法顯示{What}。{OtherFeatures}");
+            ShowError($"找不到 WebView2 Runtime {RuntimeLocator.RequiredVersion}（{RuntimeFolder}），無法顯示{What}。請放入對應的 Runtime 升級包。{OtherFeatures}");
             return;
         }
         if (!File.Exists(Path.Combine(PageFolder, Page)))

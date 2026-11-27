@@ -543,19 +543,47 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     bool CanUseSelectedCase() => !IsBusy && SelectedCase is not null;
 
+    /// <summary>格式較舊的案件：開啟前提示重建（ADR-0030 第 6 點）。</summary>
+    bool ConfirmRebuild(CaseListItemViewModel item) => _ui.Confirm("重建案件資料庫",
+        $"案件「{item.Name}」是較舊版本的程式建立的，資料庫格式與目前的程式不同，需要重建才能開啟。\n\n" +
+        $"・舊的資料庫會先備份到 {CaseUpgrade.BackupFolder(_library.BackupsRoot, item.Folder)}（每個案件只保留最近一份）。\n" +
+        "・依案件內保留的原始 LOG 重新解析事件；案件名稱、時間偏移量、廠別設定快照、匯入紀錄與稽核紀錄都保留。\n" +
+        "・事件多時需要一些時間。重建失敗時案件維持原狀，下次開啟時再試。\n\n" +
+        "要現在重建嗎？");
+
     [RelayCommand(CanExecute = nameof(CanUseSelectedCase))]
     async Task OpenSelectedCaseAsync()
     {
-        var folder = SelectedCase!.Folder;
+        var item = SelectedCase!;
+        var folder = item.Folder;
+        var notice = "";
+        if (item.NeedsRebuild && !ConfirmRebuild(item)) return;
         CloseCurrent();
         IsBusy = true;
-        Status = "開啟案件中…";
+        Status = item.NeedsRebuild ? "重建案件資料庫中（依原始 LOG 重新解析）…" : "開啟案件中…";
         try
         {
+            if (item.NeedsRebuild)
+            {
+                try
+                {
+                    var backup = await Task.Run(() => CaseUpgrade.Rebuild(folder, _library.BackupsRoot));
+                    RefreshCases();
+                    SelectedCase = Cases.FirstOrDefault(x => string.Equals(x.Folder, folder, StringComparison.OrdinalIgnoreCase));
+                    notice = $"已重建案件資料庫，舊的資料庫備份在 {backup}。";
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException
+                                               or Microsoft.Data.Sqlite.SqliteException or OperationCanceledException)
+                {
+                    // 失敗時 case.db 不變，案件仍標示需要重建，下次開啟時再試（ADR-0030 第 6 點，2026-11-27 使用者選 Q25）
+                    Status = $"重建案件資料庫失敗，案件維持原狀（仍標示需要重建，下次開啟時再試）：{ex.Message}";
+                    return;
+                }
+            }
             var c = await Task.Run(() => Case.Open(folder));
             SetCurrent(c);
             await LoadEventsAsync(c);
-            Status = $"已開啟案件「{c.Info.Name}」：{Events.Count:N0} 筆事件。";
+            Status = $"{notice}已開啟案件「{c.Info.Name}」：{Events.Count:N0} 筆事件。";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or Microsoft.Data.Sqlite.SqliteException)
         {

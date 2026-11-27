@@ -11,8 +11,13 @@ namespace LogTrace.Engine.Storage;
 /// <summary>SQLite 實作（ADR-0011：case.db 屬於不可重建的資料）。</summary>
 public sealed class SqliteEventStore : IEventStore
 {
-    /// <summary>案件資料庫的結構版本；與程式不符時拒絕開啟（第一階段開發中，不做移轉）。</summary>
+    /// <summary>
+    /// 案件資料庫的結構版本；與程式不符時拒絕開啟。版本不同的案件在開啟時以原始 LOG 重建（ADR-0030 第 6 點，<see cref="Cases.CaseUpgrade"/>）。
+    /// </summary>
     public const int SchemaVersion = 3;
+
+    /// <summary>重建時保留的資料表（使用者資料）；事件、解析欄位、效果、搜尋用文字由原始 LOG 重新產生。</summary>
+    static readonly string[] PreservedTables = ["meta", "imports", "files", "audit"];
 
     readonly SqliteConnection _conn;
     readonly string _path;
@@ -118,10 +123,72 @@ public sealed class SqliteEventStore : IEventStore
         tx.Commit();
     }
 
-    public CaseInfo LoadInfo()
+    /// <summary>案件資料庫記錄的結構版本；沒有記錄或讀不了時為 null。</summary>
+    public static int? ReadSchemaVersion(string databasePath)
     {
-        if (TryGetMeta("schema_version") != SchemaVersion.ToString(CultureInfo.InvariantCulture))
-            throw new InvalidDataException("案件資料庫的版本與程式不符，請重新建立案件並匯入。");
+        try
+        {
+            using var store = new SqliteEventStore(databasePath, readOnly: true);
+            return int.TryParse(store.TryGetMeta("schema_version"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : null;
+        }
+        catch (SqliteException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 從結構版本不同的舊資料庫複製使用者資料（meta、imports、files、audit 中兩邊都有的欄位），結構版本改為目前的版本。
+    /// 只用在新建立的資料庫（ADR-0030 第 6 點）。
+    /// </summary>
+    public void CopyPreservedFrom(string oldDatabasePath)
+    {
+        using (var attach = _conn.CreateCommand())
+        {
+            attach.CommandText = "ATTACH DATABASE $p AS old";
+            attach.Parameters.AddWithValue("$p", oldDatabasePath);
+            attach.ExecuteNonQuery();
+        }
+        try
+        {
+            using var tx = _conn.BeginTransaction();
+            foreach (var table in PreservedTables)
+            {
+                var mine = Columns("main", table);
+                var theirs = Columns("old", table).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var common = mine.Where(theirs.Contains).Select(c => $"\"{c}\"").ToList();
+                if (common.Count == 0) continue;
+                var list = string.Join(",", common);
+                Exec($"DELETE FROM main.{table}; INSERT INTO main.{table}({list}) SELECT {list} FROM old.{table};");
+            }
+            SetMeta("schema_version", SchemaVersion.ToString(CultureInfo.InvariantCulture));
+            tx.Commit();
+        }
+        finally
+        {
+            Exec("DETACH DATABASE old");
+        }
+        _days = null;
+    }
+
+    List<string> Columns(string schema, string table)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = $"SELECT name FROM pragma_table_info('{table}', '{schema}')";
+        var list = new List<string>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) list.Add(r.GetString(0));
+        return list;
+    }
+
+    /// <summary>把 WAL 的內容寫回資料庫檔案，之後只複製 case.db 就是完整的資料。</summary>
+    public void Checkpoint() => Exec("PRAGMA wal_checkpoint(TRUNCATE);");
+
+    /// <param name="requireCurrentSchema">false 時不檢查結構版本（案件清單列出需要重建的舊案件時使用）。</param>
+    public CaseInfo LoadInfo(bool requireCurrentSchema = true)
+    {
+        if (requireCurrentSchema && TryGetMeta("schema_version") != SchemaVersion.ToString(CultureInfo.InvariantCulture))
+            throw new InvalidDataException("案件資料庫的版本與程式不符，需要以原始 LOG 重建。");
         // plant_revision、encodings 為 #34 加入；之前建立的案件沒有，視為內建預設（修訂 0、自動判斷編碼）
         var plant = new PlantConfig
         {

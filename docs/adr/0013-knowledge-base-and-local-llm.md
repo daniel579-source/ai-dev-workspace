@@ -47,6 +47,7 @@ ADR-0001 把離線 LLM 與向量資料庫排除在第一階段之外。系統規
 7. **交付方式**：模型檔有數 GB，與程式分開存放，從內部共用資料夾複製，不需安裝。IT 是否允許把模型檔放在工程師電腦，**待確認**。
    - 2026-11-17 補充（提議中，見 ADR-0022）：向量搜尋的 embedding 使用 Ollama，**需要安裝**，本點「不需安裝」不適用於 Ollama；安裝要經 IT 同意（待確認）。LLM 仍依第 8 點，不使用 Ollama。
    - 2026-11-17 補充（使用者轉述 IT）：IT **同意**在工程師電腦安裝 Ollama 與放置模型檔（待確認 3 已確認；ADR-0022 待確認 1 已確認）。
+   - 2026-11-27 補充：廠區離線，檔案要經客戶以郵件轉寄（ADR-0030 背景），附件上限每廠不一定；數 GB 的模型檔與 Ollama 可能無法以本點「從內部共用資料夾複製」的方式送進廠區。ADR-0030 的升級機制只涵蓋 LogTrace 程式與 WebView2 Runtime，LLM 相關元件的交付與更新方式**待確認**（#47 E）。
 8. **候選技術**（實測後再定案）：
    - 模型：3～8B、INT4 量化。候選例如 Qwen 系列（中文較強）、Phi-4-mini（較小，中文較弱）。
    - 2026-11-17 補充（授權條款查核，以 Hugging Face 官方模型頁與 GitHub 授權檔為準）：Phi-4-mini-instruct（含 Microsoft 官方 ONNX 版）為 MIT；Qwen3-4B、Qwen3-8B、Qwen2.5-7B-Instruct 為 Apache-2.0，都可以商用。**Qwen2.5-3B-Instruct 為 Qwen Research License（只限研究或評估，不能商用），排除在正式產品之外**；3～4B 的 Qwen 改測 Qwen3-4B。執行環境 ONNX Runtime、ONNX Runtime GenAI、llama.cpp 都是 MIT。發佈時保留各自的授權檔；第三方轉檔版本的授權沿用原模型，但來源與品質另外確認。以上為條款整理，不是法律意見。

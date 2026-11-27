@@ -1,0 +1,2168 @@
+{
+  "model": "Qwen3-4B",
+  "modelPath": "qwen3-4b-cpu-int4",
+  "family": "Qwen",
+  "device": "CPU",
+  "hybrid": true,
+  "expand": true,
+  "processorCount": 16,
+  "loadSeconds": 4.3565164,
+  "peakWorkingSetMB": 4263.4453125,
+  "date": "2026-11-27 19:39",
+  "runs": [
+    {
+      "guided": false,
+      "fewShot": true,
+      "label": "只用提示詞／有範例",
+      "items": [
+        {
+          "id": "e01",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 735,
+          "outputTokens": 22,
+          "firstTokenSeconds": 12.3915917,
+          "totalSeconds": 15.2869368,
+          "decodeTokensPerSecond": 7.253021410124824,
+          "output": "{\"allOf\":[\"斷線\"],\"modules\":[\"PLC\"],\"expansions\":[\"disconnected\",\"line loss\"]}",
+          "llmInput": "PLC 斷線的紀錄",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "disconnected",
+            "line loss"
+          ],
+          "suggestions": [],
+          "expectSuggest": [
+            "disconnect",
+            "link disconnect"
+          ],
+          "suggestHit": false,
+          "suggestGood": 0
+        },
+        {
+          "id": "e02",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 733,
+          "outputTokens": 18,
+          "firstTokenSeconds": 12.2124266,
+          "totalSeconds": 14.6043225,
+          "decodeTokensPerSecond": 7.107332722966748,
+          "output": "{\"allOf\":[\"逾時\"],\"expansions\":[\"timeout\",\"timed out\"]}}",
+          "llmInput": "有逾時的事件",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "timeout",
+            "timed out"
+          ],
+          "suggestions": [
+            {
+              "term": "timeout",
+              "count": 37
+            }
+          ],
+          "expectSuggest": [
+            "timeout"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e03",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 738,
+          "outputTokens": 22,
+          "firstTokenSeconds": 12.1477142,
+          "totalSeconds": 15.0066648,
+          "decodeTokensPerSecond": 7.345352522005801,
+          "output": "{\"allOf\":[\"重試\"],\"modules\":[\"〔編號〕\"],\"expansions\":[\"retry\",\"attempt\"]}",
+          "llmInput": "〔編號〕 有重試的紀錄",
+          "exactRaw": false,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": false,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "retry",
+            "attempt"
+          ],
+          "suggestions": [
+            {
+              "term": "retry",
+              "count": 54
+            }
+          ],
+          "expectSuggest": [
+            "retry"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e04",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 735,
+          "outputTokens": 18,
+          "firstTokenSeconds": 12.0566922,
+          "totalSeconds": 14.3388023,
+          "decodeTokensPerSecond": 7.449246204203736,
+          "output": "{\"anyOf\":[\"過載\"],\"expansions\":[\"overload\",\"overloaded\"]}\"",
+          "llmInput": "有「過載」的紀錄",
+          "exactRaw": false,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": false,
+            "anyOf": false,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "overload",
+            "overloaded"
+          ],
+          "suggestions": [
+            {
+              "term": "overload",
+              "count": 6
+            }
+          ],
+          "expectSuggest": [
+            "overload"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e05",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 733,
+          "outputTokens": 19,
+          "firstTokenSeconds": 12.0567536,
+          "totalSeconds": 14.5483721,
+          "decodeTokensPerSecond": 7.224219919702797,
+          "output": "{\"allOf\":[\"緊急停止\"],\"expansions\":[\"emergency stop\",\"E-stop\"]}}",
+          "llmInput": "緊急停止的紀錄",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "emergency stop",
+            "E-stop"
+          ],
+          "suggestions": [
+            {
+              "term": "emergency stop",
+              "count": 2
+            },
+            {
+              "term": "E-stop",
+              "count": 2
+            }
+          ],
+          "expectSuggest": [
+            "emergency stop",
+            "E-STOP",
+            "emergency"
+          ],
+          "suggestHit": true,
+          "suggestGood": 2
+        },
+        {
+          "id": "e06",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 736,
+          "outputTokens": 22,
+          "firstTokenSeconds": 12.047342,
+          "totalSeconds": 14.8866495,
+          "decodeTokensPerSecond": 7.396169664610119,
+          "output": "{\"allOf\":[\"讀取失敗\"],\"expansions\":[\"read failure\",\"read error\",\"read failure\"]}}",
+          "llmInput": "有「讀取失敗」的紀錄",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "read failure",
+            "read error"
+          ],
+          "suggestions": [],
+          "expectSuggest": [
+            "NoRead"
+          ],
+          "suggestHit": false,
+          "suggestGood": 0
+        },
+        {
+          "id": "e07",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 735,
+          "outputTokens": 19,
+          "firstTokenSeconds": 12.0932188,
+          "totalSeconds": 14.5086757,
+          "decodeTokensPerSecond": 7.4520062850221045,
+          "output": "{\"allOf\":[\"超重\"],\"expansions\":[\"overweight\",\"excess weight\"]}}",
+          "llmInput": "有「超重」的事件",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "overweight",
+            "excess weight"
+          ],
+          "suggestions": [],
+          "expectSuggest": [
+            "over limit",
+            "weight over limit",
+            "weight"
+          ],
+          "suggestHit": false,
+          "suggestGood": 0
+        },
+        {
+          "id": "e08",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 735,
+          "outputTokens": 18,
+          "firstTokenSeconds": 12.0084007,
+          "totalSeconds": 14.3090978,
+          "decodeTokensPerSecond": 7.389064818658656,
+          "output": "{\"allOf\":[\"開門\"],\"expansions\":[\"open door\",\"door open\"]}}",
+          "llmInput": "有「開門」的紀錄",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "open door",
+            "door open"
+          ],
+          "suggestions": [
+            {
+              "term": "door open",
+              "count": 9
+            }
+          ],
+          "expectSuggest": [
+            "door open",
+            "open"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e09",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 736,
+          "outputTokens": 25,
+          "firstTokenSeconds": 12.1893862,
+          "totalSeconds": 15.4676324,
+          "decodeTokensPerSecond": 7.320987667125184,
+          "output": "{\"allOf\":[\"電量低\"],\"expansions\":[\"low battery\",\"battery low\",\"low power\",\"power low\"]}\"",
+          "llmInput": "有「電量低」的紀錄",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "low battery",
+            "battery low",
+            "low power",
+            "power low"
+          ],
+          "suggestions": [
+            {
+              "term": "low battery",
+              "count": 4
+            }
+          ],
+          "expectSuggest": [
+            "low battery",
+            "battery"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e10",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 735,
+          "outputTokens": 21,
+          "firstTokenSeconds": 12.054328,
+          "totalSeconds": 14.7529103,
+          "decodeTokensPerSecond": 7.411298888308872,
+          "output": "{\"allOf\":[\"位置不符\"],\"levels\":[\"ERROR\"],\"expansions\":[\"position mismatch\",\"wrong position\"]}",
+          "llmInput": "有「位置不符」的事件",
+          "exactRaw": false,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": false,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "position mismatch",
+            "wrong position"
+          ],
+          "suggestions": [
+            {
+              "term": "position mismatch",
+              "count": 7
+            }
+          ],
+          "expectSuggest": [
+            "position mismatch",
+            "mismatch"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e11",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 731,
+          "outputTokens": 16,
+          "firstTokenSeconds": 12.1685719,
+          "totalSeconds": 14.2733538,
+          "decodeTokensPerSecond": 7.126629129602452,
+          "output": "{\"allOf\":[\"碰撞\"],\"expansions\":[\"impact\",\"collision detection\"]}}",
+          "llmInput": "碰撞的紀錄",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "impact",
+            "collision detection"
+          ],
+          "suggestions": [],
+          "expectSuggest": [
+            "collision"
+          ],
+          "suggestHit": false,
+          "suggestGood": 0
+        },
+        {
+          "id": "e12",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 735,
+          "outputTokens": 21,
+          "firstTokenSeconds": 12.1401427,
+          "totalSeconds": 14.8736029,
+          "decodeTokensPerSecond": 7.316733567220039,
+          "output": "{\"allOf\":[\"過熱\"],\"levels\":[\"ERROR\"],\"expansions\":[\"overheat\",\"thermal overload\"]}",
+          "llmInput": "有「過熱」的紀錄",
+          "exactRaw": false,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": false,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "overheat",
+            "thermal overload"
+          ],
+          "suggestions": [
+            {
+              "term": "overheat",
+              "count": 2
+            }
+          ],
+          "expectSuggest": [
+            "overheat"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e13",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 737,
+          "outputTokens": 31,
+          "firstTokenSeconds": 12.1419276,
+          "totalSeconds": 16.1717518,
+          "decodeTokensPerSecond": 7.444493484355971,
+          "output": "{\"allOf\":[\"通訊異常\"],\"modules\":[\"EXE\"],\"levels\":[\"ERROR\"],\"expansions\":[\"communication error\",\"network error\",\"connection error\"]}",
+          "llmInput": "EXE 通訊異常的 ERROR",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "communication error",
+            "network error",
+            "connection error"
+          ],
+          "suggestions": [
+            {
+              "term": "communication error",
+              "count": 15
+            }
+          ],
+          "expectSuggest": [
+            "communication error",
+            "communication"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e14",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 734,
+          "outputTokens": 21,
+          "firstTokenSeconds": 12.1614812,
+          "totalSeconds": 14.8812743,
+          "decodeTokensPerSecond": 7.353500529139518,
+          "output": "{\"allOf\":[\"交握失敗\"],\"expansions\":[\"grasp failure\",\"failed grasp\"]}}",
+          "llmInput": "交握失敗的紀錄",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "grasp failure",
+            "failed grasp"
+          ],
+          "suggestions": [],
+          "expectSuggest": [
+            "handshake failed",
+            "handshake"
+          ],
+          "suggestHit": false,
+          "suggestGood": 0
+        },
+        {
+          "id": "e15",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 737,
+          "outputTokens": 21,
+          "firstTokenSeconds": 12.1742654,
+          "totalSeconds": 14.8923252,
+          "decodeTokensPerSecond": 7.358189838207384,
+          "output": "{\"allOf\":[\"死結\"],\"modules\":[\"Server\"],\"expansions\":[\"stuck\",\"blockage\"]}",
+          "llmInput": "Server 有「死結」的紀錄",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "stuck",
+            "blockage"
+          ],
+          "suggestions": [],
+          "expectSuggest": [
+            "deadlock"
+          ],
+          "suggestHit": false,
+          "suggestGood": 0
+        },
+        {
+          "id": "e16",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 733,
+          "outputTokens": 22,
+          "firstTokenSeconds": 12.1099088,
+          "totalSeconds": 15.0125679,
+          "decodeTokensPerSecond": 7.2347455476256215,
+          "output": "{\"allOf\":[\"手動模式\"],\"modules\":[\"PLC\"],\"expansions\":[\"manual mode\",\"manual\"]}",
+          "llmInput": "手動模式的紀錄",
+          "exactRaw": false,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": false,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "manual mode",
+            "manual"
+          ],
+          "suggestions": [
+            {
+              "term": "manual mode",
+              "count": 11
+            },
+            {
+              "term": "manual",
+              "count": 11
+            }
+          ],
+          "expectSuggest": [
+            "manual mode",
+            "manual"
+          ],
+          "suggestHit": true,
+          "suggestGood": 2
+        },
+        {
+          "id": "e17",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 735,
+          "outputTokens": 18,
+          "firstTokenSeconds": 12.0698102,
+          "totalSeconds": 14.4335355,
+          "decodeTokensPerSecond": 7.192037078081787,
+          "output": "{\"allOf\":[\"停電\"],\"expansions\":[\"power outage\",\"blackout\"]}}",
+          "llmInput": "有「停電」的事件",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "power outage",
+            "blackout"
+          ],
+          "suggestions": [],
+          "expectSuggest": [
+            "power failure"
+          ],
+          "suggestHit": false,
+          "suggestGood": 0
+        },
+        {
+          "id": "e18",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 735,
+          "outputTokens": 17,
+          "firstTokenSeconds": 12.1258542,
+          "totalSeconds": 14.267067,
+          "decodeTokensPerSecond": 7.4724006880586495,
+          "output": "{\"anyOf\":[\"重複\"],\"expansions\":[\"duplicate\",\"repetition\"]}}",
+          "llmInput": "有「重複」的紀錄",
+          "exactRaw": false,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": false,
+            "anyOf": false,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "duplicate",
+            "repetition"
+          ],
+          "suggestions": [
+            {
+              "term": "duplicate",
+              "count": 2
+            }
+          ],
+          "expectSuggest": [
+            "duplicate"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e19",
+          "exact": false,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": false,
+            "anyOf": false,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 739,
+          "outputTokens": 32,
+          "firstTokenSeconds": 12.1136064,
+          "totalSeconds": 16.2525279,
+          "decodeTokensPerSecond": 7.489873871732043,
+          "output": "{\"allOf\":[\"斷線\",\"逾時\"],\"noneOf\":[\"heartbeat\"],\"modules\":[\"PLC\"],\"expansions\":[\"disconnected\",\"timeout\",\"jammed\"]}",
+          "llmInput": "PLC 斷線或逾時，不要 heartbeat",
+          "exactRaw": false,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": false,
+            "anyOf": false,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "disconnected",
+            "timeout",
+            "jammed"
+          ],
+          "suggestions": [
+            {
+              "term": "timeout",
+              "count": 37
+            }
+          ],
+          "expectSuggest": [
+            "disconnect",
+            "link disconnect",
+            "timeout"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e20",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 736,
+          "outputTokens": 20,
+          "firstTokenSeconds": 12.1207597,
+          "totalSeconds": 14.6821129,
+          "decodeTokensPerSecond": 7.417953915922258,
+          "output": "{\"allOf\":[\"重新連線\"],\"expansions\":[\"reconnect\",\"reconnect to\"]}}",
+          "llmInput": "有「重新連線」的紀錄",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "reconnect",
+            "reconnect to"
+          ],
+          "suggestions": [
+            {
+              "term": "reconnect",
+              "count": 120
+            }
+          ],
+          "expectSuggest": [
+            "reconnect"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        }
+      ]
+    },
+    {
+      "guided": true,
+      "fewShot": true,
+      "label": "schema 限制／有範例",
+      "items": [
+        {
+          "id": "e01",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 735,
+          "outputTokens": 23,
+          "firstTokenSeconds": 13.6266432,
+          "totalSeconds": 16.6639311,
+          "decodeTokensPerSecond": 7.243304133269687,
+          "output": "{\"allOf\":[\"斷線\"],\"modules\":[\"PLC\"],\"expansions\":[\"disconnected\",\"line loss\"]}\"]}",
+          "llmInput": "PLC 斷線的紀錄",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "disconnected",
+            "line loss"
+          ],
+          "suggestions": [],
+          "expectSuggest": [
+            "disconnect",
+            "link disconnect"
+          ],
+          "suggestHit": false,
+          "suggestGood": 0
+        },
+        {
+          "id": "e02",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 733,
+          "outputTokens": 19,
+          "firstTokenSeconds": 12.0644708,
+          "totalSeconds": 14.5223088,
+          "decodeTokensPerSecond": 7.323509523410415,
+          "output": "{\"allOf\":[\"逾時\"],\"expansions\":[\"timeout\",\"timed out\"]}}",
+          "llmInput": "有逾時的事件",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "timeout",
+            "timed out"
+          ],
+          "suggestions": [
+            {
+              "term": "timeout",
+              "count": 37
+            }
+          ],
+          "expectSuggest": [
+            "timeout"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e03",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 738,
+          "outputTokens": 22,
+          "firstTokenSeconds": 12.0981133,
+          "totalSeconds": 14.9790837,
+          "decodeTokensPerSecond": 7.289210607648032,
+          "output": "{\"allOf\":[\"重試\"],\"modules\":[\"PLC\"],\"expansions\":[\"retry\",\"retrial\"]}\"]}",
+          "llmInput": "〔編號〕 有重試的紀錄",
+          "exactRaw": false,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": false,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "retry",
+            "retrial"
+          ],
+          "suggestions": [
+            {
+              "term": "retry",
+              "count": 54
+            }
+          ],
+          "expectSuggest": [
+            "retry"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e04",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 735,
+          "outputTokens": 19,
+          "firstTokenSeconds": 12.2469492,
+          "totalSeconds": 14.7215939,
+          "decodeTokensPerSecond": 7.27377146303063,
+          "output": "{\"anyOf\":[\"過載\"],\"expansions\":[\"overload\",\"overloaded\"]}}",
+          "llmInput": "有「過載」的紀錄",
+          "exactRaw": false,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": false,
+            "anyOf": false,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "overload",
+            "overloaded"
+          ],
+          "suggestions": [
+            {
+              "term": "overload",
+              "count": 6
+            }
+          ],
+          "expectSuggest": [
+            "overload"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e05",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 733,
+          "outputTokens": 20,
+          "firstTokenSeconds": 12.0448249,
+          "totalSeconds": 14.7464019,
+          "decodeTokensPerSecond": 7.032929285376651,
+          "output": "{\"allOf\":[\"緊急停止\"],\"expansions\":[\"emergency stop\",\"E-stop\"]}}",
+          "llmInput": "緊急停止的紀錄",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "emergency stop",
+            "E-stop"
+          ],
+          "suggestions": [
+            {
+              "term": "emergency stop",
+              "count": 2
+            },
+            {
+              "term": "E-stop",
+              "count": 2
+            }
+          ],
+          "expectSuggest": [
+            "emergency stop",
+            "E-STOP",
+            "emergency"
+          ],
+          "suggestHit": true,
+          "suggestGood": 2
+        },
+        {
+          "id": "e06",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 736,
+          "outputTokens": 23,
+          "firstTokenSeconds": 12.0924527,
+          "totalSeconds": 15.1255324,
+          "decodeTokensPerSecond": 7.253353744710368,
+          "output": "{\"allOf\":[\"讀取失敗\"],\"expansions\":[\"read failure\",\"read error\",\"read failure\"]}}",
+          "llmInput": "有「讀取失敗」的紀錄",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "read failure",
+            "read error"
+          ],
+          "suggestions": [],
+          "expectSuggest": [
+            "NoRead"
+          ],
+          "suggestHit": false,
+          "suggestGood": 0
+        },
+        {
+          "id": "e07",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 735,
+          "outputTokens": 20,
+          "firstTokenSeconds": 12.0973726,
+          "totalSeconds": 14.685512,
+          "decodeTokensPerSecond": 7.341181081668169,
+          "output": "{\"allOf\":[\"超重\"],\"expansions\":[\"overweight\",\"excess weight\"]}}",
+          "llmInput": "有「超重」的事件",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "overweight",
+            "excess weight"
+          ],
+          "suggestions": [],
+          "expectSuggest": [
+            "over limit",
+            "weight over limit",
+            "weight"
+          ],
+          "suggestHit": false,
+          "suggestGood": 0
+        },
+        {
+          "id": "e08",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 735,
+          "outputTokens": 19,
+          "firstTokenSeconds": 12.1358102,
+          "totalSeconds": 14.5871431,
+          "decodeTokensPerSecond": 7.3429439143088215,
+          "output": "{\"allOf\":[\"開門\"],\"expansions\":[\"open door\",\"door open\"]}}",
+          "llmInput": "有「開門」的紀錄",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "open door",
+            "door open"
+          ],
+          "suggestions": [
+            {
+              "term": "door open",
+              "count": 9
+            }
+          ],
+          "expectSuggest": [
+            "door open",
+            "open"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e09",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 736,
+          "outputTokens": 26,
+          "firstTokenSeconds": 12.2291145,
+          "totalSeconds": 15.6620946,
+          "decodeTokensPerSecond": 7.2823026268052065,
+          "output": "{\"allOf\":[\"電量低\"],\"expansions\":[\"low battery\",\"battery low\",\"low power\",\"power low\"]}}",
+          "llmInput": "有「電量低」的紀錄",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "low battery",
+            "battery low",
+            "low power",
+            "power low"
+          ],
+          "suggestions": [
+            {
+              "term": "low battery",
+              "count": 4
+            }
+          ],
+          "expectSuggest": [
+            "low battery",
+            "battery"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e10",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 735,
+          "outputTokens": 22,
+          "firstTokenSeconds": 12.136449,
+          "totalSeconds": 15.0817944,
+          "decodeTokensPerSecond": 7.129893831806622,
+          "output": "{\"allOf\":[\"位置不符\"],\"levels\":[\"ERROR\"],\"expansions\":[\"position mismatch\",\"wrong position\"]}\"]}",
+          "llmInput": "有「位置不符」的事件",
+          "exactRaw": false,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": false,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "position mismatch",
+            "wrong position"
+          ],
+          "suggestions": [
+            {
+              "term": "position mismatch",
+              "count": 7
+            }
+          ],
+          "expectSuggest": [
+            "position mismatch",
+            "mismatch"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e11",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 731,
+          "outputTokens": 17,
+          "firstTokenSeconds": 12.5608329,
+          "totalSeconds": 14.9089448,
+          "decodeTokensPerSecond": 6.813985313050878,
+          "output": "{\"allOf\":[\"碰撞\"],\"expansions\":[\"impact\",\"collision detection\"]}}",
+          "llmInput": "碰撞的紀錄",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "impact",
+            "collision detection"
+          ],
+          "suggestions": [],
+          "expectSuggest": [
+            "collision"
+          ],
+          "suggestHit": false,
+          "suggestGood": 0
+        },
+        {
+          "id": "e12",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 735,
+          "outputTokens": 22,
+          "firstTokenSeconds": 12.3782733,
+          "totalSeconds": 15.3246458,
+          "decodeTokensPerSecond": 7.127408364013713,
+          "output": "{\"allOf\":[\"過熱\"],\"levels\":[\"ERROR\"],\"expansions\":[\"overheat\",\"thermal overload\"]}\"]}",
+          "llmInput": "有「過熱」的紀錄",
+          "exactRaw": false,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": false,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "overheat",
+            "thermal overload"
+          ],
+          "suggestions": [
+            {
+              "term": "overheat",
+              "count": 2
+            }
+          ],
+          "expectSuggest": [
+            "overheat"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e13",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 737,
+          "outputTokens": 32,
+          "firstTokenSeconds": 12.7004923,
+          "totalSeconds": 17.3254402,
+          "decodeTokensPerSecond": 6.702778208593443,
+          "output": "{\"allOf\":[\"通訊異常\"],\"modules\":[\"EXE\"],\"levels\":[\"ERROR\"],\"expansions\":[\"communication error\",\"network error\",\"connection error\"]}\"]}",
+          "llmInput": "EXE 通訊異常的 ERROR",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "communication error",
+            "network error",
+            "connection error"
+          ],
+          "suggestions": [
+            {
+              "term": "communication error",
+              "count": 15
+            }
+          ],
+          "expectSuggest": [
+            "communication error",
+            "communication"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e14",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 734,
+          "outputTokens": 22,
+          "firstTokenSeconds": 12.1436764,
+          "totalSeconds": 15.3738737,
+          "decodeTokensPerSecond": 6.50115087397293,
+          "output": "{\"allOf\":[\"交握失敗\"],\"expansions\":[\"grasp failure\",\"failed grasp\"]}}",
+          "llmInput": "交握失敗的紀錄",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "grasp failure",
+            "failed grasp"
+          ],
+          "suggestions": [],
+          "expectSuggest": [
+            "handshake failed",
+            "handshake"
+          ],
+          "suggestHit": false,
+          "suggestGood": 0
+        },
+        {
+          "id": "e15",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 737,
+          "outputTokens": 22,
+          "firstTokenSeconds": 12.2735155,
+          "totalSeconds": 15.2781777,
+          "decodeTokensPerSecond": 6.989138412963693,
+          "output": "{\"allOf\":[\"死結\"],\"modules\":[\"Server\"],\"expansions\":[\"stuck\",\"blockage\"]}\"]}",
+          "llmInput": "Server 有「死結」的紀錄",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "stuck",
+            "blockage"
+          ],
+          "suggestions": [],
+          "expectSuggest": [
+            "deadlock"
+          ],
+          "suggestHit": false,
+          "suggestGood": 0
+        },
+        {
+          "id": "e16",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 733,
+          "outputTokens": 23,
+          "firstTokenSeconds": 12.2420603,
+          "totalSeconds": 15.3452906,
+          "decodeTokensPerSecond": 7.089386823788103,
+          "output": "{\"allOf\":[\"手動模式\"],\"modules\":[\"PLC\"],\"expansions\":[\"manual mode\",\"manual\"]}\"]}",
+          "llmInput": "手動模式的紀錄",
+          "exactRaw": false,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": false,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "manual mode",
+            "manual"
+          ],
+          "suggestions": [
+            {
+              "term": "manual mode",
+              "count": 11
+            },
+            {
+              "term": "manual",
+              "count": 11
+            }
+          ],
+          "expectSuggest": [
+            "manual mode",
+            "manual"
+          ],
+          "suggestHit": true,
+          "suggestGood": 2
+        },
+        {
+          "id": "e17",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 735,
+          "outputTokens": 19,
+          "firstTokenSeconds": 12.1725445,
+          "totalSeconds": 14.7595728,
+          "decodeTokensPerSecond": 6.957790140911872,
+          "output": "{\"allOf\":[\"停電\"],\"expansions\":[\"power outage\",\"blackout\"]}}",
+          "llmInput": "有「停電」的事件",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "power outage",
+            "blackout"
+          ],
+          "suggestions": [],
+          "expectSuggest": [
+            "power failure"
+          ],
+          "suggestHit": false,
+          "suggestGood": 0
+        },
+        {
+          "id": "e18",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 735,
+          "outputTokens": 18,
+          "firstTokenSeconds": 12.1678595,
+          "totalSeconds": 14.5093398,
+          "decodeTokensPerSecond": 7.2603643088519725,
+          "output": "{\"anyOf\":[\"重複\"],\"expansions\":[\"duplicate\",\"repetition\"]}}",
+          "llmInput": "有「重複」的紀錄",
+          "exactRaw": false,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": false,
+            "anyOf": false,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "duplicate",
+            "repetition"
+          ],
+          "suggestions": [
+            {
+              "term": "duplicate",
+              "count": 2
+            }
+          ],
+          "expectSuggest": [
+            "duplicate"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e19",
+          "exact": false,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": false,
+            "anyOf": false,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 739,
+          "outputTokens": 33,
+          "firstTokenSeconds": 12.1844751,
+          "totalSeconds": 16.6478964,
+          "decodeTokensPerSecond": 7.169388200033906,
+          "output": "{\"allOf\":[\"斷線\",\"逾時\"],\"noneOf\":[\"heartbeat\"],\"modules\":[\"PLC\"],\"expansions\":[\"disconnected\",\"timeout\",\"jammed\"]}\"]}",
+          "llmInput": "PLC 斷線或逾時，不要 heartbeat",
+          "exactRaw": false,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": false,
+            "anyOf": false,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "disconnected",
+            "timeout",
+            "jammed"
+          ],
+          "suggestions": [
+            {
+              "term": "timeout",
+              "count": 37
+            }
+          ],
+          "expectSuggest": [
+            "disconnect",
+            "link disconnect",
+            "timeout"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        },
+        {
+          "id": "e20",
+          "exact": true,
+          "valid": true,
+          "error": null,
+          "expectUnsupported": false,
+          "actualUnsupported": false,
+          "parts": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "promptTokens": 736,
+          "outputTokens": 21,
+          "firstTokenSeconds": 12.0919437,
+          "totalSeconds": 14.921938,
+          "decodeTokensPerSecond": 7.067152043380438,
+          "output": "{\"allOf\":[\"重新連線\"],\"expansions\":[\"reconnect\",\"reconnect to\"]}}",
+          "llmInput": "有「重新連線」的紀錄",
+          "exactRaw": true,
+          "partsRaw": {
+            "unsupported": true,
+            "allOf": true,
+            "anyOf": true,
+            "noneOf": true,
+            "from": true,
+            "to": true,
+            "modules": true,
+            "levels": true,
+            "fields": true
+          },
+          "hints": [],
+          "expansions": [
+            "reconnect",
+            "reconnect to"
+          ],
+          "suggestions": [
+            {
+              "term": "reconnect",
+              "count": 120
+            }
+          ],
+          "expectSuggest": [
+            "reconnect"
+          ],
+          "suggestHit": true,
+          "suggestGood": 1
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "_說明": "#55 技術驗證（ADR-0013 第 5 點）：自然語言轉搜尋條件的虛構問題集。所有編號、時間、訊息都是範例／虛構。案件日期固定為 2030-01-07。expect 為 \"unsupported\" 表示這個問題不能轉成搜尋條件（問原因、處置等），模型應回答 unsupported，不得編造條件。",
+  "caseDate": "2030-01-07",
+  "examples": [
+    {
+      "question": "PLC 在上午 9 點到 9 點 10 分之間有哪些 WARN？",
+      "expect": { "from": "2030-01-07T09:00:00", "to": "2030-01-07T09:10:00", "modules": ["PLC"], "levels": ["WARN"] }
+    },
+    {
+      "question": "找 Conv 3301 跟搬送機 SSCA07 一起出現、而且有 timeout 的紀錄",
+      "expect": { "allOf": ["timeout"], "fields": [{ "kind": "conv", "value": "3301" }, { "kind": "vehicle", "value": "SSCA07" }] }
+    },
+    {
+      "question": "命令 CMD-0900 的所有事件，不要 heartbeat",
+      "expect": { "noneOf": ["heartbeat"], "fields": [{ "kind": "command", "value": "CMD-0900" }] }
+    },
+    {
+      "question": "為什麼 SRCA05 一直停在原地？",
+      "expect": "unsupported"
+    }
+  ],
+  "questions": [
+    { "id": "q01", "question": "下午 3 點到 3 點半 EXE 的 ERROR", "expect": { "from": "2030-01-07T15:00:00", "to": "2030-01-07T15:30:00", "modules": ["EXE"], "levels": ["ERROR"] } },
+    { "id": "q02", "question": "Conv 1203 的事件", "expect": { "fields": [{ "kind": "conv", "value": "1203" }] } },
+    { "id": "q03", "question": "搬送機 SSCA01 在早上 8 點到 8 點 15 分做了什麼", "expect": { "from": "2030-01-07T08:00:00", "to": "2030-01-07T08:15:00", "fields": [{ "kind": "vehicle", "value": "SSCA01" }] } },
+    { "id": "q04", "question": "有出現 timeout 或 逾時 的紀錄", "expect": { "anyOf": ["timeout", "逾時"] } },
+    { "id": "q05", "question": "警報代碼 E-501 什麼時候發生", "expect": { "fields": [{ "kind": "alarmCode", "value": "E-501" }] } },
+    { "id": "q06", "question": "Server 的 ERROR 跟 WARN，排除 heartbeat", "expect": { "noneOf": ["heartbeat"], "modules": ["Server"], "levels": ["ERROR", "WARN"] } },
+    { "id": "q07", "question": "命令 CMD-0042 的完整過程", "expect": { "fields": [{ "kind": "command", "value": "CMD-0042" }] } },
+    { "id": "q08", "question": "棧板 PLT00123 經過哪些地方", "expect": { "fields": [{ "kind": "pallet", "value": "PLT00123" }] } },
+    { "id": "q09", "question": "14:05 到 14:20 之間有 disconnect 的事件", "expect": { "allOf": ["disconnect"], "from": "2030-01-07T14:05:00", "to": "2030-01-07T14:20:00" } },
+    { "id": "q10", "question": "儲位 0201503 的紀錄", "expect": { "fields": [{ "kind": "storage", "value": "0201503" }] } },
+    { "id": "q11", "question": "PLC 和 EXE 中同時有 retry 和 fail 的訊息", "expect": { "allOf": ["retry", "fail"], "modules": ["PLC", "EXE"] } },
+    { "id": "q12", "question": "條碼 BC778812 讀到的時間", "expect": { "fields": [{ "kind": "barcode", "value": "BC778812" }] } },
+    { "id": "q13", "question": "RM01 在晚上 10 點以後的事件", "expect": { "from": "2030-01-07T22:00:00", "fields": [{ "kind": "rm", "value": "RM01" }] } },
+    { "id": "q14", "question": "中午 12 點以前的 ERROR", "expect": { "to": "2030-01-07T12:00:00", "levels": ["ERROR"] } },
+    { "id": "q15", "question": "Conv 1203 或 Conv 1204 的事件", "expect": { "fields": [{ "kind": "conv", "value": "1203" }, { "kind": "conv", "value": "1204" }] } },
+    { "id": "q16", "question": "SSCA01 和 SSCA02 有關的 ERROR", "expect": { "levels": ["ERROR"], "fields": [{ "kind": "vehicle", "value": "SSCA01" }, { "kind": "vehicle", "value": "SSCA02" }] } },
+    { "id": "q17", "question": "包含「在席」但不包含「解除」的紀錄", "expect": { "allOf": ["在席"], "noneOf": ["解除"] } },
+    { "id": "q18", "question": "上午 10:30 到 10:45 PLC 的所有事件", "expect": { "from": "2030-01-07T10:30:00", "to": "2030-01-07T10:45:00", "modules": ["PLC"] } },
+    { "id": "q19", "question": "EQ 9001 交出貨物的紀錄", "expect": { "fields": [{ "kind": "eq", "value": "9001" }] } },
+    { "id": "q20", "question": "磅秤 SC01 的讀值", "expect": { "fields": [{ "kind": "scale", "value": "SC01" }] } },
+    { "id": "q21", "question": "BCR01 讀取失敗的紀錄，關鍵字 NoRead", "expect": { "allOf": ["NoRead"], "fields": [{ "kind": "bcr", "value": "BCR01" }] } },
+    { "id": "q22", "question": "電梯 EV01 下午 1 點到 2 點的事件", "expect": { "from": "2030-01-07T13:00:00", "to": "2030-01-07T14:00:00", "fields": [{ "kind": "elevator", "value": "EV01" }] } },
+    { "id": "q23", "question": "防火門 FD03 的事件", "expect": { "fields": [{ "kind": "fireDoor", "value": "FD03" }] } },
+    { "id": "q24", "question": "有 E-501 或 E-502 警報的事件", "expect": { "fields": [{ "kind": "alarmCode", "value": "E-501" }, { "kind": "alarmCode", "value": "E-502" }] } },
+    { "id": "q25", "question": "\"connection reset\" 這句話出現在哪裡", "expect": { "allOf": ["connection reset"] } },
+    { "id": "q26", "question": "EXE 的 INFO 中有 start 但沒有 test 的", "expect": { "allOf": ["start"], "noneOf": ["test"], "modules": ["EXE"], "levels": ["INFO"] } },
+    { "id": "q27", "question": "9 點整到 9 點 5 分", "expect": { "from": "2030-01-07T09:00:00", "to": "2030-01-07T09:05:00" } },
+    { "id": "q28", "question": "Conv A-12 的紀錄", "expect": { "fields": [{ "kind": "conv", "value": "A-12" }] } },
+    { "id": "q29", "question": "命令 CMD-0042 裡出現 error 的事件", "expect": { "allOf": ["error"], "fields": [{ "kind": "command", "value": "CMD-0042" }] } },
+    { "id": "q30", "question": "WARN 等級，關鍵字 overload 或 過載", "expect": { "anyOf": ["overload", "過載"], "levels": ["WARN"] } },
+    { "id": "q31", "question": "下午 4 點 10 分到 4 點 20 分 Server 和 PLC 的 ERROR", "expect": { "from": "2030-01-07T16:10:00", "to": "2030-01-07T16:20:00", "modules": ["Server", "PLC"], "levels": ["ERROR"] } },
+    { "id": "q32", "question": "桶 BIN0456 的紀錄", "expect": { "fields": [{ "kind": "bin", "value": "BIN0456" }] } },
+    { "id": "q33", "question": "SRCA02 在 Conv 2101 的事件", "expect": { "fields": [{ "kind": "vehicle", "value": "SRCA02" }, { "kind": "conv", "value": "2101" }] } },
+    { "id": "q34", "question": "不要 DEBUG，只要 ERROR，排除 ping", "expect": { "noneOf": ["ping"], "levels": ["ERROR"] } },
+    { "id": "q35", "question": "早上 7 點以後 EXE 有 exception 的事件", "expect": { "allOf": ["exception"], "from": "2030-01-07T07:00:00", "modules": ["EXE"] } },
+    { "id": "q36", "question": "訊號 X0103 的變化", "expect": { "fields": [{ "kind": "signal", "value": "X0103" }] } },
+    { "id": "q37", "question": "棧板 PLT00123 或 PLT00124，下午 2 點以後", "expect": { "from": "2030-01-07T14:00:00", "fields": [{ "kind": "pallet", "value": "PLT00123" }, { "kind": "pallet", "value": "PLT00124" }] } },
+    { "id": "q38", "question": "有「急停」的事件", "expect": { "allOf": ["急停"] } },
+    { "id": "q39", "question": "PLC 中有 alarm 但不是 reset 的", "expect": { "allOf": ["alarm"], "noneOf": ["reset"], "modules": ["PLC"] } },
+    { "id": "q40", "question": "11:58 到 12:02", "expect": { "from": "2030-01-07T11:58:00", "to": "2030-01-07T12:02:00" } },
+    { "id": "q41", "question": "Conv 1203 的 WARN 和 ERROR，下午 3 點到 4 點", "expect": { "from": "2030-01-07T15:00:00", "to": "2030-01-07T16:00:00", "levels": ["WARN", "ERROR"], "fields": [{ "kind": "conv", "value": "1203" }] } },
+    { "id": "q42", "question": "命令 CMD-0100、CMD-0101、CMD-0102 的事件", "expect": { "fields": [{ "kind": "command", "value": "CMD-0100" }, { "kind": "command", "value": "CMD-0101" }, { "kind": "command", "value": "CMD-0102" }] } },
+    { "id": "q43", "question": "Server 有 SQL 而且有 deadlock 的紀錄", "expect": { "allOf": ["SQL", "deadlock"], "modules": ["Server"] } },
+    { "id": "q44", "question": "搬送機 SSCA01 的 ERROR，不要 heartbeat，早上 6 點到 9 點", "expect": { "noneOf": ["heartbeat"], "from": "2030-01-07T06:00:00", "to": "2030-01-07T09:00:00", "levels": ["ERROR"], "fields": [{ "kind": "vehicle", "value": "SSCA01" }] } },
+    { "id": "q45", "question": "有 timeout、逾時 或 TIME OUT 其中之一，而且是 PLC 的", "expect": { "anyOf": ["timeout", "逾時", "TIME OUT"], "modules": ["PLC"] } },
+    { "id": "q46", "question": "儲位 0201503 和 0201504 下午 5 點以前", "expect": { "to": "2030-01-07T17:00:00", "fields": [{ "kind": "storage", "value": "0201503" }, { "kind": "storage", "value": "0201504" }] } },
+    { "id": "q47", "question": "EXE 的事件，排除 debug 和 trace 這兩個字", "expect": { "noneOf": ["debug", "trace"], "modules": ["EXE"] } },
+    { "id": "q48", "question": "條碼 BC778812 在 BCR02 被讀到的紀錄", "expect": { "fields": [{ "kind": "barcode", "value": "BC778812" }, { "kind": "bcr", "value": "BCR02" }] } },
+    { "id": "q49", "question": "晚上 8 點半到 9 點的 WARN", "expect": { "from": "2030-01-07T20:30:00", "to": "2030-01-07T21:00:00", "levels": ["WARN"] } },
+    { "id": "q50", "question": "Conv 1203 有「滿載」的紀錄", "expect": { "allOf": ["滿載"], "fields": [{ "kind": "conv", "value": "1203" }] } },
+    { "id": "u01", "question": "SSCA01 為什麼一直沒有動？", "expect": "unsupported" },
+    { "id": "u02", "question": "E-501 警報要怎麼處理？", "expect": "unsupported" },
+    { "id": "u03", "question": "幫我寫一份今天的異常報告", "expect": "unsupported" },
+    { "id": "u04", "question": "Conv 1203 是不是壞掉了？", "expect": "unsupported" },
+    { "id": "u05", "question": "現在倉庫裡有幾個棧板？", "expect": "unsupported" },
+    { "id": "u06", "question": "要怎麼重設 PLC？", "expect": "unsupported" }
+  ]
+}

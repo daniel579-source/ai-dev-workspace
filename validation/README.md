@@ -13,6 +13,7 @@
 | `src/TechValidation.Bench` | 匯入、索引大小、搜尋、正規表示式、串連、快照、排序、可攜性的量測，並與 DuckDB、Lucene.NET 比較 | T-03～T-13 |
 | `src/TechValidation.UiSpike` | WPF＋AvalonDock：10 萬筆事件清單、時間軸、2D 畫布、版面儲存與還原；自我檢查 | ADR-0007 第 1～4 項、T-01 |
 | `src/TechValidation.KnowledgeGraph` | 知識檢索的規則關聯圖（ADR-0015）：以 `knowledge-scenarios\` 的虛構情境集量測知識庫條目、相關設備與警報、異常紀錄、安全清單的召回與精確度，並與關鍵字比對比較（#89）；另以本機 Ollama 的 embedding 比較向量搜尋（ADR-0022）。參考 `src/LogTrace.Engine` | ADR-0015 |
+| `src/TechValidation.LlmQuery` | 本機 LLM 把自然語言問題轉成搜尋條件（ADR-0013 第 5、8 點）：以 `llm-query\` 的虛構問題集（可轉換 50 題、不能轉換 6 題），用 ONNX Runtime GenAI 在 CPU 比較 Phi-4-mini 與 Qwen3-4B，各跑「只用提示詞／以 JSON schema 限制」×「有範例／沒有範例」4 種組合，量測正確率、速度與記憶體（#55）。模型放在 repo 以外 | ADR-0013 |
 | `tests/TechValidation.Tests` | 正規化（T-13）與解析規則的單元測試 | — |
 
 ## 需要
@@ -42,6 +43,12 @@ dotnet run -c Release --project src/TechValidation.KnowledgeGraph -- --data know
 dotnet run -c Release --project src/TechValidation.KnowledgeGraph -- --data knowledge-scenarios --models "e5test-c3f16|e5|來源;bge-m3||來源" --vector-report results\knowledge-vector-89-<電腦名稱>.md
 # 「用詞不同」情境集（#89，ADR-0022）：虛構資料在 knowledge-wording\（kb.csv 40 條、questions.json 60 題，只有問題文字、不看 LOG）
 dotnet run -c Release --project src/TechValidation.KnowledgeGraph -- --wording knowledge-wording --models "e5test-c3f16|e5|來源;bge-m3||來源" --vector-report results\knowledge-wording-89-<電腦名稱>.md
+
+# 本機 LLM：自然語言轉搜尋條件（#55，ADR-0013）。模型放在 repo 以外，例如 D:\_case\models\（Hugging Face：microsoft/Phi-4-mini-instruct-onnx 的 cpu-int4-rtn-block-32-acc-level-4、
+# onnx-community/Qwen3-4B-ONNX 的 onnxruntime/cpu_and_mobile/cpu-int4-kld-block-128；下載後核對 SHA-256）。只用 CPU，每個模型約 50 分鐘
+dotnet run -c Release --project src/TechValidation.LlmQuery -- --model D:\_case\models\phi-4-mini-cpu-int4 --family phi --name Phi-4-mini --questions llm-query\questions.json --out results\llm-query-55-phi-<電腦名稱>.json
+dotnet run -c Release --project src/TechValidation.LlmQuery -- --model D:\_case\models\qwen3-4b-cpu-int4 --family qwen --name Qwen3-4B --questions llm-query\questions.json --out results\llm-query-55-qwen-<電腦名稱>.json
+dotnet run -c Release --project src/TechValidation.LlmQuery -- --summarize results\llm-query-55-phi-<電腦名稱>.json results\llm-query-55-qwen-<電腦名稱>.json --report results\llm-query-55-<電腦名稱>.md
 
 # 4. UI 驗證：發佈 self-contained 單一資料夾
 dotnet publish src/TechValidation.UiSpike -c Release -o publish\UiSpike

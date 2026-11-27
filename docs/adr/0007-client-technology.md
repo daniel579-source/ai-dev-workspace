@@ -34,7 +34,7 @@
 ### 2. 打包與更新
 
 - 發佈成**單一資料夾**（壓成 zip），解壓後執行其中的 exe。
-- 更新時整個資料夾替換。
+- 更新時整個資料夾替換。 → 2026-11-27 **由 ADR-0030 取代**：各版本並存於 `app-<版本>\`，由 Native AOT 啟動程式從 `updates\` 套用升級包；WebView2 Runtime 拆成另外的 Runtime 包。
 - 案件與使用者資料**不放在程式資料夾內**，替換程式不影響資料；存放位置由「儲存與索引候選方案比較」決定。
 - 2026-10-16 #29 補充：
   - 以 `scripts/package.ps1` 產生 zip，內含使用說明、`THIRD-PARTY-NOTICES.md` 與 `licenses\`；不含有 unRAR 授權限制的 `7z.dll`。版本號放在 `LogTrace.App.csproj`。

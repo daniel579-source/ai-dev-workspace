@@ -34,7 +34,12 @@
     { "question": "為什麼 SRCA05 一直停在原地？", "answer": "unsupported" },
     { "question": "棧板 PLT00999 在 RM03 的動作", "answer": {} },
     { "question": "有「卡料」或 jam 的 ERROR", "answer": { "anyOf": ["卡料", "jam"], "levels": ["ERROR"], "expansions": ["jammed", "material jam"] } },
-    { "question": "EXE 有重啟的訊息", "answer": { "allOf": ["重啟"], "modules": ["EXE"], "expansions": ["restart", "reboot"] } }
+    { "question": "EXE 有重啟的訊息", "answer": { "allOf": ["重啟"], "modules": ["EXE"], "expansions": ["restart", "reboot"] } },
+    { "question": "搬送機 SRCA08 去了哪些站", "answer": {} },
+    { "question": "條碼 BC555000 被讀取的經過", "answer": {} },
+    { "question": "Server 有 lock 或 鎖定", "answer": { "anyOf": ["lock", "鎖定"], "modules": ["Server"] } },
+    { "question": "有 arrive 但沒有 done 的紀錄", "answer": { "allOf": ["arrive"], "noneOf": ["done"] } },
+    { "question": "下午 5 點以後 PLC 的 DEBUG", "answer": { "modules": ["PLC"], "levels": ["DEBUG"] } }
   ],
   "questions": [
     { "id": "q01", "question": "下午 3 點到 3 點半 EXE 的 ERROR", "expect": { "from": "2030-01-07T15:00:00", "to": "2030-01-07T15:30:00", "modules": ["EXE"], "levels": ["ERROR"] } },

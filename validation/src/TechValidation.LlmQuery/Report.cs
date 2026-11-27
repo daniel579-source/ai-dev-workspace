@@ -27,7 +27,7 @@ public static class Report
         var hybrid = first["hybrid"]?.GetValue<bool>() == true;
         var expand = first["expand"]?.GetValue<bool>() == true;
         sb.AppendLine($"- 量測：{first["date"]}，開發電腦（{first["processorCount"]} 執行緒），裝置 {first["device"]}，ONNX Runtime GenAI 0.20.0，貪婪解碼。");
-        sb.AppendLine($"- 題目：虛構；可轉換 {nSup} 題、不能轉換（應回答 unsupported）{nUns} 題；有範例時附 {(expand ? 7 : hybrid ? 6 : 4)} 個不在測試題中的範例（`llm-query/questions.json`）。");
+        sb.AppendLine($"- 題目：虛構；可轉換 {nSup} 題、不能轉換（應回答 unsupported）{nUns} 題；有範例時附 {first["examples"]?.GetValue<int>() ?? (expand ? 7 : hybrid ? 6 : 4)} 個不在測試題中的範例（`llm-query/questions.json`）。");
         if (note is not null) sb.AppendLine($"- **注意**：{note}");
         if (expand) sb.AppendLine("- 第三輪：LLM 另外輸出延伸詞；「完全正確」為程式檢查後（關鍵字、模組、等級必須在問題原文出現；單一 anyOf 改為 allOf），括號內另列檢查前；延伸詞到虛構案件 LOG（`llm-query/case-log.json`）部分比對，有出現才算建議。");
         if (hybrid) sb.AppendLine("- 混合做法：時間與設備編號由規則抽出並換成佔位符，LLM 只處理關鍵字、模組、等級與 unsupported；from、to、fields 是規則的結果（模型回答 unsupported 時整題算 unsupported）。");

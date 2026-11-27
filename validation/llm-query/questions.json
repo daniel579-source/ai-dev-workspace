@@ -19,6 +19,14 @@
       "expect": "unsupported"
     }
   ],
+  "hybridExamples": [
+    { "question": "PLC 在上午 9 點到 9 點 10 分之間有哪些 WARN？", "answer": { "modules": ["PLC"], "levels": ["WARN"] } },
+    { "question": "找 Conv 3301 跟搬送機 SSCA07 一起出現、而且有 timeout 的紀錄", "answer": { "allOf": ["timeout"] } },
+    { "question": "命令 CMD-0900 的所有事件，不要 heartbeat", "answer": { "noneOf": ["heartbeat"] } },
+    { "question": "為什麼 SRCA05 一直停在原地？", "answer": "unsupported" },
+    { "question": "棧板 PLT00999 在 RM03 的動作", "answer": {} },
+    { "question": "有「卡料」或 jam 的 ERROR", "answer": { "anyOf": ["卡料", "jam"], "levels": ["ERROR"] } }
+  ],
   "questions": [
     { "id": "q01", "question": "下午 3 點到 3 點半 EXE 的 ERROR", "expect": { "from": "2030-01-07T15:00:00", "to": "2030-01-07T15:30:00", "modules": ["EXE"], "levels": ["ERROR"] } },
     { "id": "q02", "question": "Conv 1203 的事件", "expect": { "fields": [{ "kind": "conv", "value": "1203" }] } },

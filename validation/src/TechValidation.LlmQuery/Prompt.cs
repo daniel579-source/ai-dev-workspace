@@ -57,8 +57,8 @@ public static class Prompt
         sb.AppendLine($"問題中的 {Rules.TimeMark} 與 {Rules.IdMark} 是程式已經處理好的時間與設備編號，不要放進任何欄位。");
         sb.AppendLine("JSON 的欄位（問題沒有明確提到的欄位不要寫；什麼都沒有就輸出 {}）：");
         sb.AppendLine("- allOf：每一個都要出現的關鍵字（字串陣列）。「而且」「同時」「有」的關鍵字放這裡。");
-        sb.AppendLine("- anyOf：出現其中一個就可以的關鍵字（字串陣列）。「或」「其中之一」放這裡。");
-        sb.AppendLine("- noneOf：不能出現的關鍵字（字串陣列）。問題用「不要」「排除」「不包含」「不是」表示，這些詞本身不是關鍵字。");
+        sb.AppendLine(expand ? "- anyOf：出現其中一個就可以的關鍵字（字串陣列）。用「或」「或是」「其中之一」連接的字一律放這裡，不要放 allOf。" : "- anyOf：出現其中一個就可以的關鍵字（字串陣列）。「或」「其中之一」放這裡。");
+        sb.AppendLine(expand ? "- noneOf：不能出現的關鍵字（字串陣列）。問題用「不要」「排除」「不包含」「不是」「沒有」表示，這些詞本身不是關鍵字，也不要放進 anyOf。" : "- noneOf：不能出現的關鍵字（字串陣列）。問題用「不要」「排除」「不包含」「不是」表示，這些詞本身不是關鍵字。");
         sb.AppendLine($"- modules：問題中有寫出模組名稱（{string.Join("、", Modules)}）時，只寫出現的那幾個；沒寫就不要這個欄位。");
         sb.AppendLine($"- levels：問題中有寫出等級（{string.Join("、", Levels)}）時，只寫出現的那幾個；沒寫就不要這個欄位。");
         if (expand)
@@ -66,6 +66,11 @@ public static class Prompt
         sb.AppendLine("規則：");
         sb.AppendLine("1. 關鍵字照使用者的原文抄寫，不要翻譯、不要自己加同義詞；模組與等級的名稱不要放進關鍵字。「事件」「紀錄」「訊息」這類一般用語不是關鍵字。");
         sb.AppendLine("2. 只要是在找某些設備、某段時間或某些關鍵字的 LOG 事件，就照上面轉換。");
+        if (expand)
+        {
+            sb.AppendLine($"   問某個{Rules.IdMark}什麼時候發生、經過哪裡、完整過程、做了什麼，也是在找 LOG 事件，不是 unsupported；沒有關鍵字就輸出 {{}}。");
+            sb.AppendLine("   「做了什麼」「經過」「過程」「什麼時候」這類問法，以及時間的說法（例如「三點到四點」），都不是關鍵字。");
+        }
         sb.AppendLine("3. 問題如果不是在找 LOG 事件（例如問原因、怎麼處理、是不是壞了、要寫報告、問目前的數量），只輸出 {\"unsupported\": true}，不要編造條件。");
         return sb.ToString();
     }

@@ -178,7 +178,7 @@ self.Refresh();
 var result = new JsonObject
 {
     ["model"] = opts["name"], ["modelPath"] = Path.GetFileName(opts["model"].TrimEnd('\\', '/')), ["family"] = family.ToString(),
-    ["device"] = "CPU", ["hybrid"] = hybrid, ["expand"] = expand, ["processorCount"] = Environment.ProcessorCount,
+    ["device"] = "CPU", ["hybrid"] = hybrid, ["expand"] = expand, ["examples"] = examples.Count, ["processorCount"] = Environment.ProcessorCount,
     ["loadSeconds"] = load.Elapsed.TotalSeconds, ["peakWorkingSetMB"] = self.PeakWorkingSet64 / (1024.0 * 1024),
     ["date"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), ["runs"] = runs,
 };

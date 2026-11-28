@@ -7,7 +7,8 @@ namespace TechValidation.LlmQuery;
 /// #55 第三輪（使用者決定 2026-11-27）：以程式檢查 LLM 的輸出，延伸詞以案件 LOG 驗證後只當建議。
 /// A：關鍵字必須在問題原文出現；B：模組與等級必須在問題原文出現；
 /// C：關鍵字剛好是模組或等級名稱時不搬移，只記錄為提示（「也可能是等級／模組」）；
-/// D：anyOf 只有一個字且 allOf 是空的時改為 allOf（搜尋結果相同，Jev 0.70）。
+/// D：anyOf 只有一個字且 allOf 是空的時改為 allOf（搜尋結果相同，Jev 0.70）；
+/// E（第四輪）：關鍵字與已填的模組或等級名稱相同時刪除。
 /// 比對方式與搜尋相同（ADR-0010）：不分大小寫、全半形相同；另外忽略空白。
 /// </summary>
 public static class Checks
@@ -34,6 +35,10 @@ public static class Checks
         var noneOf = Keep(q.NoneOf);
         var modules = q.Modules.Where(InText).ToList();
         var levels = q.Levels.Where(InText).ToList();
+
+        // E（第四輪，使用者決定 2026-11-27，Jev 0.74）：關鍵字與已填的模組或等級名稱相同時刪除（搜尋已經以模組、等級限制）
+        bool Dup(string k) => modules.Concat(levels).Any(x => Norm(x) == Norm(k));
+        allOf.RemoveAll(Dup); anyOf.RemoveAll(Dup); noneOf.RemoveAll(Dup);
 
         var hints = new List<string>();
         foreach (var k in allOf.Concat(anyOf).Concat(noneOf))

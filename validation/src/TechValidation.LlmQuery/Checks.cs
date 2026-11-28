@@ -8,7 +8,7 @@ namespace TechValidation.LlmQuery;
 /// A：關鍵字必須在問題原文出現；B：模組與等級必須在問題原文出現；
 /// C：關鍵字剛好是模組或等級名稱時不搬移，只記錄為提示（「也可能是等級／模組」）；
 /// D：anyOf 只有一個字且 allOf 是空的時改為 allOf（搜尋結果相同，Jev 0.70）；
-/// E（第四輪）：關鍵字與已填的模組或等級名稱相同時刪除。
+/// E（第四輪）：關鍵字與已填的模組或等級名稱相同時刪除；F（第五輪）：問法與一般用語的停用詞。
 /// 比對方式與搜尋相同（ADR-0010）：不分大小寫、全半形相同；另外忽略空白。
 /// </summary>
 public static class Checks
@@ -21,9 +21,20 @@ public static class Checks
         return sb.ToString();
     }
 
+    /// <summary>
+    /// F（第五輪，使用者決定 2026-11-28，Jev 0.91；比對方式 Jev 0.77）：問法與一般用語，關鍵字（正規化後）與其中之一完全相同時刪除。
+    /// 來源只限：第三、四輪結果中實際被當成關鍵字的問法，以及提示詞已寫明不是關鍵字的一般用語（不取自第五輪的保留測試集）。
+    /// </summary>
+    public static readonly string[] StopWords =
+    [
+        "發生", "從", "從頭到尾", "去過哪裡", "變化", "被讀到", "讀到", "做了什麼", "做了哪些動作", "時間",
+        "事件", "紀錄", "訊息", "經過", "過程", "什麼時候",
+    ];
+    static readonly HashSet<string> StopNorm = StopWords.Select(Norm).ToHashSet();
+
     public sealed record Result(Query Query, IReadOnlyList<string> Hints);
 
-    public static Result Apply(Query q, string question)
+    public static Result Apply(Query q, string question, bool stopWords = true)
     {
         if (q.Unsupported) return new(q, []);
         var text = Norm(question);
@@ -37,6 +48,7 @@ public static class Checks
         var levels = q.Levels.Where(InText).ToList();
 
         // E（第四輪，使用者決定 2026-11-27，Jev 0.74）：關鍵字與已填的模組或等級名稱相同時刪除（搜尋已經以模組、等級限制）
+        if (stopWords) { allOf.RemoveAll(k => StopNorm.Contains(Norm(k))); anyOf.RemoveAll(k => StopNorm.Contains(Norm(k))); noneOf.RemoveAll(k => StopNorm.Contains(Norm(k))); }
         bool Dup(string k) => modules.Concat(levels).Any(x => Norm(x) == Norm(k));
         allOf.RemoveAll(Dup); anyOf.RemoveAll(Dup); noneOf.RemoveAll(Dup);
 

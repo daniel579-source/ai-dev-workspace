@@ -59,6 +59,91 @@ if (opts.ContainsKey("check-rules"))
     return 0;
 }
 
+// 第五輪：--replay <舊結果.json>：只改程式檢查時，以舊結果中的 LLM 輸出重新計分（速度欄位沿用舊結果）
+if (opts.TryGetValue("replay", out var replayPath))
+{
+    var old = JsonNode.Parse(File.ReadAllText(replayPath))!.AsObject();
+    var byId = questions.ToDictionary(x => x.Id);
+    foreach (var run in old["runs"]!.AsArray())
+        foreach (var item in run!["items"]!.AsArray())
+        {
+            var o = item!.AsObject();
+            var q = byId[o["id"]!.GetValue<string>()];
+            var output = o["output"]?.GetValue<string>() ?? "";
+            if (output.Length >= 600) Console.WriteLine($"注意：{q.Id} 的輸出被截斷，重新計分可能不同");
+            var r = Evaluate(q.Expect, q.Text, q.ExpectSuggest, hybrid ? Rules.Extract(q.Text, caseDate) : null, output);
+            o["exact"] = r.Exact; o["valid"] = r.Actual is not null; o["error"] = r.Error; o["actualUnsupported"] = r.Actual?.Unsupported;
+            o["parts"] = new JsonObject(r.Parts.Select(p => KeyValuePair.Create(p.Key, (JsonNode?)p.Value)));
+            foreach (var kv in r.Extra.ToList()) { r.Extra.Remove(kv.Key); o[kv.Key] = kv.Value; }
+        }
+    old["replayOf"] = Path.GetFileName(replayPath);
+    File.WriteAllText(opts["out"], old.ToJsonString(new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+    Console.WriteLine($"已重新計分 {replayPath} → {opts["out"]}");
+    return 0;
+}
+
+
+// LLM 輸出 → 計分（第五輪起也用於 --replay：以已存的輸出重新套用程式檢查，不重跑模型）
+(bool Exact, Dictionary<string, bool> Parts, string? Error, Query? Actual, JsonObject Extra) Evaluate(Query expectQ, string questionText, List<string>? expectSuggest, Rules.Extracted? ext, string raw)
+{
+    string? error = null;
+    Query? actual = null;
+    JsonNode? parsed = null;
+    try
+    {
+        var json = Scoring.ExtractJson(raw) ?? throw new FormatException("輸出中沒有完整的 JSON 物件");
+        parsed = JsonNode.Parse(json);
+        actual = Query.Parse(parsed);
+        if (ext is not null && !actual.Unsupported)
+        {
+            // 混合做法：時間與編號用規則的結果；含佔位符的關鍵字丟掉
+            static List<string> Clean(IEnumerable<string> xs) => xs.Where(x => !x.Contains(Rules.TimeMark) && !x.Contains(Rules.IdMark)).ToList();
+            actual = actual with { AllOf = Clean(actual.AllOf), AnyOf = Clean(actual.AnyOf), NoneOf = Clean(actual.NoneOf), From = ext.From, To = ext.To, Fields = ext.Fields };
+        }
+    }
+    catch (Exception ex) when (ex is FormatException or JsonException or InvalidOperationException or ArgumentException) // ArgumentException：模型輸出重複的欄位名稱
+    {
+        error = ex.Message;
+        actual = null; parsed = null; // 格式錯誤時整題算錯，也不讀延伸詞
+    }
+    var parts = actual is null ? Scoring.Parts.ToDictionary(p => p, _ => false) : Scoring.Compare(expectQ, actual);
+    var exact = actual is not null && parts.Values.All(x => x);
+    var extra = new JsonObject();
+    if (expand)
+    {
+        // 檢查前的結果另外記錄；exact／parts 改為程式檢查後的結果
+        extra["exactRaw"] = exact;
+        extra["partsRaw"] = new JsonObject(parts.Select(p => KeyValuePair.Create(p.Key, (JsonNode?)p.Value)));
+        var hints = new List<string>();
+        if (actual is not null)
+        {
+            var checkedResult = Checks.Apply(actual, questionText, !opts.ContainsKey("no-stopwords"));
+            actual = checkedResult.Query;
+            hints = checkedResult.Hints.ToList();
+            parts = Scoring.Compare(expectQ, actual);
+            exact = parts.Values.All(x => x);
+        }
+        // 延伸詞：去掉與原文關鍵字相同的，再到案件 LOG 查次數，有出現才當建議
+        var expansions = parsed is JsonObject po && po["expansions"] is JsonArray ea
+            ? ea.Select(x => x?.ToString() ?? "").Where(x => x.Trim().Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList() : new List<string>();
+        var keywords = actual is null ? new HashSet<string>() : actual.AllOf.Concat(actual.AnyOf).Concat(actual.NoneOf).Select(Checks.Norm).ToHashSet();
+        var suggestions = expansions.Where(x => !keywords.Contains(Checks.Norm(x)))
+            .Select(x => (Term: x, Count: caseLog!.Count(x))).Where(x => x.Count > 0).OrderByDescending(x => x.Count).ToList();
+        extra["hints"] = new JsonArray(hints.Select(h => (JsonNode)h).ToArray());
+        extra["expansions"] = new JsonArray(expansions.Select(x => (JsonNode)x).ToArray());
+        extra["suggestions"] = new JsonArray(suggestions.Select(x => (JsonNode)new JsonObject { ["term"] = x.Term, ["count"] = x.Count }).ToArray());
+        if (expectSuggest is { } want)
+        {
+            var wantNorm = want.Select(Checks.Norm).ToHashSet();
+            var good = suggestions.Count(x => wantNorm.Contains(Checks.Norm(x.Term)));
+            extra["expectSuggest"] = new JsonArray(want.Select(x => (JsonNode)x).ToArray());
+            extra["suggestHit"] = good > 0;
+            extra["suggestGood"] = good;
+        }
+    }
+    return (exact, parts, error, actual, extra);
+}
+
 var load = Stopwatch.StartNew();
 using var config = new Config(opts["model"]);
 config.ClearProviders(); // 只用 CPU（2026-11-27 Jev 0.86：GPU、NPU 留到目標筆電）
@@ -101,61 +186,7 @@ foreach (var fewShot in expand ? new[] { true } : new[] { true, false }) // 第�
         }
         sw.Stop();
         var raw = text.ToString();
-        string? error = null;
-        Query? actual = null;
-        JsonNode? parsed = null;
-        try
-        {
-            var json = Scoring.ExtractJson(raw) ?? throw new FormatException("輸出中沒有完整的 JSON 物件");
-            parsed = JsonNode.Parse(json);
-            actual = Query.Parse(parsed);
-            if (ext is not null && !actual.Unsupported)
-            {
-                // 混合做法：時間與編號用規則的結果；含佔位符的關鍵字丟掉
-                static List<string> Clean(IEnumerable<string> xs) => xs.Where(x => !x.Contains(Rules.TimeMark) && !x.Contains(Rules.IdMark)).ToList();
-                actual = actual with { AllOf = Clean(actual.AllOf), AnyOf = Clean(actual.AnyOf), NoneOf = Clean(actual.NoneOf), From = ext.From, To = ext.To, Fields = ext.Fields };
-            }
-        }
-        catch (Exception ex) when (ex is FormatException or JsonException or InvalidOperationException or ArgumentException) // ArgumentException：模型輸出重複的欄位名稱
-        {
-            error = ex.Message;
-            actual = null; parsed = null; // 格式錯誤時整題算錯，也不讀延伸詞
-        }
-        var parts = actual is null ? Scoring.Parts.ToDictionary(p => p, _ => false) : Scoring.Compare(q.Expect, actual);
-        var exact = actual is not null && parts.Values.All(x => x);
-        var extra = new JsonObject();
-        if (expand)
-        {
-            // 檢查前的結果另外記錄；exact／parts 改為程式檢查後的結果
-            extra["exactRaw"] = exact;
-            extra["partsRaw"] = new JsonObject(parts.Select(p => KeyValuePair.Create(p.Key, (JsonNode?)p.Value)));
-            var hints = new List<string>();
-            if (actual is not null)
-            {
-                var checkedResult = Checks.Apply(actual, q.Text);
-                actual = checkedResult.Query;
-                hints = checkedResult.Hints.ToList();
-                parts = Scoring.Compare(q.Expect, actual);
-                exact = parts.Values.All(x => x);
-            }
-            // 延伸詞：去掉與原文關鍵字相同的，再到案件 LOG 查次數，有出現才當建議
-            var expansions = parsed is JsonObject po && po["expansions"] is JsonArray ea
-                ? ea.Select(x => x?.ToString() ?? "").Where(x => x.Trim().Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList() : new List<string>();
-            var keywords = actual is null ? new HashSet<string>() : actual.AllOf.Concat(actual.AnyOf).Concat(actual.NoneOf).Select(Checks.Norm).ToHashSet();
-            var suggestions = expansions.Where(x => !keywords.Contains(Checks.Norm(x)))
-                .Select(x => (Term: x, Count: caseLog!.Count(x))).Where(x => x.Count > 0).OrderByDescending(x => x.Count).ToList();
-            extra["hints"] = new JsonArray(hints.Select(h => (JsonNode)h).ToArray());
-            extra["expansions"] = new JsonArray(expansions.Select(x => (JsonNode)x).ToArray());
-            extra["suggestions"] = new JsonArray(suggestions.Select(x => (JsonNode)new JsonObject { ["term"] = x.Term, ["count"] = x.Count }).ToArray());
-            if (q.ExpectSuggest is { } want)
-            {
-                var wantNorm = want.Select(Checks.Norm).ToHashSet();
-                var good = suggestions.Count(x => wantNorm.Contains(Checks.Norm(x.Term)));
-                extra["expectSuggest"] = new JsonArray(want.Select(x => (JsonNode)x).ToArray());
-                extra["suggestHit"] = good > 0;
-                extra["suggestGood"] = good;
-            }
-        }
+        var (exact, parts, error, actual, extra) = Evaluate(q.Expect, q.Text, q.ExpectSuggest, ext, raw);
         var decode = firstToken is { } ft && outTokens > 1 ? (outTokens - 1) / Math.Max(0.001, sw.Elapsed.TotalSeconds - ft) : 0;
         items.Add(new JsonObject
         {

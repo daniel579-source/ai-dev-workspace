@@ -13,7 +13,7 @@
 | `src/TechValidation.Bench` | 匯入、索引大小、搜尋、正規表示式、串連、快照、排序、可攜性的量測，並與 DuckDB、Lucene.NET 比較 | T-03～T-13 |
 | `src/TechValidation.UiSpike` | WPF＋AvalonDock：10 萬筆事件清單、時間軸、2D 畫布、版面儲存與還原；自我檢查 | ADR-0007 第 1～4 項、T-01 |
 | `src/TechValidation.KnowledgeGraph` | 知識檢索的規則關聯圖（ADR-0015）：以 `knowledge-scenarios\` 的虛構情境集量測知識庫條目、相關設備與警報、異常紀錄、安全清單的召回與精確度，並與關鍵字比對比較（#89）；另以本機 Ollama 的 embedding 比較向量搜尋（ADR-0022）。參考 `src/LogTrace.Engine` | ADR-0015 |
-| `src/TechValidation.LlmQuery` | 本機 LLM 把自然語言問題轉成搜尋條件（ADR-0013 第 5、8 點）：以 `llm-query\` 的虛構問題集（可轉換 50 題、不能轉換 6 題），用 ONNX Runtime GenAI 在 CPU 比較 Phi-4-mini 與 Qwen3-4B，各跑「只用提示詞／以 JSON schema 限制」×「有範例／沒有範例」4 種組合，量測正確率、速度與記憶體（#55）。第二輪加上 `--hybrid`：時間與設備編號由規則抽出、換成佔位符，LLM 只處理關鍵字、模組、等級與 unsupported，另以 `questions-holdout.json`（規則寫好後才撰寫）檢查是否只對原題目有效。第三輪加上 `--expand`：LLM 另外輸出延伸詞，以 `case-log.json`（虛構案件 LOG）驗證後只當建議，原文關鍵字以程式檢查，並以 `questions-expand.json`（中文提問、LOG 用英文）量測建議的命中率。第四輪（只量 Qwen3-4B）修改 `--expand` 的提示詞與範例，程式檢查加上「關鍵字與已填的模組或等級相同時刪除」，並以改提示詞之前撰寫的 `questions-holdout2.json` 檢查；第三輪的提示詞與檢查見 git 紀錄。模型放在 repo 以外 | ADR-0013 |
+| `src/TechValidation.LlmQuery` | 本機 LLM 把自然語言問題轉成搜尋條件（ADR-0013 第 5、8 點）：以 `llm-query\` 的虛構問題集（可轉換 50 題、不能轉換 6 題），用 ONNX Runtime GenAI 在 CPU 比較 Phi-4-mini 與 Qwen3-4B，各跑「只用提示詞／以 JSON schema 限制」×「有範例／沒有範例」4 種組合，量測正確率、速度與記憶體（#55）。第二輪加上 `--hybrid`：時間與設備編號由規則抽出、換成佔位符，LLM 只處理關鍵字、模組、等級與 unsupported，另以 `questions-holdout.json`（規則寫好後才撰寫）檢查是否只對原題目有效。第三輪加上 `--expand`：LLM 另外輸出延伸詞，以 `case-log.json`（虛構案件 LOG）驗證後只當建議，原文關鍵字以程式檢查，並以 `questions-expand.json`（中文提問、LOG 用英文）量測建議的命中率。第四輪（只量 Qwen3-4B）修改 `--expand` 的提示詞與範例，程式檢查加上「關鍵字與已填的模組或等級相同時刪除」，並以改提示詞之前撰寫的 `questions-holdout2.json` 檢查；第三輪的提示詞與檢查見 git 紀錄。第五輪程式檢查加入停用詞清單（問法與一般用語，完全相同才刪除），以 `--replay` 用第四輪存下的 LLM 輸出重新計分，並以停用詞建立前撰寫的 `questions-holdout3.json` 量測（`--no-stopwords` 可關閉停用詞作比較）。模型放在 repo 以外 | ADR-0013 |
 | `tests/TechValidation.Tests` | 正規化（T-13）與解析規則的單元測試 | — |
 
 ## 需要
@@ -53,6 +53,8 @@ dotnet run -c Release --project src/TechValidation.LlmQuery -- --summarize resul
 dotnet run -c Release --project src/TechValidation.LlmQuery -- --expand --model D:\_case\models\qwen3-4b-cpu-int4 --family qwen --name Qwen3-4B --questions llm-query\questions-expand.json --examples llm-query\questions.json --out results\llm-query-55-expand-words-qwen-<電腦名稱>.json
 # 第四輪：同上，另加新保留測試集
 dotnet run -c Release --project src/TechValidation.LlmQuery -- --expand --model D:\_case\models\qwen3-4b-cpu-int4 --family qwen --name Qwen3-4B --questions llm-query\questions-holdout2.json --examples llm-query\questions.json --out results\llm-query-55-r4-holdout2-qwen-<電腦名稱>.json
+# 第五輪：以已存的 LLM 輸出重新套用程式檢查（不重跑模型）；--no-stopwords 關閉停用詞
+dotnet run -c Release --project src/TechValidation.LlmQuery -- --expand --family qwen --replay results\llm-query-55-r4-main-qwen-<電腦名稱>.json --questions llm-query\questions.json --examples llm-query\questions.json --out results\llm-query-55-r5-main-qwen-<電腦名稱>.json
 # 第二輪（混合做法）：只檢查規則，或加上 --hybrid 執行；保留測試集用 --examples 沿用主題目檔的範例
 dotnet run -c Release --project src/TechValidation.LlmQuery -- --check-rules --hybrid --family qwen --questions llm-query\questions-holdout.json --examples llm-query\questions.json
 dotnet run -c Release --project src/TechValidation.LlmQuery -- --hybrid --model D:\_case\models\qwen3-4b-cpu-int4 --family qwen --name Qwen3-4B --questions llm-query\questions.json --out results\llm-query-55-hybrid-qwen-<電腦名稱>.json
